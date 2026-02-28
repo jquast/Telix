@@ -1,0 +1,171 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telix"
+version = "0.1.0"
+description = "A TUI telnet and MUD client"
+readme = "README.rst"
+license = "ISC"
+license-files = ["LICENSE.txt"]
+authors = [
+    {name = "Jeff Quast", email = "contact@jeffquast.com"},
+]
+keywords = [
+    "telnet",
+    "mud",
+    "tui",
+    "client",
+    "repl",
+    "blessed",
+    "textual",
+    "asyncio",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: ISC License (ISCL)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+    "Environment :: Console",
+    "Framework :: AsyncIO",
+    "Topic :: Internet",
+    "Topic :: System :: Networking",
+    "Topic :: Terminals :: Telnet",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "telnetlib3>=2.6",
+    "blessed>=1.31",
+    "textual>=0.44",
+    "wcwidth>=0.2.13",
+    "ucs-detect>=2,<3",
+    "prettytable",
+]
+
+[project.scripts]
+telix = "telix.main:main"
+
+[project.urls]
+Homepage = "https://github.com/jquast/telix"
+Repository = "https://github.com/jquast/telix"
+Issues = "https://github.com/jquast/telix/issues"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/telix/**",
+    "/docs/**",
+    "/README.rst",
+    "/CONTRIBUTING.rst",
+    "/LICENSE.txt",
+    "/tox.ini",
+    "/.gitignore",
+    "/pyproject.toml",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["telix"]
+artifacts = ["telix/help/*.md"]
+
+[tool.pylint.main]
+load-plugins = [
+    "pylint.extensions.check_elif",
+    "pylint.extensions.mccabe",
+    "pylint.extensions.overlapping_exceptions",
+    "pylint.extensions.redefined_variable_type",
+]
+persistent = false
+jobs = 0
+
+[tool.pylint."messages control"]
+enable = ["all"]
+disable = [
+    "fixme",
+    "locally-disabled",
+    "suppressed-message",
+    "wrong-import-order",
+    "wrong-import-position",
+    "use-implicit-booleaness-not-comparison-to-zero",
+    "too-many-instance-attributes",
+    "too-many-public-methods",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-nested-blocks",
+    "too-many-return-statements",
+    "too-many-lines",
+    "too-complex",
+    "duplicate-code",
+    "cyclic-import",
+    "import-outside-toplevel",
+    "protected-access",
+    "broad-exception-caught",
+    "broad-except",
+    "unused-argument",
+    "redefined-builtin",
+    "global-statement",
+    "invalid-name",
+    "reimported",
+    "redefined-outer-name",
+    "arguments-renamed",
+    "arguments-differ",
+    "import-error",
+    "overlapping-except",
+    "redefined-variable-type",
+    "unsupported-assignment-operation",
+    "use-implicit-booleaness-not-comparison-to-string",
+    "ungrouped-imports",
+    "consider-using-with",
+    "consider-using-from-import",
+]
+
+[tool.pylint.format]
+max-line-length = 100
+good-names = ["fd", "_", "x", "y", "tn", "ip"]
+
+[tool.pylint.design]
+max-args = 18
+max-attributes = 22
+max-branches = 22
+max-complexity = 22
+max-locals = 30
+max-module-lines = 3000
+max-parents = 10
+max-positional-arguments = 8
+max-public-methods = 45
+max-returns = 12
+max-statements = 90
+
+[tool.pylint.similarities]
+ignore-imports = true
+min-similarity-lines = 8
+
+[tool.pylint.reports]
+reports = false
+msg-template = "{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+disallow_subclassing_any = false
+ignore_missing_imports = true
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["telix.tests.*"]
+ignore_errors = true
+
+[tool.black]
+line-length = 100
+skip-magic-trailing-comma = true
+target-version = ["py39", "py310", "py311", "py312", "py313"]
