@@ -22,8 +22,10 @@ _XDG_DATA = os.environ.get(
     "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
 )
 
-CONFIG_DIR = os.path.join(_XDG_CONFIG, "telix")
-DATA_DIR = os.path.join(_XDG_DATA, "telix")
+_APP_NAME = os.environ.get("TELIX_XDGNAME", "telix")
+
+CONFIG_DIR = os.path.join(_XDG_CONFIG, _APP_NAME)
+DATA_DIR = os.path.join(_XDG_DATA, _APP_NAME)
 
 SESSIONS_FILE = pathlib.Path(CONFIG_DIR) / "sessions.json"
 HISTORY_FILE = os.path.join(DATA_DIR, "history")

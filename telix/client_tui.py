@@ -57,7 +57,7 @@ _TERMINAL_CLEANUP = (
 )
 
 _ENCODINGS = (
-    "utf-8",
+    "utf8",
     "cp437",
     "latin-1",
     "ascii",
@@ -258,6 +258,9 @@ class SessionConfig:
     typescript: str = ""
     no_repl: bool = False
 
+    # Bookmarked sessions sort to top of the list
+    bookmarked: bool = False
+
 
 def _ensure_dirs() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -332,6 +335,9 @@ def build_command(config: SessionConfig) -> list[str]:
         str(config.port),
     ]
 
+    if not config.no_repl:
+        cmd.extend(["--shell", "telix.client_shell.telix_client_shell"])
+
     for attr, flag, default in _CMD_STR_FLAGS:
         val = getattr(config, attr)
         if val != default:
@@ -379,11 +385,9 @@ class SessionListScreen(Screen[None]):
         Binding("q", "quit_app", "Quit"),
         Binding("n", "new_session", "New"),
         Binding("e", "edit_session", "Edit"),
-        Binding("m", "edit_macros", "Macros"),
-        Binding("a", "edit_autoreplies", "Autoreplies"),
+        Binding("b", "toggle_bookmark", "Bookmark"),
         Binding("d", "delete_session", "Delete"),
         Binding("enter", "connect", "Connect"),
-        Binding("s", "edit_defaults", "Defaults"),
     ]
 
     CSS = """
@@ -391,15 +395,15 @@ class SessionListScreen(Screen[None]):
         align: center top;
     }
     #session-panel {
-        width: 80;
+        width: 100%;
         height: 100%;
-        border: round $surface-lighten-2;
         background: $surface;
         padding: 0 1;
     }
     #session-body {
         height: 1fr;
     }
+    #session-search { height: auto; margin-bottom: 0; }
     #session-table {
         width: 1fr;
         height: 100%;
@@ -416,20 +420,14 @@ class SessionListScreen(Screen[None]):
         min-width: 0;
         margin-bottom: 0;
     }
-    #connect-btn { background: #5b9bf5; color: #0a0a18; }
-    #connect-btn:hover { background: #82b4f8; }
-    #add-btn { background: #6cc644; color: #0a0a18; }
-    #add-btn:hover { background: #8fd86a; }
-    #delete-btn { background: #f45070; color: #0a0a18; }
-    #delete-btn:hover { background: #f77a95; }
-    #edit-btn { background: #e8a030; color: #0a0a18; }
-    #edit-btn:hover { background: #f0ba60; }
-    #macros-btn { background: #2ec4a8; color: #0a0a18; }
-    #macros-btn:hover { background: #5cd8c0; }
-    #autoreplies-btn { background: #a06ce4; color: #f0f0f0; }
-    #autoreplies-btn:hover { background: #b88eee; }
-    #defaults-btn { background: #6670a0; color: #e8ecf8; }
-    #defaults-btn:hover { background: #8088b8; }
+    #bookmark-btn {
+        background: $accent;
+        text-style: none;
+    }
+    #bookmark-btn:hover {
+        background: $accent-lighten-1;
+        text-style: none;
+    }
     """
 
     def __init__(self) -> None:
@@ -440,40 +438,81 @@ class SessionListScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         """Build the session list layout."""
         with Vertical(id="session-panel"):
+            yield Input(placeholder="Search sessions\u2026", id="session-search")
             with Horizontal(id="session-body"):
                 with Vertical(id="button-col"):
-                    yield Button("Connect", id="connect-btn")
-                    yield Button("New", id="add-btn")
-                    yield Button("Delete", id="delete-btn")
-                    yield Button("Edit", id="edit-btn")
-                    yield Button("Macros", id="macros-btn")
-                    yield Button("Autoreplies", id="autoreplies-btn")
-                    yield Button("Defaults", id="defaults-btn")
+                    yield Button("Connect", variant="primary", id="connect-btn")
+                    yield Button("New", variant="success", id="add-btn")
+                    yield Button("Bookmark", variant="default", id="bookmark-btn")
+                    yield Button("Delete", variant="error", id="delete-btn")
+                    yield Button("Edit", variant="warning", id="edit-btn")
                 yield DataTable(id="session-table")
         yield Footer()
 
     def on_mount(self) -> None:
         """Load sessions and populate the data table."""
         self._sessions = load_sessions()
+        if not self._sessions:
+            from .directory import directory_to_sessions
+
+            self._sessions = directory_to_sessions()
+            save_sessions(self._sessions)
         table = self.query_one("#session-table", DataTable)
         table.cursor_type = "row"
-        table.add_columns("Name", "Host", "Port", "Enc", "Last")
+        table.add_columns("Host/Name", "Port", "Enc", "Last", "Flags")
         self._refresh_table()
 
-    def _refresh_table(self) -> None:
+    @staticmethod
+    def _flags(cfg: SessionConfig) -> str:
+        """Return short flag codes summarizing non-default session options."""
+        parts: list[str] = []
+        if cfg.bookmarked:
+            parts.append("*")
+        if cfg.ssl:
+            parts.append("ssl")
+        if cfg.mode == "raw":
+            parts.append("raw")
+        elif cfg.mode == "line":
+            parts.append("line")
+        if not cfg.force_binary:
+            parts.append("!bin")
+        if cfg.ansi_keys:
+            parts.append("ansi")
+        if cfg.ascii_eol:
+            parts.append("eol")
+        if not cfg.ice_colors:
+            parts.append("!ice")
+        if cfg.no_repl:
+            parts.append("!repl")
+        if cfg.typescript:
+            parts.append("ts")
+        return " ".join(parts)
+
+    def _refresh_table(self, search: str = "") -> None:
         table = self.query_one("#session-table", DataTable)
         table.clear()
-        for key, cfg in self._sessions.items():
-            if key == DEFAULTS_KEY:
-                continue
+        needle = search.strip().lower()
+        items = [
+            (key, cfg) for key, cfg in self._sessions.items()
+            if key != DEFAULTS_KEY
+            and (not needle or needle in
+                 f"{cfg.name} {cfg.host} {cfg.port} {cfg.encoding}".lower())
+        ]
+        items.sort(key=lambda kc: (not kc[1].bookmarked, (kc[1].name or kc[1].host).lower()))
+        for key, cfg in items:
             table.add_row(
-                cfg.name or key,
-                cfg.host,
+                cfg.name or cfg.host,
                 str(cfg.port),
                 cfg.encoding,
                 _relative_time(cfg.last_connected),
+                self._flags(cfg),
                 key=key,
             )
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Filter session table when search input changes."""
+        if event.input.id == "session-search":
+            self._refresh_table(event.value)
 
     def _save(self) -> None:
         save_sessions(self._sessions)
@@ -489,9 +528,21 @@ class SessionListScreen(Screen[None]):
         return str(row_key.value)
 
     def on_key(self, event: events.Key) -> None:
-        """Arrow/Home/End keys navigate between buttons and the session table."""
+        """Arrow/Home/End keys navigate between search, buttons, and the table."""
+        search_input = self.query_one("#session-search", Input)
+        table = self.query_one("#session-table", DataTable)
+
+        if event.key in ("up", "down"):
+            if self.focused is search_input and event.key == "down":
+                table.focus()
+                event.prevent_default()
+                return
+            if self.focused is table and event.key == "up" and table.cursor_row == 0:
+                search_input.focus()
+                event.prevent_default()
+                return
+
         if event.key in ("home", "end"):
-            table = self.query_one("#session-table", DataTable)
             if self.focused is table and table.row_count > 0:
                 row = 0 if event.key == "home" else table.row_count - 1
                 table.move_cursor(row=row)
@@ -504,11 +555,9 @@ class SessionListScreen(Screen[None]):
         handlers = {
             "connect-btn": self.action_connect,
             "add-btn": self.action_new_session,
+            "bookmark-btn": self.action_toggle_bookmark,
             "edit-btn": self.action_edit_session,
-            "macros-btn": self.action_edit_macros,
-            "autoreplies-btn": self.action_edit_autoreplies,
             "delete-btn": self.action_delete_session,
-            "defaults-btn": self.action_edit_defaults,
             "quit-btn": self.action_quit_app,
         }
         handler = handlers.get(event.button.id or "")
@@ -543,11 +592,25 @@ class SessionListScreen(Screen[None]):
 
     def action_edit_session(self) -> None:
         """Open editor for the selected session."""
-        key = self._require_selected()
-        if key is None:
+        old_key = self._require_selected()
+        if old_key is None:
             return
-        cfg = self._sessions[key]
-        self.app.push_screen(SessionEditScreen(config=cfg), callback=self._on_edit_result)
+        cfg = self._sessions[old_key]
+
+        def _on_edit(config: SessionConfig | None) -> None:
+            if config is None:
+                return
+            new_key = config.name or config.host
+            if not new_key:
+                return
+            if new_key != old_key and old_key in self._sessions:
+                del self._sessions[old_key]
+            self._sessions[new_key] = config
+            self._save()
+            self._refresh_table()
+            self._select_row(new_key)
+
+        self.app.push_screen(SessionEditScreen(config=cfg), callback=_on_edit)
 
     def action_delete_session(self) -> None:
         """Delete the selected session after confirmation."""
@@ -567,40 +630,16 @@ class SessionListScreen(Screen[None]):
             callback=_on_confirm,
         )
 
-    def action_edit_defaults(self) -> None:
-        """Open editor for the default session template."""
-        defaults = self._sessions.get(DEFAULTS_KEY, SessionConfig(name=DEFAULTS_KEY))
-        self.app.push_screen(
-            SessionEditScreen(config=defaults, is_defaults=True), callback=self._on_defaults_result
-        )
-
-    def _session_key_for(self, cfg: SessionConfig) -> str:
-        """Return ``host:port`` session key for config file lookups."""
-        return f"{cfg.host}:{cfg.port}"
-
-    def action_edit_macros(self) -> None:
-        """Open macro editor for the selected session."""
+    def action_toggle_bookmark(self) -> None:
+        """Toggle bookmark on the selected session and re-sort."""
         key = self._require_selected()
         if key is None:
             return
         cfg = self._sessions[key]
-        path = os.path.join(CONFIG_DIR, "macros.json")
-        sk = self._session_key_for(cfg)
-        self.app.push_screen(
-            MacroEditScreen(path=path, session_key=sk), callback=lambda saved: None
-        )
-
-    def action_edit_autoreplies(self) -> None:
-        """Open autoreply editor for the selected session."""
-        key = self._require_selected()
-        if key is None:
-            return
-        cfg = self._sessions[key]
-        path = os.path.join(CONFIG_DIR, "autoreplies.json")
-        sk = self._session_key_for(cfg)
-        self.app.push_screen(
-            AutoreplyEditScreen(path=path, session_key=sk), callback=lambda saved: None
-        )
+        cfg.bookmarked = not cfg.bookmarked
+        self._save()
+        self._refresh_table()
+        self._select_row(key)
 
     def action_connect(self) -> None:
         """Launch a telnet connection to the selected session."""
@@ -651,6 +690,7 @@ class SessionListScreen(Screen[None]):
                 sys.stdout.write(_TERMINAL_CLEANUP)
                 sys.stdout.flush()
         self._refresh_table()
+        self._select_row(key)
 
     def _on_edit_result(self, config: SessionConfig | None) -> None:
         if config is None:
@@ -670,12 +710,6 @@ class SessionListScreen(Screen[None]):
             if str(row_key.value) == key:
                 table.move_cursor(row=row_idx)
                 break
-
-    def _on_defaults_result(self, config: SessionConfig | None) -> None:
-        if config is None:
-            return
-        self._sessions[DEFAULTS_KEY] = config
-        self._save()
 
 
 class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
@@ -834,7 +868,10 @@ class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
         if not self._is_defaults:
             yield self._field_row(
                 "Name",
-                Input(value=cfg.name, placeholder="session name", id="name", classes="field-input"),
+                Input(
+                    value=cfg.name, placeholder="optional display name",
+                    id="name", classes="field-input",
+                ),
             )
             yield Horizontal(
                 Label("Host:Port", classes="field-label"),
@@ -996,7 +1033,7 @@ class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
 
     def _update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
-        from .color_filter import PALETTES
+        from telnetlib3.color_filter import PALETTES
 
         palette_name = self.query_one("#colormatch", Select).value
         preview = self.query_one("#palette-preview", Static)
@@ -1235,8 +1272,8 @@ class _EditListScreen(Screen["bool | None"]):
     .edit-button-col Button {
         width: 100%; min-width: 0; margin-bottom: 0;
     }
-    .edit-copy { background: #6670a0; color: #e8ecf8; }
-    .edit-copy:hover { background: #8088b8; }
+    .edit-copy { background: $primary-lighten-1; }
+    .edit-copy:hover { background: $primary-lighten-2; }
     .edit-right { width: 1fr; height: 100%; }
     .edit-search { height: auto; }
     .edit-table { height: 1fr; min-height: 4; overflow-x: hidden; }

@@ -396,13 +396,18 @@ def _launch_tui_editor(
     sys.stderr.flush()
     sys.__stderr__.flush()
     _editor_active = True
+    result = None
     try:
         with _blocking_fds():
-            subprocess.run(cmd, check=False)
+            result = subprocess.run(cmd, check=False)
     except FileNotFoundError:
         log.warning("could not launch TUI editor subprocess")
     finally:
         _editor_active = False
+        if result is not None and result.returncode != 0:
+            sys.stdout.write("\x1b[0m\r\n\r\nPress RETURN to continue...\r\n")
+            sys.stdout.flush()
+            input()
         _restore_after_subprocess(replay_buf)
 
     if editor_type == "macros":
@@ -516,13 +521,18 @@ def _launch_chat_viewer(ctx: "SessionContext", replay_buf: Optional[Any] = None)
     sys.stderr.flush()
     sys.__stderr__.flush()
     _editor_active = True
+    result = None
     try:
         with _blocking_fds():
-            subprocess.run(cmd, check=False)
+            result = subprocess.run(cmd, check=False)
     except FileNotFoundError:
         log.warning("could not launch chat viewer subprocess")
     finally:
         _editor_active = False
+        if result is not None and result.returncode != 0:
+            sys.stdout.write("\x1b[0m\r\n\r\nPress RETURN to continue...\r\n")
+            sys.stdout.flush()
+            input()
         _restore_after_subprocess(replay_buf)
 
 
@@ -590,13 +600,18 @@ def _launch_room_browser(ctx: "SessionContext", replay_buf: Optional[Any] = None
     sys.stderr.flush()
     sys.__stderr__.flush()
     _editor_active = True
+    result = None
     try:
         with _blocking_fds():
-            subprocess.run(cmd, check=False)
+            result = subprocess.run(cmd, check=False)
     except FileNotFoundError:
         log.warning("could not launch room browser subprocess")
     finally:
         _editor_active = False
+        if result is not None and result.returncode != 0:
+            sys.stdout.write("\x1b[0m\r\n\r\nPress RETURN to continue...\r\n")
+            sys.stdout.flush()
+            input()
         _restore_after_subprocess(replay_buf)
 
     room_graph = ctx.room_graph

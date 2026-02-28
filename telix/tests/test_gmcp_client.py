@@ -6,8 +6,6 @@ from unittest import mock
 
 # 3rd party
 import pytest
-
-# local
 from telnetlib3.client import _DEFAULT_GMCP_MODULES, TelnetClient, _get_argument_parser
 from telnetlib3.telopt import GMCP
 
@@ -50,8 +48,8 @@ def _make_connected_client(**kwargs):
 
 @pytest.mark.asyncio
 async def test_default_gmcp_data_dict():
-    client = _make_client()
-    assert not client._gmcp_data
+    client, _ = _make_connected_client()
+    assert not client.writer.ctx.gmcp_data
 
 
 @pytest.mark.asyncio
@@ -82,8 +80,8 @@ async def test_gmcp_log_enabled():
 @pytest.mark.asyncio
 async def test_gmcp_data_on_writer():
     client, _ = _make_connected_client()
-    assert client._gmcp_data is not None
-    assert isinstance(client._gmcp_data, dict)
+    assert client.writer.ctx.gmcp_data is not None
+    assert isinstance(client.writer.ctx.gmcp_data, dict)
 
 
 @pytest.mark.asyncio
@@ -124,15 +122,15 @@ async def test_ext_callback_registered_for_gmcp():
     ],
 )
 async def test_on_gmcp_data_storage(setup_calls, key, expected):
-    client = _make_client()
+    client, _ = _make_connected_client()
     for module, data in setup_calls:
         client._on_gmcp(module, data)
-    assert client._gmcp_data[key] == expected
+    assert client.writer.ctx.gmcp_data[key] == expected
 
 
 @pytest.mark.asyncio
 async def test_on_gmcp_logs_debug_by_default():
-    client = _make_client()
+    client, _ = _make_connected_client()
     with mock.patch.object(client.log, "debug") as mock_debug:
         client._on_gmcp("Char.Vitals", {"hp": 50})
         mock_debug.assert_called_once()
@@ -140,7 +138,7 @@ async def test_on_gmcp_logs_debug_by_default():
 
 @pytest.mark.asyncio
 async def test_on_gmcp_logs_info_when_enabled():
-    client = _make_client(gmcp_log=True)
+    client, _ = _make_connected_client(gmcp_log=True)
     with mock.patch.object(client.log, "info") as mock_info:
         client._on_gmcp("Char.Vitals", {"hp": 50})
         mock_info.assert_called_once()

@@ -122,7 +122,7 @@ def build_macro_dispatch(macros: list[Macro], ctx: Any, log: logging.Logger) -> 
     import asyncio
     from datetime import datetime, timezone
 
-    from blessed.line_editor import DEFAULT_KEYMAP  # pylint: disable=no-name-in-module
+    from blessed.line_editor import DEFAULT_KEYMAP
 
     from .client_repl import execute_macro_commands
 

@@ -8,8 +8,10 @@ import collections
 from time import monotonic as _monotonic
 from typing import TYPE_CHECKING, Optional
 
-# local
+# 3rd party
 from telnetlib3.stream_writer import TelnetWriterUnicode
+
+# local
 from .client_repl_commands import _COMMAND_DELAY
 
 if TYPE_CHECKING:

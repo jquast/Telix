@@ -10,9 +10,12 @@ import collections
 from time import monotonic as _monotonic
 from typing import TYPE_CHECKING, Any, List, Tuple, Union, Callable, Optional, Generator
 
-# local
+# 3rd party
 from telnetlib3.stream_reader import TelnetReader, TelnetReaderUnicode
 from telnetlib3.stream_writer import TelnetWriter, TelnetWriterUnicode
+
+# local
+from .autoreply import _DELAY_RE
 from .session_context import SessionContext, _CommandQueue
 
 # Re-export from sub-modules so existing ``from .client_repl import X``
@@ -118,7 +121,6 @@ from .client_repl_commands import (  # noqa: F401
     _render_active_command,
 )
 from .client_repl_commands import execute_macro_commands as execute_macro_commands  # noqa: F401
-from .autoreply import _DELAY_RE
 
 # pylint: enable=unused-import,useless-import-alias
 
@@ -126,9 +128,9 @@ if TYPE_CHECKING:
     import blessed
     import blessed.keyboard
     import blessed.line_editor
+    from telnetlib3 import client_shell
     from blessed.line_editor import LineEditResult
 
-    from telnetlib3 import client_shell
     from .macros import Macro
     from .autoreply import AutoreplyEngine
 
@@ -835,7 +837,7 @@ if sys.platform != "win32":
             self.history_file = history_file
             self.banner_lines = banner_lines
 
-            self.ctx: SessionContext = telnet_writer._ctx
+            self.ctx: SessionContext = telnet_writer.ctx  # type: ignore[assignment]
             self.is_ssl = telnet_writer.get_extra_info("ssl_object") is not None
             self.conn_info = self.ctx.session_key + (" SSL" if self.is_ssl else "")
 

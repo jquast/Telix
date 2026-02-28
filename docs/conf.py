@@ -1,0 +1,66 @@
+# std imports
+import os
+import sys
+import datetime
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
+)
+
+suppress_warnings = ["image.nonlocal_uri", "myst.header"]
+
+# -- General configuration ----------------------------------------------------
+
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.viewcode",
+    "myst_parser",
+]
+
+templates_path = ["_templates"]
+
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
+
+master_doc = "index"
+
+project = "telix"
+copyright = f"2025-{datetime.datetime.now().year} Jeff Quast"
+
+version = "0.1"
+release = "0.1.0"  # keep in sync with pyproject.toml
+
+exclude_patterns = ["_build"]
+
+add_function_parentheses = True
+add_module_names = False
+pygments_style = "sphinx"
+
+# -- Options for HTML output --------------------------------------------------
+
+html_theme = "sphinx_rtd_theme"
+html_split_index = True
+html_show_sourcelink = True
+html_show_sphinx = False
+html_show_copyright = True
+htmlhelp_basename = "telix_doc"
+
+# -- Options for LaTeX output -------------------------------------------------
+
+latex_documents = [
+    ("index", "telix.tex", "Telix Documentation", "Jeff Quast", "manual"),
+]
+
+# -- Options for manual page output -------------------------------------------
+
+man_pages = [("index", "telix", "Telix Documentation", ["Jeff Quast"], 1)]
+
+autodoc_member_order = "bysource"
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "telnetlib3": ("https://telnetlib3.readthedocs.io/en/latest/", None),
+}

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 # std imports
 import asyncio
-from typing import IO, Any, Union, Callable, Optional, Awaitable
+from typing import Any, Union, Callable, Optional, Awaitable
 
-# local
+# 3rd party
 from telnetlib3.stream_writer import TelnetWriter, TelnetWriterUnicode
+from telnetlib3._session_context import TelnetSessionContext  # pylint: disable=no-name-in-module
 
 
 class _CommandQueue:
@@ -23,19 +24,21 @@ class _CommandQueue:
         self.render = render
 
 
-class SessionContext:
+class SessionContext(TelnetSessionContext):
     """
     Per-connection runtime state for a MUD client session.
 
-    Replaces the dynamic ``_foo`` attributes formerly set via
-    :func:`setattr` on :class:`~telnetlib3.stream_writer.TelnetWriter` (from telnetlib3).
-    Created in ``_session_shell`` and attached as ``writer._ctx``.
+    Extends :class:`~telnetlib3._session_context.TelnetSessionContext` with
+    MUD-specific state (rooms, macros, autoreplies, highlights, chat, etc.).
+    Created in ``_session_shell`` and attached as ``writer.ctx``.
 
     :param session_key: Session identifier (``"host:port"``).
     """
 
     def __init__(self, session_key: str = "") -> None:
         """Initialize session context with default state."""
+        super().__init__()
+
         # back-reference to the writer (set by _session_shell)
         self.writer: Optional[Union[TelnetWriter, TelnetWriterUnicode]] = None
 
@@ -77,12 +80,11 @@ class SessionContext:
         # command queue
         self.command_queue: Optional[_CommandQueue] = None
 
-        # macros & autoreplies
+        # macros & autoreplies (autoreply_engine inherited from base)
         self.macro_defs: list[Any] = []
         self.macros_file: str = ""
         self.autoreply_rules: list[Any] = []
         self.autoreplies_file: str = ""
-        self.autoreply_engine: Optional[Any] = None
 
         # highlighters
         self.highlight_rules: list[Any] = []
@@ -105,13 +107,10 @@ class SessionContext:
         self.chat_file: str = ""
 
         # rendering / input config
-        self.color_filter: Optional[Any] = None
-        self.raw_mode: Optional[bool] = None
-        self.ascii_eol: bool = False
-        self.input_filter: Optional[Any] = None
+        # (raw_mode, ascii_eol, input_filter, color_filter, typescript_file
+        #  inherited from TelnetSessionContext)
         self.repl_enabled: bool = False
         self.history_file: Optional[str] = None
-        self.typescript_file: Optional[IO[str]] = None
 
         # modem activity dots (set by REPL, used by _send_chained et al.)
         self.rx_dot: Optional[Any] = None
@@ -122,7 +121,7 @@ class SessionContext:
         self.key_dispatch: Optional[Any] = None
         self.cursor_style: str = ""
         self.send_line: Optional[Callable[[str], None]] = None
-        self.autoreply_wait_fn: Optional[Callable[..., Awaitable[None]]] = None
+        # autoreply_wait_fn inherited from TelnetSessionContext
         self.send_naws: Optional[Callable[[], None]] = None
 
         # debounced timestamp persistence
