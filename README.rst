@@ -1,9 +1,9 @@
-telix
+Telix
 =====
 
-A modern telnet client especially designed for BBSs_ and MUDs_.
+A modern telnet client designed especially for BBSs_ and MUDs_.
 
-Built using python libraries telnetlib3_, blessed_, and textual_.
+Built using Python libraries telnetlib3_, blessed_, and textual_.
 
 .. _BBSs: https://bbs.modem.xyz/
 .. _MUDs: https://muds.modem.xyz/
@@ -18,16 +18,14 @@ Built using python libraries telnetlib3_, blessed_, and textual_.
 Features
 --------
 
-- **Session manager** -- A TUI for browsing, creating, and launching sessions.  Ships with a bundled
-  directory of 1000+ MUD and BBS servers.
-- **Advanced Telnet** -- Thanks to telnetlib3_, possibly supporting more telnet RFCs and extensions
-  than any other client in the world! SSL/TLS, NAWS, NEW_ENVIRON, CHARSET, GMCP, MSSP, BINARY, SGA,
-  ECHO, TTYPE, NEW_ENVIRON, TSPEED, CHARSET, LINEMODE, XDISPLOC, EOR, GA and more!
-- **BBS Scene Art Support** -- Telix can translate popular BBS encodings like CP437, PETSCII, and
-  ATASCII to modern utf-8 terminals. It can also translate color codes, including iCE colors, to
-  24-bit color terminal sequences for accurate color accuracy of "Scene art".
-- **Strong Mud Support**: dedicated TUI to configure Macros, Autoreplies, Highlights, Room mapping,
-  Fast travel, Random walk, Auto-Discover, and Chat.
+- **Session manager** Ships with a bundled directory of 1000+ MUD and BBS servers.
+- **Advanced Telnet** Supports SSL/TLS, NAWS, NEW_ENVIRON, CHARSET, GMCP, MCCP, BINARY, SGA, ECHO,
+  TTYPE, NEW_ENVIRON, TSPEED, CHARSET, LINEMODE, XDISPLOC, EOR, GA and more!
+- **BBS/Scene Art Support** Encodings like CP437, PETSCII, and ATASCII are translated as well as
+  color codes, including iCE colors, to 24-bit color terminal sequences for accurate color
+  representation.
+- **Strong Mud Support**: Several dedicated Interfaces to manage Macros, Autoreplies, Highlights,
+  Room mapping, Fast/Slow travel, Random walk, Auto-Discover, and Chat.
 
 Installation
 ------------
@@ -143,31 +141,37 @@ Repeat prefix
 
 A leading integer repeats the next token::
 
-    3n;2e         →  n;n;n;e;e
-    5attack       →  attack;attack;attack;attack;attack
+- ``3n;2e`` expands to ``n;n;n;e;e``
+- ``5attack`` expands to ``attack;attack;attack;attack;attack``
 
 Backtick commands
 ~~~~~~~~~~~~~~~~~
 
-Client-side directives enclosed in backticks, evaluated before sending.
+Client-side directives are enclosed in backticks and evaluated before sending.
 
 ``delay``
     Pause execution: `` `delay 1s` ``, `` `delay 500ms` ``.
 
 ``when``
-    Conditional gate on GMCP vitals (percentages of max):
-    `` `when HP%>=80` ``, `` `when MP%>50` ``.
+    Conditional gate on GMCP vitals.  Use ``%`` for percentages of max,
+    or bare names for raw values:
+    `` `when HP%>=80` ``, `` `when MP>50` ``, `` `when HP<500` ``.
+
 
 ``until``
-    Wait for a regex pattern in server output (case-insensitive, default
-    timeout 4 seconds): `` `until died\.` ``, `` `until 10 treasure` ``.
+    Wait for a case-insensitive regex pattern in server output.
+
+    Default timeout is 4 seconds unless specified otherwise as optional first argument: `` `until
+    160 ^you killed|died\.` ``, `` `until 20 ^a train arrived at the station` ``.
 
 ``untils``
     Same as ``until`` but case-sensitive.
 
-``fast travel <room_id>`` / ``slow travel <room_id>``
-    Navigate to a room by GMCP ID.  Fast skips exclusive autoreplies; slow
-    allows them to fire at each room.
+``fast travel <room_id>``
+    Navigate to a room by GMCP ID.  Fast mode disables autoreplies.
+
+``slow travel <room_id>``
+    Navigate to a room by GMCP ID, autoreplies may trigger.
 
 ``return fast`` / ``return slow``
     Travel back to the room where the current macro started.
@@ -175,14 +179,18 @@ Client-side directives enclosed in backticks, evaluated before sending.
 ``home``
     Fast travel to the home room of the current area.
 
-``autodiscover [limit]``
-    BFS-explore unvisited exits from nearby rooms.
+``autodiscover [limit] [bfs|dfs] [autosearch] [autoevaluate] [noreply]``
+    BFS-explore unvisited exits from nearby rooms.  ``noreply`` completely
+    disables autoreply processing during the walk.
 
-``randomwalk [limit]``
-    Walk randomly, preferring rooms with unvisited exits.
+``randomwalk [limit] [visit_level] [bfs|dfs] [autosearch] [autoevaluate] [noreply]``
+    Walk randomly, preferring rooms with unvisited exits.  ``noreply``
+    completely disables autoreply processing during the walk.
 
-``resume [limit]``
+``resume [limit] [noreply]``
     Resume the last autodiscover or randomwalk from where it stopped.
+    Inherits the ``noreply`` setting from the original walk unless
+    overridden.
 
 Macros
 ------
@@ -208,9 +216,9 @@ Flags:
 - **A (Always)** -- Match even while another rule's exclusive chain is active.
 - **I (Immediate)** -- Reply without waiting for a GA/EOR prompt.
 - **C (Case-sensitive)** -- Case-sensitive pattern matching.
-- **W (When)** -- Attach a vital-percentage condition gate.
+- **W (When)** -- Attach a vitals condition gate.
 
-Patterns use Python regex syntax.  Capture groups (``\1``, ``\2``) can be
+Patterns use Python regex syntax.  Capture groups (e.g. ``\1``, ``\2``) can be
 interpolated into the reply text.
 
 Rules are evaluated top-to-bottom; the first match wins unless a rule is
@@ -262,8 +270,8 @@ Files
 -----
 
 All persistent state follows the `XDG Base Directory Specification
-<https://specifications.freedesktop.org/basedir-spec/latest/>`_.
-Override locations with ``$XDG_CONFIG_HOME`` and ``$XDG_DATA_HOME``.
+<https://specifications.freedesktop.org/basedir-spec/latest/>`_.  Override locations with
+``$XDG_CONFIG_HOME`` and ``$XDG_DATA_HOME``.
 
 Common defaults:
 
@@ -283,15 +291,14 @@ Common defaults:
      - ``~/Library/Application Support``
      - ``%LOCALAPPDATA%``
 
-``$XDG_CONFIG_HOME/telix/`` contains 1 file for all sessions for each feature:
+``$XDG_CONFIG_HOME/telix/`` contains files for each feature:
 
  - ``sessions.json``
  - ``autoreplies.json``
  - ``macros.json``,
  - ``highlights.json``
 
-``$XDG_DATA_HOME/telix/`` contains 1 file for each session for each feature.  Session-specific files
-use a SHA-256 slug of ``host:port``:
+``$XDG_DATA_HOME/telix/`` contains a file for session using a SHA-256 slug of ``host:port``:
 
 - ``history-<hash>``
 - ``rooms-<hash>.db``
@@ -305,4 +312,6 @@ See ``CONTRIBUTING.rst``.
 License
 -------
 
-ISC.  See ``LICENSE.txt``.
+ISC.
+
+See ``LICENSE.txt``.

@@ -2152,7 +2152,7 @@ class AutoreplyEditScreen(_EditListScreen):
                         with Horizontal(classes="field-row"):
                             yield Label("Condition", classes="form-label-short")
                             yield Select(
-                                [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%")],
+                                [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%"), ("HP", "HP"), ("MP", "MP")],
                                 value="",
                                 allow_blank=False,
                                 id="autoreply-cond-vital",
@@ -2341,7 +2341,7 @@ class AutoreplyEditScreen(_EditListScreen):
         cond_op = self.query_one("#autoreply-cond-op", Select).value
         cond_val = self.query_one("#autoreply-cond-val", Input).value.strip()
         when: dict[str, str] | None = None
-        if cond_vital and isinstance(cond_vital, str) and cond_vital in ("HP%", "MP%"):
+        if cond_vital and isinstance(cond_vital, str) and cond_vital in ("HP%", "MP%", "HP", "MP"):
             try:
                 int(cond_val or "99")
             except ValueError:

@@ -420,6 +420,7 @@ async def _autodiscover(
     limit: int = _DEFAULT_WALK_LIMIT,
     resume: bool = False,
     strategy: str = "bfs",
+    noreply: bool = False,
 ) -> None:
     """
     Explore unvisited exits reachable from the current room.
@@ -435,6 +436,7 @@ async def _autodiscover(
     :param limit: Maximum number of exits to explore.
     :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
         deepest-first ordering.
+    :param noreply: Completely disable the autoreply engine during the walk.
     """
     if ctx.discover_active:
         return
@@ -461,6 +463,12 @@ async def _autodiscover(
         if echo_fn is not None:
             echo_fn("AUTODISCOVER: no unvisited exits nearby")
         return
+
+    engine = ctx.autoreply_engine
+    engine_was_enabled = True
+    if noreply and engine is not None:
+        engine_was_enabled = engine.enabled
+        engine.enabled = False
 
     ctx.discover_active = True
     ctx.discover_total = len(branches)
@@ -628,9 +636,12 @@ async def _autodiscover(
     except asyncio.CancelledError:
         pass
     finally:
+        if noreply and engine is not None:
+            engine.enabled = engine_was_enabled
         ctx.last_walk_mode = "autodiscover"
         ctx.last_walk_room = ctx.current_room_num
         ctx.last_walk_strategy = strategy
+        ctx.last_walk_noreply = noreply
         ctx.last_walk_tried = tried
         ctx.discover_active = False
         ctx.discover_current = 0
@@ -649,6 +660,7 @@ async def _randomwalk(
     limit: int = _DEFAULT_WALK_LIMIT,
     resume: bool = False,
     visit_level: int = 2,
+    noreply: bool = False,
 ) -> None:
     """
     Random walk up to *limit* rooms, preferring unvisited exits.
@@ -668,6 +680,7 @@ async def _randomwalk(
     :param log: Logger.
     :param limit: Maximum number of steps.
     :param visit_level: Minimum visits per reachable room before stopping.
+    :param noreply: Completely disable the autoreply engine during the walk.
     """
     if ctx.randomwalk_active:
         return
@@ -687,6 +700,12 @@ async def _randomwalk(
         if echo_fn is not None:
             echo_fn("RANDOMWALK: no exits from current room")
         return
+
+    engine = ctx.autoreply_engine
+    engine_was_enabled = True
+    if noreply and engine is not None:
+        engine_was_enabled = engine.enabled
+        engine.enabled = False
 
     # Per-walk visit counter.  The entrance room (the room we were in
     # before triggering the walk) is seeded at infinity so the walker
@@ -963,8 +982,11 @@ async def _randomwalk(
     except asyncio.CancelledError:
         pass
     finally:
+        if noreply and engine is not None:
+            engine.enabled = engine_was_enabled
         ctx.last_walk_mode = "randomwalk"
         ctx.last_walk_room = ctx.current_room_num
+        ctx.last_walk_noreply = noreply
         ctx.last_walk_visited = visited
         ctx.randomwalk_active = False
         ctx.randomwalk_auto_search = False
@@ -1046,6 +1068,7 @@ async def _handle_travel_commands(
             auto_search = False
             auto_evaluate = False
             walk_strategy = "bfs"
+            noreply = False
             if arg:
                 arg_parts = arg.split()
                 numeric_idx = 0
@@ -1055,6 +1078,8 @@ async def _handle_travel_commands(
                         auto_search = True
                     elif low == "autoevaluate":
                         auto_evaluate = True
+                    elif low == "noreply":
+                        noreply = True
                     elif low in ("bfs", "dfs"):
                         walk_strategy = low
                     elif numeric_idx == 0:
@@ -1081,6 +1106,7 @@ async def _handle_travel_commands(
                         echo_fn("RESUME: room changed since last walk, cannot resume")
                     return parts[idx + 1 :]
                 verb = ctx.last_walk_mode
+                noreply = noreply or ctx.last_walk_noreply
                 do_resume = True
             else:
                 # Auto-resume: if re-running the same mode from the
@@ -1092,13 +1118,14 @@ async def _handle_travel_commands(
             if verb == "autodiscover":
                 await _autodiscover(
                     ctx, log, limit=walk_limit, resume=do_resume,
-                    strategy=walk_strategy)
+                    strategy=walk_strategy, noreply=noreply)
 
             else:
                 ctx.randomwalk_auto_search = auto_search
                 ctx.randomwalk_auto_evaluate = auto_evaluate
                 await _randomwalk(
-                    ctx, log, limit=walk_limit, resume=do_resume, visit_level=walk_visit_level
+                    ctx, log, limit=walk_limit, resume=do_resume,
+                    visit_level=walk_visit_level, noreply=noreply,
                 )
             return parts[idx + 1 :]
 

@@ -1109,6 +1109,7 @@ if sys.platform != "win32":
                     _autodiscover(
                         self.ctx, self.telnet_writer.log, resume=True,
                         strategy=self.ctx.last_walk_strategy,
+                        noreply=self.ctx.last_walk_noreply,
                     )
                 )
                 t.add_done_callback(self._on_walk_done)
@@ -1120,7 +1121,10 @@ if sys.platform != "win32":
                         task.cancel()
                     return
                 t = asyncio.ensure_future(
-                    _randomwalk(self.ctx, self.telnet_writer.log, resume=True)
+                    _randomwalk(
+                        self.ctx, self.telnet_writer.log, resume=True,
+                        noreply=self.ctx.last_walk_noreply,
+                    )
                 )
                 t.add_done_callback(self._on_walk_done)
                 self.ctx.randomwalk_task = t

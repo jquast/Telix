@@ -16,7 +16,7 @@ from .client_repl_render import _ELLIPSIS, _get_term, _wcswidth, _write_hint, _f
 _REPEAT_RE = re.compile(r"^(\d+)([A-Za-z].*)$")
 _BACKTICK_RE = re.compile(r"`[^`]*`")
 
-_WHEN_RE = re.compile(r"^`when\s+(HP%|MP%)\s*(>=|<=|>|<|=)\s*(\d+)`$", re.IGNORECASE)
+_WHEN_RE = re.compile(r"^`when\s+(HP%?|MP%?)\s*(>=|<=|>|<|=)\s*(\d+)`$", re.IGNORECASE)
 _UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 _UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 

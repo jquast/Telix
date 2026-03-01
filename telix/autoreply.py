@@ -41,15 +41,36 @@ _COND_RE = re.compile(r"^(>=|<=|>|<|=)(\d+)$")
 _KILL_RE = re.compile(r"^kill\s+(\S+)", re.IGNORECASE)
 
 # Maps condition key to (current_keys, max_keys) for GMCP Char.Vitals lookup.
-_VITAL_KEYS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+_VITAL_PCT_KEYS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "HP%": (("hp", "HP"), ("maxhp", "maxHP", "max_hp")),
     "MP%": (("mp", "MP", "mana", "sp", "SP"), ("maxmp", "maxMP", "max_mp", "maxsp", "maxSP")),
 }
 
+# Maps raw-value condition key to GMCP Char.Vitals field names.
+_VITAL_RAW_KEYS: dict[str, tuple[str, ...]] = {
+    "HP": ("hp", "HP"),
+    "MP": ("mp", "MP", "mana", "sp", "SP"),
+}
+
+
+def _get_vital_raw(key: str, vitals: dict[str, Any]) -> Optional[int]:
+    """Return the raw vital value for *key*, or ``None`` if unavailable."""
+    field_names = _VITAL_RAW_KEYS.get(key)
+    if field_names is None:
+        return None
+    for k in field_names:
+        raw = vitals.get(k)
+        if raw is not None:
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return None
+    return None
+
 
 def _get_vital_pct(key: str, vitals: dict[str, Any]) -> Optional[int]:
     """Return the vital percentage (0-100+) for *key*, or ``None`` if unavailable."""
-    spec = _VITAL_KEYS.get(key)
+    spec = _VITAL_PCT_KEYS.get(key)
     if spec is None:
         return None
     cur_keys, max_keys = spec
@@ -94,7 +115,8 @@ def check_condition(when: dict[str, str], ctx: "SessionContext") -> tuple[bool, 
     """
     Check vital conditions against GMCP data on *ctx*.
 
-    :param when: Condition dict, e.g. ``{"HP%": ">50", "MP%": ">30"}``.
+    :param when: Condition dict, e.g. ``{"HP%": ">50"}`` (percentage)
+        or ``{"HP": ">500"}`` (raw value).
     :param ctx: Session context with ``gmcp_data`` attribute.
     :returns: ``(ok, failure_description)`` -- *ok* is ``False`` when a
         condition is not met; *failure_description* explains which.
@@ -112,11 +134,16 @@ def check_condition(when: dict[str, str], ctx: "SessionContext") -> tuple[bool, 
         if not m:
             continue
         op, threshold = m.group(1), int(m.group(2))
-        pct = _get_vital_pct(key, vitals)
-        if pct is None:
+        if key.endswith("%"):
+            value = _get_vital_pct(key, vitals)
+            unit = "%"
+        else:
+            value = _get_vital_raw(key, vitals)
+            unit = ""
+        if value is None:
             continue
-        if not _compare(pct, op, threshold):
-            return False, f"{key}{op}{threshold} (actual {pct}%)"
+        if not _compare(value, op, threshold):
+            return False, f"{key}{op}{threshold} (actual {value}{unit})"
     return True, ""
 
 

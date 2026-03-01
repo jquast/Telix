@@ -1128,6 +1128,13 @@ def _mock_writer_with_vitals(hp: int, maxhp: int, mp: int, maxmp: int):
         ({"HP%": ">50", "MP%": ">30"}, 60, 100, 40, 100, True),
         ({"HP%": ">50", "MP%": ">30"}, 60, 100, 20, 100, False),
         ({"HP%": ">50", "MP%": ">30"}, 40, 100, 40, 100, False),
+        ({"HP": ">50"}, 60, 100, 50, 100, True),
+        ({"HP": ">50"}, 50, 100, 50, 100, False),
+        ({"HP": ">=50"}, 50, 100, 50, 100, True),
+        ({"MP": ">30"}, 80, 100, 40, 100, True),
+        ({"MP": ">30"}, 80, 100, 20, 100, False),
+        ({"HP": ">50", "MP": ">30"}, 60, 100, 40, 100, True),
+        ({"HP": ">50", "MP": ">30"}, 60, 100, 20, 100, False),
     ],
 )
 def test_check_condition(when, hp, maxhp, mp, maxmp, ok):
@@ -1444,6 +1451,36 @@ async def test_inline_when_fails_aborts_chain():
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.1)
     assert not any("kill bear" in w for w in written)
+
+
+@pytest.mark.asyncio
+async def test_inline_when_raw_hp_passes():
+    ctx, written = _mock_writer_with_vitals(80, 100, 50, 100)
+    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    engine.feed("A bear appears.\n")
+    await asyncio.sleep(0.1)
+    assert any("kill bear" in w for w in written)
+
+
+@pytest.mark.asyncio
+async def test_inline_when_raw_hp_fails():
+    ctx, written = _mock_writer_with_vitals(30, 100, 50, 100)
+    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    engine.feed("A bear appears.\n")
+    await asyncio.sleep(0.1)
+    assert not any("kill bear" in w for w in written)
+
+
+@pytest.mark.asyncio
+async def test_inline_when_raw_mp_passes():
+    ctx, written = _mock_writer_with_vitals(80, 100, 50, 100)
+    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when MP>30`;kill bear;")]
+    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    engine.feed("A bear appears.\n")
+    await asyncio.sleep(0.1)
+    assert any("kill bear" in w for w in written)
 
 
 @pytest.mark.asyncio

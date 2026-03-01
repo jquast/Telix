@@ -1751,3 +1751,117 @@ def test_typescript_will_echo_writes_bare_crlf(tmp_path: Any) -> None:
 
     content = ts_path.read_text(encoding="utf-8", newline="")
     assert "Password: \r\nWelcome" in content
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_handle_travel_noreply_parsed(
+    monkeypatch: pytest.MonkeyPatch, fast_sleep
+) -> None:
+    """``noreply`` keyword is parsed and passed to autodiscover."""
+    import logging
+
+    from telix.client_repl import _handle_travel_commands
+
+    adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
+    writer = _WalkWriter(room_num="room1", adj=adj)
+
+    captured_kw: list[dict] = []
+
+    async def fake_autodiscover(ctx, log, **kw):
+        captured_kw.append(kw)
+
+    monkeypatch.setattr("telix.client_repl_travel._autodiscover", fake_autodiscover)
+
+    parts = ["`autodiscover noreply`"]
+    await _handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+
+    assert len(captured_kw) == 1
+    assert captured_kw[0]["noreply"] is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_randomwalk_noreply_disables_engine(
+    monkeypatch: pytest.MonkeyPatch, fast_sleep
+) -> None:
+    """``noreply=True`` disables autoreply engine during randomwalk and restores after."""
+    import logging
+
+    from telix.client_repl import _randomwalk
+    from telix.autoreply import AutoreplyEngine
+
+    adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
+    writer = _WalkWriter(room_num="room1", adj=adj)
+    engine = AutoreplyEngine(
+        rules=[], ctx=writer.ctx, log=logging.getLogger("test")
+    )
+    writer.ctx.autoreply_engine = engine
+    assert engine.enabled is True
+
+    await _randomwalk(writer.ctx, logging.getLogger("test"), limit=2, noreply=True)
+
+    assert engine.enabled is True
+    assert writer.ctx.last_walk_noreply is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_autodiscover_noreply_disables_engine(
+    monkeypatch: pytest.MonkeyPatch, fast_sleep
+) -> None:
+    """``noreply=True`` disables autoreply engine during autodiscover and restores after."""
+    import logging
+
+    from telix.client_repl import _autodiscover
+    from telix.autoreply import AutoreplyEngine
+
+    adj: dict[str, dict[str, str]] = {
+        "room1": {"north": "room2"},
+        "room2": {"south": "room1"},
+    }
+    writer = _WalkWriter(room_num="room1", adj=adj)
+    writer.ctx.room_graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
+    engine = AutoreplyEngine(
+        rules=[], ctx=writer.ctx, log=logging.getLogger("test")
+    )
+    writer.ctx.autoreply_engine = engine
+
+    async def noop_fast_travel(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("telix.client_repl_travel._fast_travel", noop_fast_travel)
+
+    await _autodiscover(writer.ctx, logging.getLogger("test"), limit=1, noreply=True)
+
+    assert engine.enabled is True
+    assert writer.ctx.last_walk_noreply is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_resume_inherits_noreply(
+    monkeypatch: pytest.MonkeyPatch, fast_sleep
+) -> None:
+    """``resume`` picks up ``noreply`` from saved walk state."""
+    import logging
+
+    from telix.client_repl import _handle_travel_commands
+
+    adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
+    writer = _WalkWriter(room_num="room1", adj=adj)
+    writer.ctx.last_walk_mode = "randomwalk"
+    writer.ctx.last_walk_room = "room1"
+    writer.ctx.last_walk_noreply = True
+
+    captured_noreply: list[bool] = []
+
+    async def fake_randomwalk(ctx, log, **kw):
+        captured_noreply.append(kw.get("noreply", False))
+
+    monkeypatch.setattr("telix.client_repl_travel._randomwalk", fake_randomwalk)
+
+    parts = ["`resume`"]
+    await _handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+
+    assert captured_noreply == [True]
