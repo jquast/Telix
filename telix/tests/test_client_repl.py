@@ -1452,9 +1452,7 @@ async def test_home_travel_command(monkeypatch: pytest.MonkeyPatch, fast_sleep) 
     )
 
     fast_travel_args: list[object] = []
-    original_ft = __import__(
-        "telix.client_repl_travel", fromlist=["_fast_travel"]
-    )._fast_travel
+    original_ft = __import__("telix.client_repl_travel", fromlist=["_fast_travel"])._fast_travel
 
     async def mock_fast_travel(*args: object, **kwargs: object) -> None:
         fast_travel_args.append((args, kwargs))
@@ -1675,10 +1673,7 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     from telix.client_repl import ReplSession
     from telix.session_context import SessionContext
 
-    bt = types.SimpleNamespace(
-        restore="", save="", cyan="", normal="",
-        move_yx=lambda row, col: "",
-    )
+    bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
     scroll = types.SimpleNamespace(input_row=0)
     stdout_writer, _ = _mock_stdout()
 
@@ -1693,9 +1688,7 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     repl.stdout = stdout_writer
     repl.ctx = ctx
     repl.replay_buf = []
-    repl.editor = types.SimpleNamespace(
-        display=types.SimpleNamespace(cursor=0)
-    )
+    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
 
     repl._echo_autoreply("look")
     ts_file.close()
@@ -1711,10 +1704,7 @@ def test_echo_autoreply_no_typescript() -> None:
     from telix.client_repl import ReplSession
     from telix.session_context import SessionContext
 
-    bt = types.SimpleNamespace(
-        restore="", save="", cyan="", normal="",
-        move_yx=lambda row, col: "",
-    )
+    bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
     scroll = types.SimpleNamespace(input_row=0)
     stdout_writer, _ = _mock_stdout()
 
@@ -1727,9 +1717,7 @@ def test_echo_autoreply_no_typescript() -> None:
     repl.stdout = stdout_writer
     repl.ctx = ctx
     repl.replay_buf = []
-    repl.editor = types.SimpleNamespace(
-        display=types.SimpleNamespace(cursor=0)
-    )
+    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
 
     repl._echo_autoreply("look")
 
@@ -1760,9 +1748,7 @@ def test_typescript_will_echo_writes_bare_crlf(tmp_path: Any) -> None:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
-async def test_handle_travel_noreply_parsed(
-    monkeypatch: pytest.MonkeyPatch, fast_sleep
-) -> None:
+async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``noreply`` keyword is parsed and passed to autodiscover."""
     import logging
 
@@ -1793,14 +1779,12 @@ async def test_randomwalk_noreply_disables_engine(
     """``noreply=True`` disables autoreply engine during randomwalk and restores after."""
     import logging
 
-    from telix.client_repl import _randomwalk
     from telix.autoreply import AutoreplyEngine
+    from telix.client_repl import _randomwalk
 
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = _WalkWriter(room_num="room1", adj=adj)
-    engine = AutoreplyEngine(
-        rules=[], ctx=writer.ctx, log=logging.getLogger("test")
-    )
+    engine = AutoreplyEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
     writer.ctx.autoreply_engine = engine
     assert engine.enabled is True
 
@@ -1818,18 +1802,13 @@ async def test_autodiscover_noreply_disables_engine(
     """``noreply=True`` disables autoreply engine during autodiscover and restores after."""
     import logging
 
-    from telix.client_repl import _autodiscover
     from telix.autoreply import AutoreplyEngine
+    from telix.client_repl import _autodiscover
 
-    adj: dict[str, dict[str, str]] = {
-        "room1": {"north": "room2"},
-        "room2": {"south": "room1"},
-    }
+    adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = _WalkWriter(room_num="room1", adj=adj)
     writer.ctx.room_graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
-    engine = AutoreplyEngine(
-        rules=[], ctx=writer.ctx, log=logging.getLogger("test")
-    )
+    engine = AutoreplyEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
     writer.ctx.autoreply_engine = engine
 
     async def noop_fast_travel(*args, **kwargs):
@@ -1845,9 +1824,7 @@ async def test_autodiscover_noreply_disables_engine(
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
-async def test_resume_inherits_noreply(
-    monkeypatch: pytest.MonkeyPatch, fast_sleep
-) -> None:
+async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``resume`` picks up ``noreply`` from saved walk state."""
     import logging
 

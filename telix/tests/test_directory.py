@@ -89,8 +89,7 @@ class TestParseLine:
     @pytest.fixture(autouse=True)
     def _import_parser(self) -> None:
         tools_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "tools",
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tools"
         )
         if tools_dir not in sys.path:
             sys.path.insert(0, tools_dir)
@@ -173,9 +172,7 @@ class TestParseLine:
         assert entry["columns"] == 80
         assert entry["encoding"] == "cp437"
 
-    @pytest.mark.parametrize("encoding", [
-        "gbk", "big5", "cp437", "latin-1", "atascii", "petscii",
-    ])
+    @pytest.mark.parametrize("encoding", ["gbk", "big5", "cp437", "latin-1", "atascii", "petscii"])
     def test_known_encodings(self, encoding: str) -> None:
         from import_modem_xyz import _parse_line
 
@@ -190,7 +187,9 @@ class TestParseFile:
 
         mudlist = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "..", "modem.xyz", "mudlist.txt",
+            "..",
+            "modem.xyz",
+            "mudlist.txt",
         )
         if not os.path.isfile(mudlist):
             pytest.skip("modem.xyz not available")
@@ -203,7 +202,9 @@ class TestParseFile:
 
         bbslist = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "..", "modem.xyz", "bbslist.txt",
+            "..",
+            "modem.xyz",
+            "bbslist.txt",
         )
         if not os.path.isfile(bbslist):
             pytest.skip("modem.xyz not available")

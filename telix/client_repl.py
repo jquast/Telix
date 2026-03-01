@@ -45,6 +45,7 @@ from .client_repl_render import (  # noqa: F401
     _BAR_CAP_LEFT,
     _STYLE_NORMAL,
     _BAR_CAP_RIGHT,
+    _CURSOR_AR_OSC,
     _CURSOR_STYLES,
     _FLASH_RAMP_UP,
     CURSOR_DEFAULT,
@@ -100,9 +101,9 @@ from .client_repl_dialogs import (  # noqa: F401
     _confirm_dialog,
     _launch_tui_editor,
     _randomwalk_dialog,
-    _autodiscover_dialog,
     _launch_chat_viewer,
     _reload_autoreplies,
+    _autodiscover_dialog,
     _launch_room_browser,
 )
 from .client_repl_commands import (  # noqa: F401
@@ -1021,6 +1022,8 @@ if sys.platform != "win32":
             self.stdout.write(encoded)
             self.replay_buf.append(encoded)
             self.stdout.write(bt.save.encode())
+            if self.autoreply_engine is not None:
+                self.autoreply_engine.feed(text)
             assert self.scroll is not None
             self._update_input_style()
             self.stdout.write(
@@ -1076,9 +1079,7 @@ if sys.platform != "win32":
                 if task is not None:
                     task.cancel()
                 return
-            cmd = _autodiscover_dialog(
-                replay_buf=self.replay_buf, session_key=self.ctx.session_key
-            )
+            cmd = _autodiscover_dialog(replay_buf=self.replay_buf, session_key=self.ctx.session_key)
             if cmd is None:
                 return
             task = asyncio.ensure_future(
@@ -1107,7 +1108,9 @@ if sys.platform != "win32":
                     return
                 t = asyncio.ensure_future(
                     _autodiscover(
-                        self.ctx, self.telnet_writer.log, resume=True,
+                        self.ctx,
+                        self.telnet_writer.log,
+                        resume=True,
                         strategy=self.ctx.last_walk_strategy,
                         noreply=self.ctx.last_walk_noreply,
                     )
@@ -1122,7 +1125,9 @@ if sys.platform != "win32":
                     return
                 t = asyncio.ensure_future(
                     _randomwalk(
-                        self.ctx, self.telnet_writer.log, resume=True,
+                        self.ctx,
+                        self.telnet_writer.log,
+                        resume=True,
                         noreply=self.ctx.last_walk_noreply,
                     )
                 )
@@ -1264,8 +1269,9 @@ if sys.platform != "win32":
             drew = self.toolbar.cursor_light(bt, row, col, ar)
             if not drew:
                 style = _STYLE_AUTOREPLY if ar else _STYLE_NORMAL
+                osc = _CURSOR_AR_OSC if ar else CURSOR_COLOR_OSC
                 self.stdout.write(bt.move_yx(row, col).encode())
-                self.stdout.write(CURSOR_COLOR_OSC.encode())
+                self.stdout.write(osc.encode())
                 self.stdout.write(style["cursor_sgr"].encode())
                 self.stdout.write(CURSOR_SHOW.encode())
                 self.stdout.write(bt.normal.encode())
@@ -1294,8 +1300,9 @@ if sys.platform != "win32":
                     self.stdout.write((bt.move_yx(dmz, 0) + _dmz_line(_cols, ar_bg)).encode())
             cs = self.ctx.cursor_style or _DEFAULT_CURSOR_STYLE
             style = _STYLE_AUTOREPLY if ar_bg else _STYLE_NORMAL
+            osc = _CURSOR_AR_OSC if ar_bg else CURSOR_COLOR_OSC
             self.stdout.write(_CURSOR_STYLES.get(cs, CURSOR_STEADY_BLOCK).encode())
-            self.stdout.write(CURSOR_COLOR_OSC.encode())
+            self.stdout.write(osc.encode())
             self.stdout.write(style["cursor_sgr"].encode())
             self.stdout.write(CURSOR_SHOW.encode())
 
@@ -1481,7 +1488,7 @@ if sys.platform != "win32":
                     self.replay_buf.append(encoded)
                 self.stdout.write(bt.save.encode())
                 if self.autoreply_engine is not None:
-                    self.autoreply_engine.feed(out)
+                    self.autoreply_engine.feed(emit_now)
                     if is_prompt:
                         self.autoreply_engine.on_prompt()
                         self.prompt_pending = False

@@ -19,8 +19,8 @@ from telix.client_tui import (  # noqa: E402
     SessionConfig,
     MacroEditScreen,
     TelnetSessionApp,
-    AutoreplyEditScreen,
     SessionListScreen,
+    AutoreplyEditScreen,
     _int_val,
     tui_main,
     _float_val,
@@ -211,14 +211,9 @@ def test_persistence_corrupted_json(tui_tmp_paths, monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "compression,expected_flag,absent_flag",
-    [
-        (True, "--compression", "--no-compression"),
-        (False, "--no-compression", "--compression"),
-    ],
+    [(True, "--compression", "--no-compression"), (False, "--no-compression", "--compression")],
 )
-def test_build_command_compression(
-    compression: bool, expected_flag: str, absent_flag: str
-) -> None:
+def test_build_command_compression(compression: bool, expected_flag: str, absent_flag: str) -> None:
     cfg = SessionConfig(host="h", port=23, compression=compression)
     cmd = build_command(cfg)
     assert expected_flag in cmd

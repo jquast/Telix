@@ -430,7 +430,10 @@ class RoomStore:
         return [self._row_to_room(r) for r in rows]
 
     def find_branches(
-        self, src: str, limit: int = 99, blocked: frozenset[str] = frozenset(),
+        self,
+        src: str,
+        limit: int = 99,
+        blocked: frozenset[str] = frozenset(),
         strategy: str = "bfs",
     ) -> list[tuple[str, str, str]]:
         """

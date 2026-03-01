@@ -38,7 +38,8 @@ __all__ = ("telix_client_shell",)
 
 
 def _build_session_key(writer: Union[TelnetWriter, TelnetWriterUnicode]) -> str:
-    """Derive ``host:port`` session key from CLI arguments or peername.
+    """
+    Derive ``host:port`` session key from CLI arguments or peername.
 
     Prefers the original hostname from ``sys.argv`` over the resolved IP
     from :func:`socket.getpeername`, so that session-specific files
@@ -49,6 +50,7 @@ def _build_session_key(writer: Union[TelnetWriter, TelnetWriterUnicode]) -> str:
 
     try:
         from telnetlib3.client import _get_argument_parser
+
         args = _get_argument_parser().parse_known_args(sys.argv[1:])[0]
         if args.host:
             return f"{args.host}:{args.port}"
@@ -64,8 +66,7 @@ def _load_configs(ctx: SessionContext) -> None:
     """
     Load per-session config files into *ctx*.
 
-    Missing config files are silently skipped so first-time connections
-    start with empty defaults.
+    Missing config files are silently skipped so first-time connections start with empty defaults.
     """
     session_key = ctx.session_key
     config_dir = str(_paths.xdg_config_dir())
@@ -198,9 +199,7 @@ async def telix_client_shell(
 
         escape_name = accessories.name_unicode(keyboard_escape)
         banner_sep = "\r\n" if tty_shell._istty else linesep
-        stdout.write(
-            f"Escape character is '{escape_name}'.{banner_sep}".encode()
-        )
+        stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
         def _handle_close(msg: str) -> None:
             _flush_color_filter(telnet_writer, stdout)
@@ -214,11 +213,7 @@ async def telix_client_shell(
         while True:
             if _check_want_repl() and tty_shell._istty:
                 mode_switched = await repl_event_loop(
-                    telnet_reader,
-                    telnet_writer,
-                    tty_shell,
-                    stdout,
-                    history_file=ctx.history_file,
+                    telnet_reader, telnet_writer, tty_shell, stdout, history_file=ctx.history_file
                 )
                 if not mode_switched:
                     # Connection closed normally.
@@ -227,9 +222,7 @@ async def telix_client_shell(
 
             # Raw event loop.
             if not switched_to_raw and tty_shell._istty and tty_shell._save_mode is not None:
-                tty_shell.set_mode(
-                    tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True)
-                )
+                tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
                 switched_to_raw = True
                 local_echo = not telnet_writer.will_echo
                 linesep = "\r\n"

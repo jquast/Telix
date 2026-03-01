@@ -523,10 +523,10 @@ class SessionListScreen(Screen[None]):
         table.clear()
         needle = search.strip().lower()
         items = [
-            (key, cfg) for key, cfg in self._sessions.items()
+            (key, cfg)
+            for key, cfg in self._sessions.items()
             if key != DEFAULTS_KEY
-            and (not needle or needle in
-                 f"{cfg.name} {cfg.host} {cfg.port} {cfg.encoding}".lower())
+            and (not needle or needle in f"{cfg.name} {cfg.host} {cfg.port} {cfg.encoding}".lower())
         ]
         # Bookmarked first, then most recently connected first, then name.
         items.sort(key=lambda kc: (kc[1].name or kc[1].host).lower())
@@ -923,8 +923,10 @@ class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
             yield self._field_row(
                 "Name",
                 Input(
-                    value=cfg.name, placeholder="optional display name",
-                    id="name", classes="field-input",
+                    value=cfg.name,
+                    placeholder="optional display name",
+                    id="name",
+                    classes="field-input",
                 ),
             )
             yield Horizontal(
@@ -941,12 +943,8 @@ class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
                     yield RadioButton(
                         "Passive", value=cfg.compression is None, id="compress-passive"
                     )
-                    yield RadioButton(
-                        "Yes", value=cfg.compression is True, id="compress-yes"
-                    )
-                    yield RadioButton(
-                        "No", value=cfg.compression is False, id="compress-no"
-                    )
+                    yield RadioButton("Yes", value=cfg.compression is True, id="compress-yes")
+                    yield RadioButton("No", value=cfg.compression is False, id="compress-no")
             with Vertical(id="ssl-timeout-col"):
                 with Horizontal(classes="switch-row"):
                     yield Label("SSL/TLS", classes="field-label")
@@ -1035,8 +1033,7 @@ class SessionEditScreen(Screen[SessionConfig | None]):  # type: ignore[misc]
         )
         yield self._field_row(
             "Typescript",
-            Input(value=cfg.typescript, placeholder="path", id="typescript",
-                  classes="field-input"),
+            Input(value=cfg.typescript, placeholder="path", id="typescript", classes="field-input"),
         )
 
     def compose(self) -> ComposeResult:
@@ -2159,7 +2156,13 @@ class AutoreplyEditScreen(_EditListScreen):
                         with Horizontal(classes="field-row"):
                             yield Label("Condition", classes="form-label-short")
                             yield Select(
-                                [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%"), ("HP", "HP"), ("MP", "MP")],
+                                [
+                                    ("(none)", ""),
+                                    ("HP%", "HP%"),
+                                    ("MP%", "MP%"),
+                                    ("HP", "HP"),
+                                    ("MP", "MP"),
+                                ],
                                 value="",
                                 allow_blank=False,
                                 id="autoreply-cond-vital",
@@ -3078,7 +3081,7 @@ class RoomBrowserScreen(Screen["bool | None"]):
                 show_time = self._sort_mode == "last_visited"
                 if len(members) == 1:
                     num, _area, _exits, bookmarked, lv = members[0]
-                    name_part = name.ljust(self._name_col)[:self._name_col]
+                    name_part = name.ljust(self._name_col)[: self._name_col]
                     count_part = "(1)".rjust(4)
                     if show_time:
                         info_part = _relative_time(lv).rjust(8) if lv else "".rjust(8)
@@ -3089,7 +3092,7 @@ class RoomBrowserScreen(Screen["bool | None"]):
                     label = f"{name_part} {count_part} {info_part}{id_part}"
                     tree.root.add_leaf(RichText(label), data=num)
                 else:
-                    name_part = name.ljust(self._name_col)[:self._name_col]
+                    name_part = name.ljust(self._name_col)[: self._name_col]
                     count_part = f"({len(members)})".rjust(4)
                     if show_time:
                         newest = max((m[4] for m in members if m[4]), default="")
@@ -4083,18 +4086,14 @@ class _RandomwalkDialogScreen(Screen[bool]):
                     )
                     yield lbl
                     yield Input(
-                        value=str(self._default_visit_level),
-                        id="rw-visit-level",
-                        type="integer",
+                        value=str(self._default_visit_level), id="rw-visit-level", type="integer"
                     )
                 with Horizontal(classes="rw-option"):
                     yield Label("Auto search:")
                     yield Switch(value=self._default_auto_search, id="rw-auto-search")
                 with Horizontal(classes="rw-option"):
                     yield Label("Auto evaluate:")
-                    yield Switch(
-                        value=self._default_auto_evaluate, id="rw-auto-evaluate"
-                    )
+                    yield Switch(value=self._default_auto_evaluate, id="rw-auto-evaluate")
             yield Static("", id="rw-error")
             with Horizontal(id="rw-buttons"):
                 yield Button("Help", variant="default", id="rw-help")
@@ -4245,11 +4244,7 @@ class _AutodiscoverDialogScreen(Screen[bool]):
     }
     """
 
-    def __init__(
-        self,
-        result_file: str = "",
-        default_strategy: str = "bfs",
-    ) -> None:
+    def __init__(self, result_file: str = "", default_strategy: str = "bfs") -> None:
         super().__init__()
         self._result_file = result_file
         self._default_strategy = default_strategy
@@ -4322,28 +4317,19 @@ class _AutodiscoverDialogScreen(Screen[bool]):
         if not self._result_file:
             return
         cmd = f"`autodiscover {strategy}`"
-        result = json.dumps({
-            "confirmed": confirmed,
-            "strategy": strategy,
-            "command": cmd,
-        })
+        result = json.dumps({"confirmed": confirmed, "strategy": strategy, "command": cmd})
         with open(self._result_file, "w", encoding="utf-8") as f:
             f.write(result)
 
 
 def autodiscover_dialog_main(
-    result_file: str = "",
-    default_strategy: str = "bfs",
-    logfile: str = "",
+    result_file: str = "", default_strategy: str = "bfs", logfile: str = ""
 ) -> None:
     """Launch standalone autodiscover dialog TUI."""
     _restore_blocking_fds(logfile)
     _log_child_diagnostics()
     _patch_writer_thread_queue()
-    screen = _AutodiscoverDialogScreen(
-        result_file=result_file,
-        default_strategy=default_strategy,
-    )
+    screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy=default_strategy)
     app = _EditorApp(screen)
     app.run()
 

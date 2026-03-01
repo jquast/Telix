@@ -286,12 +286,22 @@ _CURSOR_STYLES: dict[str, str] = {
 }
 _DEFAULT_CURSOR_STYLE = "steady_block"
 
-# Cursor color: medium red-brown foreground on the input-line background.
+# Cursor color: RGB inverse of the input-line background.
+# Normal bg (26,0,0) -> inverse (229,255,255); autoreply bg (26,18,0) -> (229,237,255).
 # Cursor color via OSC 12 (xterm/kitty/foot/iTerm2).  Uses X11 rgb: format.
-CURSOR_COLOR_RGB = (50, 32, 14)
+_NORMAL_BG_RGB = (26, 0, 0)
+_AUTOREPLY_BG_RGB = (26, 18, 0)
+CURSOR_COLOR_RGB = (255 - _NORMAL_BG_RGB[0], 255 - _NORMAL_BG_RGB[1], 255 - _NORMAL_BG_RGB[2])
+_CURSOR_AR_RGB = (
+    255 - _AUTOREPLY_BG_RGB[0], 255 - _AUTOREPLY_BG_RGB[1], 255 - _AUTOREPLY_BG_RGB[2]
+)
 CURSOR_COLOR_OSC: str = (
     f"\x1b]12;rgb:{CURSOR_COLOR_RGB[0]:02x}/{CURSOR_COLOR_RGB[1]:02x}"
     f"/{CURSOR_COLOR_RGB[2]:02x}\x07"
+)
+_CURSOR_AR_OSC: str = (
+    f"\x1b]12;rgb:{_CURSOR_AR_RGB[0]:02x}/{_CURSOR_AR_RGB[1]:02x}"
+    f"/{_CURSOR_AR_RGB[2]:02x}\x07"
 )
 CURSOR_COLOR_RESET_OSC: str = "\x1b]112\x07"  # OSC 112 -- reset to default
 
@@ -310,6 +320,8 @@ def _make_styles() -> None:
     blessed_term = _get_term()
     cr, cg, cb = CURSOR_COLOR_RGB
     cursor_fg = blessed_term.color_rgb(cr, cg, cb)
+    ar_cr, ar_cg, ar_cb = _CURSOR_AR_RGB
+    cursor_ar_fg = blessed_term.color_rgb(ar_cr, ar_cg, ar_cb)
     _STYLE_NORMAL.clear()
     _STYLE_NORMAL.update(
         {
@@ -327,7 +339,7 @@ def _make_styles() -> None:
             "suggestion_sgr": blessed_term.color_rgb(80, 60, 0),
             "bg_sgr": blessed_term.on_color_rgb(26, 18, 0),
             "ellipsis_sgr": blessed_term.color_rgb(80, 60, 0),
-            "cursor_sgr": cursor_fg + blessed_term.on_color_rgb(26, 18, 0),
+            "cursor_sgr": cursor_ar_fg + blessed_term.on_color_rgb(26, 18, 0),
         }
     )
 
@@ -1257,7 +1269,8 @@ class ToolbarRenderer:
         ch, (r, g, b) = self.stoplight._last_result
         if ch == " ":
             return False
-        bg = _STYLE_AUTOREPLY["bg_sgr"] if is_autoreply_bg else _STYLE_NORMAL["bg_sgr"]
+        cbg = _CURSOR_AR_RGB if is_autoreply_bg else CURSOR_COLOR_RGB
+        bg = bt.on_color_rgb(*cbg)
         self.out.write(bt.move_yx(row, col).encode())
         self.out.write(f"{bg}{bt.color_rgb(r, g, b)}{ch}{bt.normal}".encode())
         self.out.write(bt.move_yx(row, col).encode())
@@ -1335,8 +1348,9 @@ class ToolbarRenderer:
                 drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
                 if not drew:
                     style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
+                    osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
                     self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                    self.out.write(CURSOR_COLOR_OSC.encode())
+                    self.out.write(osc.encode())
                     self.out.write(style["cursor_sgr"].encode())
                     self.out.write(CURSOR_SHOW.encode())
                     self.out.write(bt.normal.encode())
@@ -1399,8 +1413,9 @@ class ToolbarRenderer:
                     drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
                     if not drew:
                         style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
+                        osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
                         self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                        self.out.write(CURSOR_COLOR_OSC.encode())
+                        self.out.write(osc.encode())
                         self.out.write(style["cursor_sgr"].encode())
                         self.out.write(CURSOR_SHOW.encode())
                         self.out.write(bt.normal.encode())
@@ -1462,8 +1477,9 @@ class ToolbarRenderer:
                 drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
                 if not drew:
                     style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
+                    osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
                     self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                    self.out.write(CURSOR_COLOR_OSC.encode())
+                    self.out.write(osc.encode())
                     self.out.write(style["cursor_sgr"].encode())
                     self.out.write(CURSOR_SHOW.encode())
                     self.out.write(bt.normal.encode())

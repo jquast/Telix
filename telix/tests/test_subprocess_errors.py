@@ -18,25 +18,20 @@ from telix.session_context import SessionContext
 @pytest.fixture()
 def _stub_terminal(monkeypatch: Any) -> None:
     """Stub terminal helpers so subprocess launchers don't touch the real TTY."""
-    monkeypatch.setattr(
-        "telix.client_repl_dialogs._get_logfile_path", lambda: ""
-    )
-    monkeypatch.setattr(
-        "telix.client_repl._restore_after_subprocess", lambda buf: None
-    )
+    monkeypatch.setattr("telix.client_repl_dialogs._get_logfile_path", lambda: "")
+    monkeypatch.setattr("telix.client_repl._restore_after_subprocess", lambda buf: None)
     monkeypatch.setattr("telix.client_repl._terminal_cleanup", lambda: "")
     monkeypatch.setattr(
         "telix.client_repl._get_term",
-        lambda: MagicMock(
-            change_scroll_region=MagicMock(return_value=""), height=24
-        ),
+        lambda: MagicMock(change_scroll_region=MagicMock(return_value=""), height=24),
     )
     monkeypatch.setattr(
         "telix.client_repl._blocking_fds",
-        MagicMock(return_value=MagicMock(
-            __enter__=MagicMock(return_value=None),
-            __exit__=MagicMock(return_value=False),
-        )),
+        MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)
+            )
+        ),
     )
 
 
@@ -62,9 +57,13 @@ class TestLaunchTuiEditorError:
         monkeypatch.setattr("os.path.exists", lambda p: False)
 
         written: list[str] = []
-        monkeypatch.setattr("sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock()))
+        monkeypatch.setattr(
+            "sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock())
+        )
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
-        monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
+        monkeypatch.setattr(
+            "sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False))
+        )
 
         with patch("builtins.input", return_value="") as mock_input:
             _launch_tui_editor("macros", _make_ctx())
@@ -81,9 +80,13 @@ class TestLaunchTuiEditorError:
         monkeypatch.setattr("os.path.exists", lambda p: False)
 
         written: list[str] = []
-        monkeypatch.setattr("sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock()))
+        monkeypatch.setattr(
+            "sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock())
+        )
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
-        monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
+        monkeypatch.setattr(
+            "sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False))
+        )
 
         _launch_tui_editor("macros", _make_ctx())
         assert not any("Press RETURN" in s for s in written)
@@ -98,9 +101,13 @@ class TestLaunchChatViewerError:
         monkeypatch.setattr("subprocess.run", lambda cmd, check=False: fail_result)
 
         written: list[str] = []
-        monkeypatch.setattr("sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock()))
+        monkeypatch.setattr(
+            "sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock())
+        )
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
-        monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
+        monkeypatch.setattr(
+            "sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False))
+        )
 
         with patch("builtins.input", return_value="") as mock_input:
             _launch_chat_viewer(_make_ctx())
@@ -116,14 +123,16 @@ class TestLaunchRoomBrowserError:
 
         fail_result = subprocess.CompletedProcess(args=[], returncode=1)
         monkeypatch.setattr("subprocess.run", lambda cmd, check=False: fail_result)
-        monkeypatch.setattr(
-            "telix.rooms.read_fasttravel", lambda p: ([], False)
-        )
+        monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([], False))
 
         written: list[str] = []
-        monkeypatch.setattr("sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock()))
+        monkeypatch.setattr(
+            "sys.stdout", MagicMock(write=lambda s: written.append(s), flush=MagicMock())
+        )
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
-        monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
+        monkeypatch.setattr(
+            "sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False))
+        )
 
         ctx = _make_ctx()
         ctx.room_graph = None

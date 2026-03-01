@@ -211,9 +211,7 @@ def _randomwalk_dialog(replay_buf: Optional[Any] = None, session_key: str = "") 
             pass
 
 
-def _autodiscover_dialog(
-    replay_buf: Optional[Any] = None, session_key: str = ""
-) -> Optional[str]:
+def _autodiscover_dialog(replay_buf: Optional[Any] = None, session_key: str = "") -> Optional[str]:
     """
     Show the autodiscover dialog with BFS/DFS strategy selection.
 

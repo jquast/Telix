@@ -1,8 +1,7 @@
 """
 Chat message persistence for GMCP ``Comm.Channel.Text``.
 
-Provides functions to load, persist, and append chat messages to a
-per-session JSON file on disk.
+Provides functions to load, persist, and append chat messages to a per-session JSON file on disk.
 """
 
 from __future__ import annotations

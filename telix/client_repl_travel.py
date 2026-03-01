@@ -457,8 +457,7 @@ async def _autodiscover(
     blocked_edges: dict[tuple[str, str], str] = {}
     blocked_rooms = graph.blocked_rooms()
 
-    branches = graph.find_branches(
-        current, blocked=blocked_rooms, strategy=strategy)
+    branches = graph.find_branches(current, blocked=blocked_rooms, strategy=strategy)
     if not branches:
         if echo_fn is not None:
             echo_fn("AUTODISCOVER: no unvisited exits nearby")
@@ -483,8 +482,7 @@ async def _autodiscover(
             # newly revealed exits from rooms we just visited, nearest-first.
             branches = [
                 (gw, d, t)
-                for gw, d, t in graph.find_branches(
-                    pos, blocked=blocked_rooms, strategy=strategy)
+                for gw, d, t in graph.find_branches(pos, blocked=blocked_rooms, strategy=strategy)
                 if (gw, d) not in tried and t not in inaccessible
             ]
             if not branches:
@@ -1117,15 +1115,24 @@ async def _handle_travel_commands(
 
             if verb == "autodiscover":
                 await _autodiscover(
-                    ctx, log, limit=walk_limit, resume=do_resume,
-                    strategy=walk_strategy, noreply=noreply)
+                    ctx,
+                    log,
+                    limit=walk_limit,
+                    resume=do_resume,
+                    strategy=walk_strategy,
+                    noreply=noreply,
+                )
 
             else:
                 ctx.randomwalk_auto_search = auto_search
                 ctx.randomwalk_auto_evaluate = auto_evaluate
                 await _randomwalk(
-                    ctx, log, limit=walk_limit, resume=do_resume,
-                    visit_level=walk_visit_level, noreply=noreply,
+                    ctx,
+                    log,
+                    limit=walk_limit,
+                    resume=do_resume,
+                    visit_level=walk_visit_level,
+                    noreply=noreply,
                 )
             return parts[idx + 1 :]
 

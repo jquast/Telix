@@ -38,11 +38,7 @@ def directory_to_sessions() -> dict[str, Any]:
         host = entry["host"]
         port = entry.get("port", 23)
         key = f"{host}:{port}"
-        cfg = SessionConfig(
-            host=host,
-            port=port,
-            name=entry.get("name", host),
-        )
+        cfg = SessionConfig(host=host, port=port, name=entry.get("name", host))
         if entry.get("ssl"):
             cfg.ssl = True
         enc = entry.get("encoding")
