@@ -37,11 +37,19 @@ exclude_patterns = ["_build"]
 
 add_function_parentheses = True
 add_module_names = False
-pygments_style = "sphinx"
+pygments_style = "monokai"
+pygments_dark_style = "monokai"
 
 # -- Options for HTML output --------------------------------------------------
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
+html_theme_options = {
+    "dark_css_variables": {
+        "color-brand-primary": "#7c4dff",
+        "color-brand-content": "#7c4dff",
+    },
+}
+
 html_split_index = True
 html_show_sourcelink = True
 html_show_sphinx = False
