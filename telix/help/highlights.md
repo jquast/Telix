@@ -44,6 +44,15 @@ Colors: `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`,
 | `reverse` | Reversed video |
 | `bold_white_on_red` | Bold white text on red background |
 
+### Example Highlights
+
+| Pattern | Style | Flags | Notes |
+|---------|-------|-------|-------|
+| `^A Level \d+ \w+` | `blink_black_on_yellow` | S | Flash and stop movement for level-gated items |
+| `\(medium\)` | `black_on_yellow` | | Highlight medium-difficulty indicators |
+| `treasure` | `bold_yellow` | | Highlight loot keywords |
+| `\b(gold\|silver)\b` | `bold_white_on_blue` | | Highlight currency |
+
 ### Pattern Syntax (Python Regex)
 
 | Pattern | Matches |

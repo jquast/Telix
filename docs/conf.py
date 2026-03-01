@@ -72,5 +72,4 @@ autodoc_member_order = "bysource"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "telnetlib3": ("https://telnetlib3.readthedocs.io/en/latest/", None),
 }

@@ -251,6 +251,11 @@ async def test_naws_restored_on_normal_exit() -> None:
         ("look;`delay 1s`;north", ["look", "`delay 1s`", "north"]),
         ("`randomwalk`", ["`randomwalk`"]),
         ("3e;`slow travel 99`", ["e", "e", "e", "`slow travel 99`"]),
+        ("a ; b", ["a", "b"]),
+        ("a;\nb", ["a", "b"]),
+        ("a\n;\nb", ["a", "b"]),
+        ("  a  ;  b  ;  c  ", ["a", "b", "c"]),
+        ("3n\n;\n2e", ["n", "n", "n", "e", "e"]),
     ],
 )
 def test_expand_commands(line: str, expected: list[str]) -> None:

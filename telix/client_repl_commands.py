@@ -38,6 +38,9 @@ def expand_commands_ex(line: str) -> ExpandedCommands:
     r"""
     Split *line* on ``;`` and ``|`` (outside backticks) and expand repeat prefixes.
 
+    Whitespace around separators is optional, including newlines --
+    ``a;b``, ``a ; b``, and ``a;\nb`` are all equivalent.
+
     Backtick-enclosed tokens (e.g. ```fast travel 123```, ```delay 1s```,
     ```until 4 died\\.```) are preserved verbatim -- they are not split
     on ``;`` or ``|`` and repeat expansion is not applied.

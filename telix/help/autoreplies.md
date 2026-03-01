@@ -67,23 +67,31 @@ Patterns use Python's `re` module with flags `MULTILINE | DOTALL`
 
 ### Condition Gate
 
-The optional **Condition** field adds a vital-percentage gate:
-the rule only fires when the condition is satisfied.
+The optional **Condition** field adds a vital gate: the rule only fires
+when the condition is satisfied.  Use **HP%** / **MP%** for percentages
+of max, or **HP** / **MP** for raw values.
 
 | Condition | Meaning |
 |-----------|---------|
 | HP% >= 80 | Only fire when HP is at least 80% of max |
 | MP% > 50 | Only fire when MP is above 50% of max |
 | HP% = 100 | Only fire when HP is exactly full |
+| HP >= 500 | Only fire when HP is at least 500 |
+| MP > 200 | Only fire when MP is above 200 |
 
 ### Example Autoreplies
 
 | Pattern | Reply | Notes |
 |---------|-------|-------|
-| `(\w+) attacks you` | `kill \1` | Auto-attack aggressors |
-| `You killed` | `get all;`delay 1s`;look` | Loot after kill |
-| `You are hungry` | `eat bread` | Auto-eat |
-| `^A bear` | `` `when HP%>=80`;kill bear;`until 10 died\\.`;get all `` | Conditional combat |
+| `(\w+) attacks you` | `kill \1` | Auto-attack using capture group |
+| `^Corpse of` | `degland corpse;distill corpse;get solaris from corpse` | Auto-loot corpses (Always) |
+| `Corpse contains:.*(\d+ solaris)` | `get all solaris from corpse` | Grab currency from corpses (Always) |
+| `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation (When: HP% > 50) |
+| `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome (When: HP% > 50) |
+| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy — long timeout (When: HP% > 99) |
+| `Please enter your ship.` | `enter ship` | Board shuttle (Immediate) |
+| `(^You catch\|^You fail to catch)` | `bait hook;fish with rod` | Auto-fishing loop |
+| `Try searching\\.` | `search;gl` | Auto-search when prompted |
 
 ### Keyboard Shortcuts
 

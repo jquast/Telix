@@ -15,12 +15,7 @@ Built with `telnetlib3 <https://telnetlib3.readthedocs.io/>`_,
    installation
    usage
    session-manager
-   keybindings
-   commands
-   macros
-   autoreplies
-   highlights
-   rooms
+   user-manual
    files
 
 .. toctree::

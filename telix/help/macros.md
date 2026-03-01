@@ -27,7 +27,7 @@ exactly as if you had typed it at the input line.
 
 - **Enabled** — toggle the macro on/off without deleting it
 - **Key** — click "Capture" then press the desired keystroke
-- **Text** — the command sequence (use `;` and `:` separators, backtick
+- **Text** — the command sequence (use `;` and `|` separators, backtick
   commands)
 
 ### Keyboard Shortcuts
@@ -48,10 +48,11 @@ destination.  Others insert a template you can edit.
 
 ### Example Macros
 
-| Key | Text |
-|-----|------|
-| F2 | `kill bear;`until 10 died\\.`;get all` |
-| F5 | `` `slow travel abc123` `` |
-| Ctrl+R | `` `return fast` `` |
-| F3 | `` `autodiscover 50` `` |
-| F4 | `3n;2e;look` |
+| Key | Text | Notes |
+|-----|------|-------|
+| Alt+E | `get boots;get jacket;take crysknife;wield crysknife;equip boots;equip cloak` | Equip gear after respawn |
+| Alt+H | `` `fast travel 8bd9a5e5`;5order splint;5order bandage;`return slow` `` | Buy supplies and return |
+| F2 | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
+| F4 | `3n;2e;look` | Navigate and look |
+| Ctrl+R | `` `return fast` `` | Return to macro start room |
+| F3 | `` `autodiscover 50` `` | Explore 50 unvisited exits |

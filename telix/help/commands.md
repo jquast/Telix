@@ -1,19 +1,23 @@
 ## Command Syntax
 
-Commands are separated by **`;`** (wait for server prompt) or **`:`** (send
-immediately, no prompt wait).
+Commands are separated by **`;`** (wait for server prompt) or **`|`** (send
+immediately, no prompt wait).  Whitespace around separators is optional,
+including newlines — so `a;b`, `a ; b`, and `a;\nb` are all equivalent.
+
+A leading number repeats the command that follows it, separated by `;`
+(prompt-paced) by default.
 
 | Syntax | Meaning |
 |--------|---------|
 | `get all;drop sword` | Send "get all", wait for prompt, then "drop sword" |
-| `cast heal:look` | Send "cast heal", then "look" immediately without waiting |
+| `cast heal|look` | Send "cast heal", then "look" immediately without waiting |
 | `3n;2e` | Repeat prefix — expands to `n;n;n;e;e` |
-| `5attack` | Sends "attack" five times with prompt pacing |
+| `5attack` | Repeat prefix — expands to `attack;attack;attack;attack;attack` |
 
 ## Backtick Commands
 
 Backtick-enclosed commands are special directives processed by the client.
-They are **not** split on `;` or `:` internally.
+They are **not** split on `;` or `|` internally.
 
 ### Delay
 
@@ -28,13 +32,15 @@ Pause execution for a duration.
 ### When (Condition Gate)
 
 Stop the command chain unless a GMCP vital condition is met.
-Vitals are expressed as **percentages** of max.
+Use **`HP%`** / **`MP%`** for percentages of max, or **`HP`** / **`MP`**
+for raw values.
 
 | Example | Effect |
 |---------|--------|
-| `` `when HP%>=80` `` | Continue only if HP is at least 80% |
-| `` `when MP%>50` `` | Continue only if MP is above 50% |
-| `` `when HP%=100` `` | Continue only if HP is exactly 100% |
+| `` `when HP%>=80` `` | Continue only if HP is at least 80% of max |
+| `` `when MP%>50` `` | Continue only if MP is above 50% of max |
+| `` `when HP>=500` `` | Continue only if HP is at least 500 |
+| `` `when MP>200` `` | Continue only if MP is above 200 |
 
 Operators: `>=`, `<=`, `>`, `<`, `=`
 
@@ -42,12 +48,14 @@ Operators: `>=`, `<=`, `>`, `<`, `=`
 
 Pause the chain until a regex pattern appears in server output,
 or a timeout expires (default 4 seconds). **Case-insensitive.**
+The pattern is a regex, so `|` inside the pattern means alternation.
 
 | Example | Effect |
 |---------|--------|
-| `` `until died\\.` `` | Wait up to 4s for "died." |
-| `` `until 10 died\\.` `` | Wait up to 10s for "died." |
+| `` `until died\.` `` | Wait up to 4s for "died." |
+| `` `until 10 died\.` `` | Wait up to 10s for "died." |
 | `` `until 2 treasure` `` | Wait up to 2s for "treasure" |
+| `` `until 10 died\.\|You killed\|Kill what \?` `` | Wait for kill, miss, or error |
 
 ### Untils (Case-Sensitive Until)
 
@@ -57,6 +65,7 @@ Same as `until` but the pattern match is **case-sensitive**.
 |---------|--------|
 | `` `untils 2 DEAD` `` | Wait up to 2s for exactly "DEAD" |
 | `` `untils You dodge` `` | Wait up to 4s for "You dodge" |
+| `` `untils You get Keycard` `` | Wait up to 4s for exact case "You get Keycard" |
 
 ### Fast Travel / Slow Travel
 
@@ -128,11 +137,24 @@ same room.  Optional arguments:
 
 ## Combining Commands
 
-Commands can be freely mixed:
+Commands, backtick directives, repeat prefixes, and separators can be
+freely mixed:
 
 ```
-kill bear;`until 10 died\\.`;get all;`delay 1s`;`return fast`
+kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all
 ```
 
-This sends "kill bear", waits up to 10s for "died.", sends "get all",
-pauses 1 second, then fast-travels back to the starting room.
+Kill a bear, wait for it to die (or detect a miss), then loot.
+
+```
+`fast travel 8bd9a5e5`;5order splint;5order bandage;`return slow`
+```
+
+Fast-travel to a shop, order supplies with repeat prefixes, then return
+via slow travel so autoreplies fire on the way back.
+
+```
+Dingo;`until 10 Password`
+```
+
+Send a name, then wait up to 10s for a password prompt (login sequence).
