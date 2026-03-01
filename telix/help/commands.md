@@ -79,29 +79,47 @@ Travel back to the room where the current macro started executing.
 
 ### Autodiscover
 
-BFS-explore unvisited exits from nearby rooms.  Accepts an optional
-room limit (default 999).
+BFS-explore unvisited exits from nearby rooms.  Optional arguments
+(in any order after the verb):
+
+- **limit** — maximum exits to explore (default 999)
+- **bfs** / **dfs** — search strategy (default bfs)
+- **autosearch** — send ``search`` in each new room
+- **autoevaluate** — send ``evaluate`` in each new room
+- **noreply** — completely disable autoreply processing during the walk
 
 | Example | Effect |
 |---------|--------|
 | `` `autodiscover` `` | Explore up to 999 unvisited exits |
 | `` `autodiscover 50` `` | Explore up to 50 exits |
+| `` `autodiscover dfs noreply` `` | DFS explore with autoreplies disabled |
 
 ### Random Walk
 
-Walk randomly, preferring rooms with unvisited exits.  Accepts an
-optional step limit (default 999).
+Walk randomly, preferring rooms with unvisited exits.  Optional
+arguments (in any order after the verb):
+
+- **limit** — maximum steps (default 999)
+- **visit_level** — minimum visits per room before stopping (default 2)
+- **bfs** / **dfs** — search strategy (default bfs)
+- **autosearch** — send ``search`` in each new room
+- **autoevaluate** — send ``evaluate`` in each new room
+- **noreply** — completely disable autoreply processing during the walk
 
 | Example | Effect |
 |---------|--------|
 | `` `randomwalk` `` | Random walk up to 999 steps |
 | `` `randomwalk 100` `` | Random walk up to 100 steps |
+| `` `randomwalk noreply autosearch` `` | Walk with autoreplies disabled, auto-search |
 
 ### Resume
 
 Resume the last autodiscover or randomwalk from where it stopped,
 carrying over the visited/tried state.  Only works if still in the
-same room.  Accepts an optional limit override.
+same room.  Optional arguments:
+
+- **limit** — override step limit
+- **noreply** — override the noreply setting (otherwise inherited from original walk)
 
 | Example | Effect |
 |---------|--------|
