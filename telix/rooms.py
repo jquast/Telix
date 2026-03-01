@@ -487,7 +487,7 @@ class RoomStore:
 
     def search(self, query: str) -> list[Room]:
         """
-        Case-insensitive substring search on room name and area.
+        Case-insensitive substring search on room name, area, and ID.
 
         :param query: Search string.
         :returns: Matching rooms sorted bookmarked-first, then by name.
@@ -496,8 +496,9 @@ class RoomStore:
         rows = self._conn.execute(
             f"SELECT {self._ROOM_COLS}"
             " FROM room WHERE name LIKE ? COLLATE NOCASE"
-            " OR area LIKE ? COLLATE NOCASE",
-            (q, q),
+            " OR area LIKE ? COLLATE NOCASE"
+            " OR num LIKE ? COLLATE NOCASE",
+            (q, q, q),
         ).fetchall()
         results = [self._row_to_room(r) for r in rows]
         results.sort(key=lambda r: (not r.bookmarked, r.name.lower()))

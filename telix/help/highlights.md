@@ -15,28 +15,28 @@ same text.
 
 ### Flags Explained
 
-- **S (Stop movement)** — cancel any active autodiscover or randomwalk
+- **S (Stop movement)** -- cancel any active autodiscover or randomwalk
   when this pattern matches.  Useful for detecting danger or important
   events during exploration.
-- **CS (Case-sensitive)** — match the pattern case-sensitively instead of
+- **CS (Case-sensitive)** -- match the pattern case-sensitively instead of
   the default case-insensitive matching.
-- **M (Multiline)** — match the pattern across multiple lines of output.
+- **M (Multiline)** -- match the pattern across multiple lines of output.
   Use `\n` in the pattern to span line boundaries (e.g. `echoes:\n.*hijacked`).
-- **C (Captured)** — extract regex groups into named variables and log
+- **C (Captured)** -- extract regex groups into named variables and log
   matched lines to a capture channel (see Captures below).
 
 ### Form Fields
 
-- **Enabled** — toggle the rule on/off
-- **Stop** — cancel movement walks on match
-- **Case Sensitive** — case-sensitive matching
-- **Multiline** — match pattern across line boundaries
-- **Captured** — enable capture extraction (see Captures below)
-- **Capture Name** — channel name for the Capture Window (default
+- **Enabled** -- toggle the rule on/off
+- **Stop** -- cancel movement walks on match
+- **Case Sensitive** -- case-sensitive matching
+- **Multiline** -- match pattern across line boundaries
+- **Captured** -- enable capture extraction (see Captures below)
+- **Capture Name** -- channel name for the Capture Window (default
   `captures`); may contain group references like `\1`
-- **Pattern** — Python regex
-- **Highlight** — a style name (see below)
-- **Add Capture** — add key/value extraction rows (only visible when
+- **Pattern** -- Python regex
+- **Highlight** -- a style name (see below)
+- **Add Capture** -- add key/value extraction rows (only visible when
   Captured is on)
 
 ### Style Names

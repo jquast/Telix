@@ -29,7 +29,7 @@ def _parse_line(line: str, entry_type: str) -> dict[str, object] | None:
     parts = line.split()
     host = parts[0]
 
-    # Skip bare IP addresses — only keep named hosts.
+    # Skip bare IP addresses -- only keep named hosts.
     try:
         ipaddress.ip_address(host)
         return None

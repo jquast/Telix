@@ -25,9 +25,9 @@ exactly as if you had typed it at the input line.
 
 ### Form Fields
 
-- **Enabled** — toggle the macro on/off without deleting it
-- **Key** — click "Capture" then press the desired keystroke
-- **Text** — the command sequence (use `;` and `|` separators, backtick
+- **Enabled** -- toggle the macro on/off without deleting it
+- **Key** -- click "Capture" then press the desired keystroke
+- **Text** -- the command sequence (use `;` and `|` separators, backtick
   commands)
 
 ### Keyboard Shortcuts
@@ -51,8 +51,8 @@ destination.  Others insert a template you can edit.
 A toggle macro alternates between two commands on each press.  Enable
 the **Toggle** switch in the form to turn a macro into a toggle.
 
-- **On command** (the "Text" field) — sent on the first press
-- **Off command** — sent on the second press, then back to On, etc.
+- **On command** (the "Text" field) -- sent on the first press
+- **Off command** -- sent on the second press, then back to On, etc.
 
 Toggle macros always start in the "on" state when the session begins.
 The current toggle state is not saved to disk.
@@ -67,4 +67,4 @@ The current toggle state is not saved to disk.
 | F4 | `3n;2e;look` | Navigate and look |
 | Ctrl+R | `` `return fast` `` | Return to macro start room |
 | F3 | `` `autodiscover 50` `` | Explore 50 unvisited exits |
-| F5 | `survey on` / `survey off` | Toggle macro — alternates each press |
+| F5 | `survey on` / `survey off` | Toggle macro -- alternates each press |

@@ -3238,13 +3238,13 @@ class ProgressBarEditScreen(_EditListScreen):
         self._form_source_pkg = gmcp_package
         self._populate_field_selects(gmcp_package, value_field, max_field)
         self._populating_form = False
-        # Color mode — set the desired button to on; RadioSet will turn the
+        # Color mode -- set the desired button to on; RadioSet will turn the
         # other off via its internal _on_radio_button_changed handler.
         is_custom = color_mode == "custom"
         self._form_color_mode = color_mode
         target = "#pb-mode-custom" if is_custom else "#pb-mode-theme"
         self.query_one(target, RadioButton).value = True
-        # Color selects — populate with theme or custom options
+        # Color selects -- populate with theme or custom options
         self._swap_color_options(
             is_custom, preserve_max=color_name_max, preserve_min=color_name_min,
             preserve_text_fill=text_color_fill, preserve_text_empty=text_color_empty,
@@ -3607,7 +3607,7 @@ class _RoomTree(Tree[str]):
         room_num = node.data
         is_child = node.parent is not None and node.parent.parent is not None
 
-        # Icon column (2 chars): priority — home > blocked > marked > bookmark
+        # Icon column (2 chars): priority -- home > blocked > marked > bookmark
         if room_num and room_num in self._home:
             icon = RichText("\u2302 ", style=_HOME_STYLE)
         elif room_num and room_num in self._blocked:
@@ -3619,7 +3619,7 @@ class _RoomTree(Tree[str]):
         else:
             icon = RichText("  ")
 
-        # Arrow column (2 chars: arrow + space) — only for expandable nodes
+        # Arrow column (2 chars: arrow + space) -- only for expandable nodes
         if node._allow_expand:
             arrow_char = self.ICON_NODE_EXPANDED if node.is_expanded else self.ICON_NODE
             arrow = RichText(arrow_char, style=_ARROW_STYLE)
@@ -3915,7 +3915,8 @@ class RoomBrowserScreen(Screen["bool | None"]):
             if area_filter and area != area_filter:
                 continue
             display_name = strip_exit_dirs(name)
-            if q and q not in display_name.lower() and q not in area.lower():
+            if q and (q not in display_name.lower()
+                      and q not in area.lower() and q not in num.lower()):
                 continue
             if display_name not in groups:
                 groups[display_name] = []
@@ -4492,7 +4493,7 @@ def _run_editor_app(app: _EditorApp) -> None:
     """
     Run a Textual editor app, displaying errors in the terminal on crash.
 
-    Textual handles some exceptions internally (e.g. compose errors) —
+    Textual handles some exceptions internally (e.g. compose errors) --
     it renders a traceback in the alt screen, then exits with return
     code 1.  Once the alt screen is torn down the traceback is lost.
 
@@ -4633,7 +4634,7 @@ def show_help_main(topic: str = "keybindings", logfile: str = "") -> None:
 
 
 class _ChatViewerScreen(Screen[None]):
-    """Capture Window — unified viewer for GMCP chat and highlight captures."""
+    """Capture Window -- unified viewer for GMCP chat and highlight captures."""
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("escape", "close", "Close", show=True),
@@ -5046,12 +5047,16 @@ class _RandomwalkDialogScreen(Screen[bool]):
         default_visit_level: int = 2,
         default_auto_search: bool = False,
         default_auto_evaluate: bool = False,
+        default_auto_survey: bool = False,
+        default_autoreplies: bool = True,
     ) -> None:
         super().__init__()
         self._result_file = result_file
         self._default_visit_level = default_visit_level
         self._default_auto_search = default_auto_search
         self._default_auto_evaluate = default_auto_evaluate
+        self._default_auto_survey = default_auto_survey
+        self._default_autoreplies = default_autoreplies
 
     def compose(self) -> ComposeResult:
         with Vertical(id="rw-dialog"):
@@ -5079,8 +5084,22 @@ class _RandomwalkDialogScreen(Screen[bool]):
                     yield Label("Auto search:")
                     yield Switch(value=self._default_auto_search, id="rw-auto-search")
                 with Horizontal(classes="rw-option"):
-                    yield Label("Auto evaluate:")
-                    yield Switch(value=self._default_auto_evaluate, id="rw-auto-evaluate")
+                    yield Label("Auto consider:")
+                    yield Switch(
+                        value=self._default_auto_evaluate,
+                        id="rw-auto-consider",
+                        disabled=not self._default_autoreplies,
+                    )
+                with Horizontal(classes="rw-option"):
+                    yield Label("Auto survey:")
+                    yield Switch(
+                        value=self._default_auto_survey,
+                        id="rw-auto-survey",
+                        disabled=not self._default_autoreplies,
+                    )
+                with Horizontal(classes="rw-option"):
+                    yield Label("Autoreplies:")
+                    yield Switch(value=self._default_autoreplies, id="rw-autoreplies")
             yield Static("", id="rw-error")
             with Horizontal(id="rw-buttons"):
                 yield Button("Help", variant="primary", id="rw-help")
@@ -5095,6 +5114,12 @@ class _RandomwalkDialogScreen(Screen[bool]):
         """Show room-mapping help screen."""
         self.app.push_screen(_CommandHelpScreen(topic="room-mapping"))
 
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        """Disable consider/survey switches when autoreplies is OFF."""
+        if event.switch.id == "rw-autoreplies":
+            self.query_one("#rw-auto-consider", Switch).disabled = not event.value
+            self.query_one("#rw-auto-survey", Switch).disabled = not event.value
+
     def _validate_and_dismiss(self) -> None:
         raw = self.query_one("#rw-visit-level", Input).value.strip()
         try:
@@ -5106,8 +5131,12 @@ class _RandomwalkDialogScreen(Screen[bool]):
             self.query_one("#rw-error", Static).update("Visit level must be at least 1.")
             return
         auto_search = self.query_one("#rw-auto-search", Switch).value
-        auto_evaluate = self.query_one("#rw-auto-evaluate", Switch).value
-        self._write_result(True, level, auto_search, auto_evaluate)
+        auto_evaluate = self.query_one("#rw-auto-consider", Switch).value
+        auto_survey = self.query_one("#rw-auto-survey", Switch).value
+        autoreplies = self.query_one("#rw-autoreplies", Switch).value
+        self._write_result(
+            True, level, auto_search, auto_evaluate, auto_survey, autoreplies,
+        )
         self.dismiss(True)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -5122,13 +5151,20 @@ class _RandomwalkDialogScreen(Screen[bool]):
                 self._default_visit_level,
                 self._default_auto_search,
                 self._default_auto_evaluate,
+                self._default_auto_survey,
+                self._default_autoreplies,
             )
             self.dismiss(False)
 
     def action_cancel(self) -> None:
         """Cancel the dialog and write default values."""
         self._write_result(
-            False, self._default_visit_level, self._default_auto_search, self._default_auto_evaluate
+            False,
+            self._default_visit_level,
+            self._default_auto_search,
+            self._default_auto_evaluate,
+            self._default_auto_survey,
+            self._default_autoreplies,
         )
         self.dismiss(False)
 
@@ -5138,6 +5174,8 @@ class _RandomwalkDialogScreen(Screen[bool]):
         visit_level: int,
         auto_search: bool = False,
         auto_evaluate: bool = False,
+        auto_survey: bool = False,
+        autoreplies: bool = True,
     ) -> None:
         if not self._result_file:
             return
@@ -5146,6 +5184,10 @@ class _RandomwalkDialogScreen(Screen[bool]):
             cmd += " autosearch"
         if auto_evaluate:
             cmd += " autoevaluate"
+        if auto_survey:
+            cmd += " autosurvey"
+        if not autoreplies:
+            cmd += " noreply"
         cmd += "`"
         result = json.dumps(
             {
@@ -5153,6 +5195,8 @@ class _RandomwalkDialogScreen(Screen[bool]):
                 "visit_level": visit_level,
                 "auto_search": auto_search,
                 "auto_evaluate": auto_evaluate,
+                "auto_survey": auto_survey,
+                "autoreplies": autoreplies,
                 "command": cmd,
             }
         )
@@ -5165,6 +5209,8 @@ def randomwalk_dialog_main(
     default_visit_level: str = "2",
     default_auto_search: str = "0",
     default_auto_evaluate: str = "0",
+    default_auto_survey: str = "0",
+    default_autoreplies: str = "1",
     logfile: str = "",
 ) -> None:
     """Launch standalone random walk dialog TUI."""
@@ -5176,6 +5222,8 @@ def randomwalk_dialog_main(
         default_visit_level=int(default_visit_level),
         default_auto_search=default_auto_search == "1",
         default_auto_evaluate=default_auto_evaluate == "1",
+        default_auto_survey=default_auto_survey == "1",
+        default_autoreplies=default_autoreplies == "1",
     )
     app = _EditorApp(screen)
     app.run()
@@ -5220,6 +5268,22 @@ class _AutodiscoverDialogScreen(Screen[bool]):
         width: 1fr;
         height: auto;
     }
+    #ad-options-col {
+        height: auto;
+        margin-bottom: 1;
+    }
+    .ad-option {
+        height: 3;
+        margin-bottom: 1;
+    }
+    .ad-option Label {
+        padding-top: 1;
+        width: auto;
+        margin-right: 1;
+    }
+    .ad-option Switch {
+        width: auto;
+    }
     #ad-buttons {
         height: 3;
         align-horizontal: right;
@@ -5231,10 +5295,22 @@ class _AutodiscoverDialogScreen(Screen[bool]):
     }
     """
 
-    def __init__(self, result_file: str = "", default_strategy: str = "bfs") -> None:
+    def __init__(
+        self,
+        result_file: str = "",
+        default_strategy: str = "bfs",
+        default_auto_search: bool = False,
+        default_auto_evaluate: bool = False,
+        default_auto_survey: bool = False,
+        default_autoreplies: bool = True,
+    ) -> None:
         super().__init__()
         self._result_file = result_file
         self._default_strategy = default_strategy
+        self._default_auto_search = default_auto_search
+        self._default_auto_evaluate = default_auto_evaluate
+        self._default_auto_survey = default_auto_survey
+        self._default_autoreplies = default_autoreplies
 
     def compose(self) -> ComposeResult:
         with Vertical(id="ad-dialog"):
@@ -5264,6 +5340,31 @@ class _AutodiscoverDialogScreen(Screen[bool]):
                         id="ad-dfs",
                         value=(self._default_strategy == "dfs"),
                     )
+            with Vertical(id="ad-options-col"):
+                with Horizontal(classes="ad-option"):
+                    yield Label("Auto search:")
+                    yield Switch(
+                        value=self._default_auto_search, id="ad-auto-search",
+                    )
+                with Horizontal(classes="ad-option"):
+                    yield Label("Auto consider:")
+                    yield Switch(
+                        value=self._default_auto_evaluate,
+                        id="ad-auto-consider",
+                        disabled=not self._default_autoreplies,
+                    )
+                with Horizontal(classes="ad-option"):
+                    yield Label("Auto survey:")
+                    yield Switch(
+                        value=self._default_auto_survey,
+                        id="ad-auto-survey",
+                        disabled=not self._default_autoreplies,
+                    )
+                with Horizontal(classes="ad-option"):
+                    yield Label("Autoreplies:")
+                    yield Switch(
+                        value=self._default_autoreplies, id="ad-autoreplies",
+                    )
             with Horizontal(id="ad-buttons"):
                 yield Button("Help", variant="primary", id="ad-help")
                 yield Button("Cancel", variant="error", id="ad-cancel")
@@ -5283,40 +5384,99 @@ class _AutodiscoverDialogScreen(Screen[bool]):
             return "dfs"
         return "bfs"
 
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        """Disable consider/survey switches when autoreplies is OFF."""
+        if event.switch.id == "ad-autoreplies":
+            self.query_one("#ad-auto-consider", Switch).disabled = not event.value
+            self.query_one("#ad-auto-survey", Switch).disabled = not event.value
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle OK and Cancel button presses."""
         if event.button.id == "ad-help":
             self.action_show_help()
         elif event.button.id == "ad-ok":
-            self._write_result(True, self._get_strategy())
+            auto_search = self.query_one("#ad-auto-search", Switch).value
+            auto_evaluate = self.query_one("#ad-auto-consider", Switch).value
+            auto_survey = self.query_one("#ad-auto-survey", Switch).value
+            autoreplies = self.query_one("#ad-autoreplies", Switch).value
+            self._write_result(
+                True, self._get_strategy(),
+                auto_search, auto_evaluate, auto_survey, autoreplies,
+            )
             self.dismiss(True)
         elif event.button.id == "ad-cancel":
-            self._write_result(False, self._default_strategy)
+            self._write_result(
+                False, self._default_strategy,
+                self._default_auto_search, self._default_auto_evaluate,
+                self._default_auto_survey, self._default_autoreplies,
+            )
             self.dismiss(False)
 
     def action_cancel(self) -> None:
         """Cancel the dialog and write default values."""
-        self._write_result(False, self._default_strategy)
+        self._write_result(
+            False, self._default_strategy,
+            self._default_auto_search, self._default_auto_evaluate,
+            self._default_auto_survey, self._default_autoreplies,
+        )
         self.dismiss(False)
 
-    def _write_result(self, confirmed: bool, strategy: str) -> None:
+    def _write_result(
+        self,
+        confirmed: bool,
+        strategy: str,
+        auto_search: bool = False,
+        auto_evaluate: bool = False,
+        auto_survey: bool = False,
+        autoreplies: bool = True,
+    ) -> None:
         """Write result JSON to disk for the parent process."""
         if not self._result_file:
             return
-        cmd = f"`autodiscover {strategy}`"
-        result = json.dumps({"confirmed": confirmed, "strategy": strategy, "command": cmd})
+        cmd = f"`autodiscover {strategy}"
+        if auto_search:
+            cmd += " autosearch"
+        if auto_evaluate:
+            cmd += " autoevaluate"
+        if auto_survey:
+            cmd += " autosurvey"
+        if not autoreplies:
+            cmd += " noreply"
+        cmd += "`"
+        result = json.dumps({
+            "confirmed": confirmed,
+            "strategy": strategy,
+            "auto_search": auto_search,
+            "auto_evaluate": auto_evaluate,
+            "auto_survey": auto_survey,
+            "autoreplies": autoreplies,
+            "command": cmd,
+        })
         with open(self._result_file, "w", encoding="utf-8") as f:
             f.write(result)
 
 
 def autodiscover_dialog_main(
-    result_file: str = "", default_strategy: str = "bfs", logfile: str = ""
+    result_file: str = "",
+    default_strategy: str = "bfs",
+    default_auto_search: str = "0",
+    default_auto_evaluate: str = "0",
+    default_auto_survey: str = "0",
+    default_autoreplies: str = "1",
+    logfile: str = "",
 ) -> None:
     """Launch standalone autodiscover dialog TUI."""
     _restore_blocking_fds(logfile)
     _log_child_diagnostics()
     _patch_writer_thread_queue()
-    screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy=default_strategy)
+    screen = _AutodiscoverDialogScreen(
+        result_file=result_file,
+        default_strategy=default_strategy,
+        default_auto_search=default_auto_search == "1",
+        default_auto_evaluate=default_auto_evaluate == "1",
+        default_auto_survey=default_auto_survey == "1",
+        default_autoreplies=default_autoreplies == "1",
+    )
     app = _EditorApp(screen)
     app.run()
 

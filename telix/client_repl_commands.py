@@ -367,7 +367,7 @@ async def _send_chained(
             continue
 
         # Detect runs of identical commands (e.g. "9e;6n" expands to
-        # e,e,...,n,n,...) — these need movement pacing even in mixed
+        # e,e,...,n,n,...) -- these need movement pacing even in mixed
         # lists.  A command is "repeated" if it matches the previous one.
         prev_cmd = commands[_idx - 1] if _idx > 0 else ""
         use_move_pacing = is_repeated or cmd == prev_cmd

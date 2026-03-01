@@ -55,37 +55,37 @@ The REPL reads server data in ``_read_server`` (``client_repl.py``)
 using ``await telnet_reader.read()``.  Incoming text flows through
 several stages before reaching the terminal:
 
-1. **Telnet parsing** — ``telnetlib3`` strips IAC sequences and
+1. **Telnet parsing** -- ``telnetlib3`` strips IAC sequences and
    decodes bytes to text.  IAC-only segments produce no data; the
    reader stays blocked.
 
-2. **Output transform** — ``_transform_output()`` normalises
+2. **Output transform** -- ``_transform_output()`` normalises
    line endings and applies the color filter.
 
-3. **Line hold** — ``_LineHoldBuffer.add(text)`` splits the text
+3. **Line hold** -- ``_LineHoldBuffer.add(text)`` splits the text
    at the last ``\n``.  Complete lines go to ``emit_now``; the
    trailing fragment (e.g. a prompt without ``\n``) is held back.
    ``_schedule_line_hold_flush()`` starts a 150 ms debounce timer
    (``_LINE_HOLD_TIMEOUT``).
 
-4. **Prompt signal** — If the server sends IAC GA or IAC EOR, the
+4. **Prompt signal** -- If the server sends IAC GA or IAC EOR, the
    ``_on_prompt_signal`` callback sets ``prompt_pending = True``.
    The main loop flushes held text immediately when it sees a
    pending prompt (``flush_for_prompt``).
 
-5. **Highlight engine** — ``emit_now`` lines are run through the
+5. **Highlight engine** -- ``emit_now`` lines are run through the
    highlight engine before display; held-back text flushed by the
    timer is written raw (no highlights).  Rules with ``captured=True``
    extract regex groups into ``ctx.captures`` (for ``when`` conditions)
    and log matched lines to ``ctx.capture_log`` (for the Capture Window).
 
-6. **Screen output** — The REPL saves/restores the cursor position
+6. **Screen output** -- The REPL saves/restores the cursor position
    via VT100 DECSC (``\x1b7``) / DECRC (``\x1b8``), writes to
    ``stdout`` (an ``asyncio.StreamWriter`` connected to the PTY
    master FD via ``connect_write_pipe``), and re-renders the input
    line and toolbar after each write.
 
-7. **Scroll region** — ``ScrollRegion`` confines server output to
+7. **Scroll region** -- ``ScrollRegion`` confines server output to
    the top portion of the terminal using DECSTBM
    (``change_scroll_region``).  The input line and toolbar sit
    below the scroll boundary.
@@ -163,7 +163,7 @@ on ``SessionContext``:
 
 These callback attributes are defined on telix's ``SessionContext``
 and wired up in ``client_shell._load_configs()``.  Access them as
-regular attributes — do not use ``getattr()``.
+regular attributes -- do not use ``getattr()``.
 
 Room tracking
 ~~~~~~~~~~~~~
@@ -188,7 +188,7 @@ and writes ``ctx.current_room_file`` so TUI subprocesses see the change.
 TUI editor subprocesses
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Pressing F-keys (F5–F11) launches Textual-based editor screens in a
+Pressing F-keys (F5-F11) launches Textual-based editor screens in a
 **child subprocess** via ``_launch_tui_editor()`` in
 ``client_repl_dialogs.py``.  Key constraints:
 
@@ -248,6 +248,7 @@ You can also set up a `pre-commit <https://pre-commit.com/>`_ hook::
 Style and Static Analysis
 -------------------------
 
+- do not wrote unicode em-dash, arrows, or similar characters in code or documentation.
 - use tox to run tests, linters, and formatters, to ensure requirements are met exactly.
 - Max line length: 100 characters
 - Sphinx-style reStructuredText docstrings

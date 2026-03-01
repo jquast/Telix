@@ -17,7 +17,6 @@ from .client_repl_commands import _COMMAND_DELAY
 if TYPE_CHECKING:
     from .session_context import SessionContext
 
-_DISCOVER_ARRIVAL_TIMEOUT = 3.0
 _DEFAULT_WALK_LIMIT = 999
 _STANDARD_DIRS = frozenset(
     {
@@ -38,6 +37,9 @@ _STANDARD_DIRS = frozenset(
 _BOUNCE_THRESHOLD = 3
 _MAX_STUCK_RETRIES = 3
 _STUCK_RETRY_DELAY = 5.0
+# Delay after wait_fn() in settle loops to allow _read_server to process
+# the prompt text and call on_prompt() before checking autoreply flags.
+_SETTLE_YIELD_DELAY = 0.05
 
 
 async def _fast_travel(
@@ -195,10 +197,18 @@ async def _fast_travel(
                     room_changed.clear()
 
                 tag = f" [{step_idx + 1}/{len(steps)}]"
+                prefix = ""
+                if ctx.discover_active:
+                    prefix = f"AUTODISCOVER [{ctx.discover_current}]: "
+                elif ctx.randomwalk_active:
+                    prefix = (
+                        f"RANDOMWALK [{ctx.randomwalk_current}"
+                        f"/{ctx.randomwalk_total}]: "
+                    )
                 if attempt == 0:
                     log.info("%s [%d/%d] %s", mode, step_idx + 1, len(steps), direction)
                     if echo_fn is not None:
-                        echo_fn(direction + tag)
+                        echo_fn(prefix + direction + tag)
                 else:
                     log.info(
                         "%s [%d/%d] %s (retry %d)",
@@ -274,7 +284,9 @@ async def _fast_travel(
                             # replies.
                             if wait_fn is not None:
                                 await wait_fn()
-                            await asyncio.sleep(0)
+                            # Allow time for _read_server to process text
+                            # and call on_prompt() for cascading matches.
+                            await asyncio.sleep(_SETTLE_YIELD_DELAY)
                             # If neither exclusive nor reply_pending
                             # after the prompt, we've converged.
                             if not engine.exclusive_active and not engine.reply_pending:
@@ -421,6 +433,9 @@ async def _autodiscover(
     resume: bool = False,
     strategy: str = "bfs",
     noreply: bool = False,
+    auto_search: bool = False,
+    auto_evaluate: bool = False,
+    auto_survey: bool = False,
 ) -> None:
     """
     Explore unvisited exits reachable from the current room.
@@ -437,6 +452,9 @@ async def _autodiscover(
     :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
         deepest-first ordering.
     :param noreply: Completely disable the autoreply engine during the walk.
+    :param auto_search: Send ``search`` in each newly discovered room.
+    :param auto_evaluate: Enable consider-before-kill autoreply logic.
+    :param auto_survey: Send ``survey`` in each newly discovered room.
     """
     if ctx.discover_active:
         return
@@ -469,6 +487,10 @@ async def _autodiscover(
         engine_was_enabled = engine.enabled
         engine.enabled = False
 
+    prev_auto_evaluate = ctx.randomwalk_auto_evaluate
+    if auto_evaluate:
+        ctx.randomwalk_auto_evaluate = True
+
     ctx.discover_active = True
     ctx.discover_total = len(branches)
     ctx.discover_current = 0
@@ -478,7 +500,7 @@ async def _autodiscover(
     try:
         while step_count < limit:
             pos = ctx.current_room_num
-            # Re-discover from current position each iteration — picks up
+            # Re-discover from current position each iteration -- picks up
             # newly revealed exits from rooms we just visited, nearest-first.
             branches = [
                 (gw, d, t)
@@ -575,7 +597,7 @@ async def _autodiscover(
             if room_changed is not None:
                 room_changed.clear()
                 try:
-                    await asyncio.wait_for(room_changed.wait(), timeout=_DISCOVER_ARRIVAL_TIMEOUT)
+                    await asyncio.wait_for(room_changed.wait(), timeout=ctx.room_arrival_timeout)
                 except asyncio.TimeoutError:
                     pass
                 arrived = ctx.current_room_num != gw_room
@@ -628,7 +650,37 @@ async def _autodiscover(
             if ar_fired and wait_fn is not None:
                 await wait_fn()
 
-            # Stay where we are — next iteration re-discovers branches
+            if auto_search:
+                if echo_fn is not None:
+                    echo_fn("search")
+                ctx.active_command = "search"
+                ctx.active_command_time = _monotonic()
+                if ctx.tx_dot is not None:
+                    ctx.tx_dot.trigger()
+                if isinstance(ctx.writer, TelnetWriterUnicode):
+                    ctx.writer.write("search\r\n")
+                else:
+                    ctx.writer.write(b"search\r\n")
+                if wait_fn is not None:
+                    await wait_fn()
+                ctx.active_command = None
+
+            if auto_survey:
+                if echo_fn is not None:
+                    echo_fn("survey")
+                ctx.active_command = "survey"
+                ctx.active_command_time = _monotonic()
+                if ctx.tx_dot is not None:
+                    ctx.tx_dot.trigger()
+                if isinstance(ctx.writer, TelnetWriterUnicode):
+                    ctx.writer.write("survey\r\n")
+                else:
+                    ctx.writer.write(b"survey\r\n")
+                if wait_fn is not None:
+                    await wait_fn()
+                ctx.active_command = None
+
+            # Stay where we are -- next iteration re-discovers branches
             # from current position, so nearby clusters get swept without
             # backtracking.
     except asyncio.CancelledError:
@@ -636,6 +688,7 @@ async def _autodiscover(
     finally:
         if noreply and engine is not None:
             engine.enabled = engine_was_enabled
+        ctx.randomwalk_auto_evaluate = prev_auto_evaluate
         ctx.last_walk_mode = "autodiscover"
         ctx.last_walk_room = ctx.current_room_num
         ctx.last_walk_strategy = strategy
@@ -668,7 +721,7 @@ async def _randomwalk(
     how many times we have arrived at each room during this walk.  The
     room the player was in *before* triggering the walk (the
     "entrance") is seeded with an infinite count so it is never
-    chosen — the walker will never leave through the direction it
+    chosen -- the walker will never leave through the direction it
     came from.
 
     Stops early when every reachable room (excluding the entrance)
@@ -714,7 +767,7 @@ async def _randomwalk(
         walk_counts[entrance_room] = float("inf")
 
     # blocked_exits is consulted per-room at scoring time rather than
-    # seeding walk_counts globally — a blocked exit (A, east) should
+    # seeding walk_counts globally -- a blocked exit (A, east) should
     # only penalize that specific exit, not the destination room from
     # every other direction.
     # Clear stale blocked exits from previous walks so dead-end rooms
@@ -901,10 +954,25 @@ async def _randomwalk(
                     await wait_fn()
                 ctx.active_command = None
 
+            if ctx.randomwalk_auto_survey:
+                if echo_fn is not None:
+                    echo_fn("survey")
+                ctx.active_command = "survey"
+                ctx.active_command_time = _monotonic()
+                if ctx.tx_dot is not None:
+                    ctx.tx_dot.trigger()
+                if isinstance(ctx.writer, TelnetWriterUnicode):
+                    ctx.writer.write("survey\r\n")
+                else:
+                    ctx.writer.write(b"survey\r\n")
+                if wait_fn is not None:
+                    await wait_fn()
+                ctx.active_command = None
+
             # Bounce detection: if we returned to the room we were in
             # 2 steps ago, we are ping-ponging between two rooms.
             # Only block the direction if the intermediate room
-            # (``current``) is a dead-end corridor — i.e. it has no
+            # (``current``) is a dead-end corridor -- i.e. it has no
             # unblocked exits other than the one leading back here.
             if prev_room is not None and actual == prev_room:
                 bounce_count += 1
@@ -976,7 +1044,12 @@ async def _randomwalk(
                         await asyncio.sleep(0.05)
                     if ar_fired and wait_fn is not None:
                         await wait_fn()
-                    await asyncio.sleep(0)
+                    # Allow enough time for _read_server to process the
+                    # prompt text and call on_prompt() / _match_rules(),
+                    # which may set exclusive_active for a cascading match
+                    # (e.g. a second rule matching on the response to the
+                    # first rule's last command).
+                    await asyncio.sleep(_SETTLE_YIELD_DELAY)
                     if not ar.exclusive_active and not ar.reply_pending:
                         break
                     settle += 1
@@ -992,6 +1065,7 @@ async def _randomwalk(
         ctx.randomwalk_active = False
         ctx.randomwalk_auto_search = False
         ctx.randomwalk_auto_evaluate = False
+        ctx.randomwalk_auto_survey = False
         ctx.randomwalk_current = 0
         ctx.randomwalk_total = 0
         ctx.randomwalk_task = None
@@ -1068,6 +1142,7 @@ async def _handle_travel_commands(
             walk_visit_level = 2
             auto_search = False
             auto_evaluate = False
+            auto_survey = False
             walk_strategy = "bfs"
             noreply = False
             if arg:
@@ -1079,6 +1154,8 @@ async def _handle_travel_commands(
                         auto_search = True
                     elif low == "autoevaluate":
                         auto_evaluate = True
+                    elif low == "autosurvey":
+                        auto_survey = True
                     elif low == "noreply":
                         noreply = True
                     elif low in ("bfs", "dfs"):
@@ -1124,11 +1201,15 @@ async def _handle_travel_commands(
                     resume=do_resume,
                     strategy=walk_strategy,
                     noreply=noreply,
+                    auto_search=auto_search,
+                    auto_evaluate=auto_evaluate,
+                    auto_survey=auto_survey,
                 )
 
             else:
                 ctx.randomwalk_auto_search = auto_search
                 ctx.randomwalk_auto_evaluate = auto_evaluate
+                ctx.randomwalk_auto_survey = auto_survey
                 await _randomwalk(
                     ctx,
                     log,

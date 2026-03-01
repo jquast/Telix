@@ -66,6 +66,7 @@ class SessionContext(TelnetSessionContext):
         self.randomwalk_task: Optional[asyncio.Task[None]] = None
         self.randomwalk_auto_search: bool = False
         self.randomwalk_auto_evaluate: bool = False
+        self.randomwalk_auto_survey: bool = False
         self.travel_task: Optional[asyncio.Task[None]] = None
         self.active_command: Optional[str] = None
         self.active_command_time: float = 0.0

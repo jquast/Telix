@@ -1,4 +1,4 @@
-"""Tests for telix.client_shell — session setup, config loading, REPL gating."""
+"""Tests for telix.client_shell -- session setup, config loading, REPL gating."""
 
 from __future__ import annotations
 

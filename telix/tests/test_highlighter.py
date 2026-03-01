@@ -41,7 +41,7 @@ def _make_rule(
 
 
 class _FormattingString(str):
-    """Mimics blessed.FormattingString — a str subclass that is also callable."""
+    """Mimics blessed.FormattingString -- a str subclass that is also callable."""
 
     def __call__(self, text: str = "") -> str:
         return f"{self}{text}\x1b[0m"

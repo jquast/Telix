@@ -551,6 +551,124 @@ def test_autodiscover_dialog_default_strategy() -> None:
     assert screen._default_strategy == "dfs"
 
 
+def test_autodiscover_dialog_all_flags(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
+    screen._write_result(
+        True, "bfs",
+        auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True,
+    )
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`autodiscover bfs autosearch autoevaluate autosurvey`"
+    assert data["auto_search"] is True
+    assert data["auto_evaluate"] is True
+    assert data["auto_survey"] is True
+    assert data["autoreplies"] is True
+
+
+def test_autodiscover_dialog_noreply(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy="dfs")
+    screen._write_result(True, "dfs", autoreplies=False)
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`autodiscover dfs noreply`"
+    assert data["autoreplies"] is False
+
+
+def test_autodiscover_dialog_autosurvey_only(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
+    screen._write_result(True, "bfs", auto_survey=True)
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`autodiscover bfs autosurvey`"
+
+
+def test_autodiscover_dialog_default_booleans() -> None:
+    screen = _AutodiscoverDialogScreen(
+        default_auto_search=True,
+        default_auto_evaluate=True,
+        default_auto_survey=True,
+        default_autoreplies=False,
+    )
+    assert screen._default_auto_search is True
+    assert screen._default_auto_evaluate is True
+    assert screen._default_auto_survey is True
+    assert screen._default_autoreplies is False
+
+
+def test_randomwalk_dialog_autosurvey(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
+    screen._write_result(True, 2, auto_survey=True)
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 2 autosurvey`"
+    assert data["auto_survey"] is True
+
+
+def test_randomwalk_dialog_noreply(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
+    screen._write_result(True, 2, autoreplies=False)
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 2 noreply`"
+    assert data["autoreplies"] is False
+
+
+def test_randomwalk_dialog_all_new_flags(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _RandomwalkDialogScreen(result_file=result_file, default_visit_level=3)
+    screen._write_result(
+        True, 3,
+        auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True,
+    )
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 3 autosearch autoevaluate autosurvey`"
+
+
+def test_randomwalk_dialog_noreply_with_flags(tmp_path: Any) -> None:
+    import json
+
+    result_file = str(tmp_path / "result.json")
+    screen = _RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
+    screen._write_result(True, 2, auto_search=True, autoreplies=False)
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 2 autosearch noreply`"
+
+
+def test_randomwalk_dialog_default_autoreplies() -> None:
+    screen = _RandomwalkDialogScreen(
+        default_auto_survey=True, default_autoreplies=False,
+    )
+    assert screen._default_auto_survey is True
+    assert screen._default_autoreplies is False
+
+
 def _make_sessions(n: int) -> dict[str, SessionConfig]:
     sessions: dict[str, SessionConfig] = {}
     for i in range(n):

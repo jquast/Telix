@@ -16,30 +16,30 @@ the first match wins unless a rule is marked **Always**.
 
 ### Flags Explained
 
-- **A (Always)** — match even while another rule's exclusive chain is
+- **A (Always)** -- match even while another rule's exclusive chain is
   active.  Without this flag, only the first matching rule fires per
   prompt.  Use for things like autoloot or stat tracking that should
   always trigger.
-- **I (Immediate)** — send the reply immediately without waiting for the
+- **I (Immediate)** -- send the reply immediately without waiting for the
   server's GA/EOR prompt.  Useful for login sequences or rapid responses
   where the server doesn't send a prompt between messages.
-- **C (Case-sensitive)** — match the pattern case-sensitively instead of
+- **C (Case-sensitive)** -- match the pattern case-sensitively instead of
   the default case-insensitive matching.
-- **W (When)** — a vital-percentage condition gate is set on this rule.
-- **(off)** — the rule is disabled and won't match.  Toggle via the
+- **W (When)** -- a vital-percentage condition gate is set on this rule.
+- **(off)** -- the rule is disabled and won't match.  Toggle via the
   Enabled switch in the form, or use Shift+F9 in-session to disable
   all autoreplies globally.
 
 ### Form Fields
 
-- **Enabled** — toggle the rule on/off
-- **Always** — match even during another rule's exclusive chain
-- **Imm** (Immediate) — reply without waiting for prompt
-- **Case** — case-sensitive pattern matching (default: off)
-- **Pattern** — Python regex (case-insensitive by default, DOTALL,
+- **Enabled** -- toggle the rule on/off
+- **Always** -- match even during another rule's exclusive chain
+- **Imm** (Immediate) -- reply without waiting for prompt
+- **Case** -- case-sensitive pattern matching (default: off)
+- **Pattern** -- Python regex (case-insensitive by default, DOTALL,
   MULTILINE); use capture groups `(...)` for backreferences
-- **Reply** — command sequence; use `\1`, `\2` for captured groups
-- **Condition** — optional vital gate (e.g. HP% >= 80); the rule only
+- **Reply** -- command sequence; use `\1`, `\2` for captured groups
+- **Condition** -- optional vital gate (e.g. HP% >= 80); the rule only
   fires when the condition is met
 
 ### Pattern Syntax (Python Regex)
@@ -94,7 +94,7 @@ raw GMCP values, or any captured variable name (e.g. **Adrenaline**,
 | `Corpse contains:.*(\d+ solaris)` | `get all solaris from corpse` | Grab currency from corpses (Always) |
 | `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation (When: HP% > 50) |
 | `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome (When: HP% > 50) |
-| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy — long timeout (When: HP% > 99) |
+| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy -- long timeout (When: HP% > 99) |
 | `Please enter your ship.` | `enter ship` | Board shuttle (Immediate) |
 | `(^You catch\|^You fail to catch)` | `bait hook;fish with rod` | Auto-fishing loop |
 | `Try searching\\.` | `search;gl` | Auto-search when prompted |

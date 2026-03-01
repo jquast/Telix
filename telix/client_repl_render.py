@@ -922,6 +922,8 @@ class ToolbarRenderer:
         self._eta_refresh_active: bool = False
         self._until_progress_active: bool = False
         self._last_progress_col: int = -1
+        self._last_progress_hint: str = ""
+        self._last_hint_split: Optional[Tuple[str, int]] = None
         self._last_eta_text: str = ""
         self._cached_eta_frags: Optional[List[Tuple[str, str]]] = None
         self.hp = VitalTracker()
@@ -931,10 +933,15 @@ class ToolbarRenderer:
         self._cursor_show_handle: Optional[asyncio.TimerHandle] = None
         self._cursor_hidden: bool = False
 
-    _CURSOR_SHOW_DELAY = 0.1
+    _CURSOR_SHOW_DELAY = 0.05
+
+    def _is_autoreply_bg(self, engine: Any) -> bool:
+        """Return whether the input row should use the autoreply background."""
+        ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
+        return self.ctx.discover_active or self.ctx.randomwalk_active or ar
 
     def hide_cursor(self) -> None:
-        """Hide the terminal cursor immediately, canceling any pending show."""
+        """Hide the terminal cursor, canceling any pending debounced show."""
         if self._cursor_show_handle is not None:
             self._cursor_show_handle.cancel()
             self._cursor_show_handle = None
@@ -942,17 +949,27 @@ class ToolbarRenderer:
             self.out.write(CURSOR_HIDE.encode())
             self._cursor_hidden = True
 
+    def show_cursor(self) -> None:
+        """Show the terminal cursor immediately, canceling any pending show."""
+        if self._cursor_show_handle is not None:
+            self._cursor_show_handle.cancel()
+            self._cursor_show_handle = None
+        self._cursor_hidden = False
+        self.out.write(CURSOR_SHOW.encode())
+
     def schedule_cursor_show(self, loop: asyncio.AbstractEventLoop) -> None:
         """Schedule the terminal cursor to be shown after a short delay.
 
-        Cancels any previously pending show so that rapid hide/show cycles
-        collapse into a single show at the end.
+        If ``hide_cursor`` is called before the timer fires, the show is
+        suppressed.  A later ``schedule_cursor_show`` will try again.
         """
         if self._cursor_show_handle is not None:
             self._cursor_show_handle.cancel()
 
         def _do_show() -> None:
             self._cursor_show_handle = None
+            if self.stoplight is not None and self.stoplight.is_animating():
+                return
             self._cursor_hidden = False
             self.out.write(CURSOR_SHOW.encode())
 
@@ -978,8 +995,9 @@ class ToolbarRenderer:
         slots, needs_reflash = self._build_slots(
             engine, ar_active, discover_active, randomwalk_active, now
         )
-        is_autoreply_bg = discover_active or randomwalk_active or ar_active
-        return self._paint(slots, is_autoreply_bg, needs_reflash)
+        return self._paint(
+            slots, self._is_autoreply_bg(engine), needs_reflash
+        )
 
     def _ensure_gmcp_ready(self) -> bool:
         """Initialize toolbar on first GMCP data; return ``False`` if no data yet."""
@@ -1387,7 +1405,7 @@ class ToolbarRenderer:
                 self.out.write(bg_sgr.encode())
 
         # Drive stoplight animation via frame() so cursor_light stays in
-        # sync, but don't render the glyph here — it only appears at the
+        # sync, but don't render the glyph here -- it only appears at the
         # cursor position.
         if self.stoplight is not None:
             self.stoplight.frame(autoreply_bg=is_autoreply_bg)
@@ -1417,12 +1435,30 @@ class ToolbarRenderer:
         ch, (r, g, b) = self.stoplight._last_result
         if ch == " ":
             return False
-        cbg = _CURSOR_AR_RGB if is_autoreply_bg else CURSOR_COLOR_RGB
+        cbg = _AUTOREPLY_BG_RGB if is_autoreply_bg else _NORMAL_BG_RGB
         bg = bt.on_color_rgb(*cbg)
         self.out.write(bt.move_yx(row, col).encode())
         self.out.write(f"{bg}{bt.color_rgb(r, g, b)}{ch}{bt.normal}".encode())
         self.out.write(bt.move_yx(row, col).encode())
         return True
+
+    def restore_cursor(
+        self, bt: "blessed.Terminal", row: int, col: int, is_autoreply_bg: bool
+    ) -> None:
+        """Show the cursor at *row*, *col*, using the stoplight glyph if animating.
+
+        Picks the appropriate style and OSC color for normal or autoreply
+        background, then makes the terminal cursor visible.
+        """
+        if self.cursor_light(bt, row, col, is_autoreply_bg):
+            return
+        style = _STYLE_AUTOREPLY if is_autoreply_bg else _STYLE_NORMAL
+        osc = _CURSOR_AR_OSC if is_autoreply_bg else CURSOR_COLOR_OSC
+        self.out.write(bt.move_yx(row, col).encode())
+        self.out.write(osc.encode())
+        self.out.write(style["cursor_sgr"].encode())
+        self.show_cursor()
+        self.out.write(bt.normal.encode())
 
     def schedule_flash(
         self,
@@ -1438,8 +1474,7 @@ class ToolbarRenderer:
             still = self.render(autoreply_engine)
             input_row = self.scroll.input_row
             engine = autoreply_engine
-            ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-            is_ar_bg = self.ctx.discover_active or self.ctx.randomwalk_active or ar
+            is_ar_bg = self._is_autoreply_bg(engine)
 
             cq = self.ctx.command_queue
             ac = self.ctx.active_command
@@ -1477,36 +1512,40 @@ class ToolbarRenderer:
                 drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
                 if not drew:
                     self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                    self.schedule_cursor_show(loop)
+                    self.show_cursor()
             else:
                 hint = _activity_hint(engine)
                 hint_w = len(hint) if hint else 0
                 edit_w = max(2, bt.width - hint_w)
                 if not still:
                     self.out.write(editor.render(bt, input_row, edit_w).encode())
+                prog = None
                 if hint:
                     prog = _until_progress(engine)
-                    col = bt.width - hint_w
-                    bg = _STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else _STYLE_NORMAL["bg_sgr"]
-                    self.out.write(bt.move_yx(input_row, col).encode())
-                    _write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg)
+                    split = int(len(hint) * prog + 0.5) if prog is not None else -1
+                    hint_split = (hint, split)
+                    if hint_split != self._last_hint_split:
+                        self._last_hint_split = hint_split
+                        col = bt.width - hint_w
+                        bg = (
+                            _STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg
+                            else _STYLE_NORMAL["bg_sgr"]
+                        )
+                        self.out.write(bt.move_yx(input_row, col).encode())
+                        _write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg)
                     if prog is not None:
                         still = True
-                cursor_col = editor.display.cursor
-                drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
-                if not drew:
-                    style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
-                    osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
-                    self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                    self.out.write(osc.encode())
-                    self.out.write(style["cursor_sgr"].encode())
-                    self.schedule_cursor_show(loop)
-                    self.out.write(bt.normal.encode())
+                else:
+                    self._last_hint_split = None
+                if prog is None:
+                    cursor_col = editor.display.cursor
+                    self.restore_cursor(bt, input_row, cursor_col, is_ar_bg)
 
             if still:
                 loop.call_later(_FLASH_INTERVAL, _tick)
             else:
                 self.flash_active = False
+                self._last_hint_split = None
 
         loop.call_later(_FLASH_INTERVAL, _tick)
 
@@ -1556,17 +1595,8 @@ class ToolbarRenderer:
                     cursor_col = editor.display.cursor
                     input_row = self.scroll.input_row
                     engine = autoreply_engine
-                    ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-                    is_ar_bg = self.ctx.discover_active or self.ctx.randomwalk_active or ar
-                    drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
-                    if not drew:
-                        style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
-                        osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
-                        self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                        self.out.write(osc.encode())
-                        self.out.write(style["cursor_sgr"].encode())
-                        self.schedule_cursor_show(loop)
-                        self.out.write(bt.normal.encode())
+                    is_ar_bg = self._is_autoreply_bg(engine)
+                    self.restore_cursor(bt, input_row, cursor_col, is_ar_bg)
             loop.call_later(self._ETA_REFRESH_INTERVAL, _eta_tick)
 
         loop.call_later(self._ETA_REFRESH_INTERVAL, _eta_tick)
@@ -1597,40 +1627,33 @@ class ToolbarRenderer:
             if prog is None:
                 self._until_progress_active = False
                 self._last_progress_col = -1
+                self._last_progress_hint = ""
+                self.schedule_cursor_show(loop)
                 return
             hint = _activity_hint(engine)
             if not hint:
                 self._until_progress_active = False
+                self._last_progress_hint = ""
+                self.schedule_cursor_show(loop)
                 return
             split = int(len(hint) * prog + 0.5)
-            if split == self._last_progress_col:
+            if split == self._last_progress_col and hint == self._last_progress_hint:
                 loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)
                 return
             self._last_progress_col = split
+            self._last_progress_hint = hint
             hint_w = len(hint)
             col = bt.width - hint_w
             if col < 2:
                 loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)
                 return
-            ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-            is_ar_bg = self.ctx.discover_active or self.ctx.randomwalk_active or ar
+            is_ar_bg = self._is_autoreply_bg(engine)
             bg = _STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else _STYLE_NORMAL["bg_sgr"]
             self.hide_cursor()
             self.out.write(bt.move_yx(self.scroll.input_row, col).encode())
             _write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg)
-            has_command = self.ctx.command_queue is not None or self.ctx.active_command is not None
-            if not has_command:
-                cursor_col = editor.display.cursor
-                input_row = self.scroll.input_row
-                drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
-                if not drew:
-                    style = _STYLE_AUTOREPLY if is_ar_bg else _STYLE_NORMAL
-                    osc = _CURSOR_AR_OSC if is_ar_bg else CURSOR_COLOR_OSC
-                    self.out.write(bt.move_yx(input_row, cursor_col).encode())
-                    self.out.write(osc.encode())
-                    self.out.write(style["cursor_sgr"].encode())
-                    self.schedule_cursor_show(loop)
-                    self.out.write(bt.normal.encode())
+            if self.ctx.cx_dot is not None:
+                self.ctx.cx_dot.trigger()
             loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)
 
         loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)

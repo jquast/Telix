@@ -15,22 +15,22 @@ a GMCP package field pair (value + max) to a colored bar display.
 
 ### Form Fields
 
-- **Name** — display label for the bar
-- **Enabled** — toggle the bar on/off
-- **GMCP Pkg** — the GMCP package containing the fields
+- **Name** -- display label for the bar
+- **Enabled** -- toggle the bar on/off
+- **GMCP Pkg** -- the GMCP package containing the fields
   (e.g. `Char.Vitals`, `Char.Status`)
-- **Value Field** — field name for the current value (e.g. `hp`)
-- **Max Field** — field name for the maximum value (e.g. `maxhp`)
-- **Color Mode** — `Theme` uses your TUI theme accent color;
+- **Value Field** -- field name for the current value (e.g. `hp`)
+- **Max Field** -- field name for the maximum value (e.g. `maxhp`)
+- **Color Mode** -- `Theme` uses your TUI theme accent color;
   `Custom` lets you choose specific max/min colors
-- **Max Color** — bar color at 100% (custom mode only)
-- **Min Color** — bar color at 0% (custom mode only)
-- **Text Color** — foreground color for text overlaid on the bar.
+- **Max Color** -- bar color at 100% (custom mode only)
+- **Min Color** -- bar color at 0% (custom mode only)
+- **Text Color** -- foreground color for text overlaid on the bar.
   `auto` (default) uses dark text on the filled portion and grey on
   the empty portion.  Choose a theme or custom color to override.
-- **Path** — `Shortest` or `Longest` hue arc between colors
-- **Preview** — live preview of the bar at the chosen percentage
-- **Value %** — preview percentage (0-100)
+- **Path** -- `Shortest` or `Longest` hue arc between colors
+- **Preview** -- live preview of the bar at the chosen percentage
+- **Value %** -- preview percentage (0-100)
 
 ### Side
 
@@ -44,7 +44,7 @@ The `<Travel>` bar is a built-in entry that displays progress for
 randomwalk and autodiscover operations.  It is automatically
 included when you press **Detect** and cannot be duplicated.
 
-Unlike GMCP bars, the `<Travel>` bar has no GMCP source — its
+Unlike GMCP bars, the `<Travel>` bar has no GMCP source -- its
 Source, Value, and Max fields are disabled in the editor.  You
 can still customize its colors, color path, side, and enabled
 state like any other bar.
@@ -64,10 +64,10 @@ are enabled by default; other detected bars are disabled.
 
 ### Color Modes
 
-**Theme** — interpolates between the TUI accent color and its
+**Theme** -- interpolates between the TUI accent color and its
 hue complement.  Changes automatically when you switch themes.
 
-**Custom** — interpolates between a chosen max color (full bar)
+**Custom** -- interpolates between a chosen max color (full bar)
 and min color (empty bar) through HSV color space using the
 selected hue path (shortest or longest arc).
 

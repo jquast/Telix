@@ -1,5 +1,5 @@
 """
-Telix client shell — wraps telnetlib3's terminal handling with REPL support.
+Telix client shell -- wraps telnetlib3's terminal handling with REPL support.
 
 Provides :func:`telix_client_shell`, a drop-in replacement for
 :func:`telnetlib3.client_shell.telnet_client_shell` that creates a
@@ -267,7 +267,7 @@ async def telix_client_shell(
                 if not mode_switched:
                     # Connection closed normally.
                     break
-                # Server switched to kludge/raw mode — fall through to raw loop.
+                # Server switched to kludge/raw mode -- fall through to raw loop.
 
             # Raw event loop.
             if not switched_to_raw and tty_shell._istty and tty_shell._save_mode is not None:
@@ -300,7 +300,7 @@ async def telix_client_shell(
             local_echo = state.local_echo
             linesep = state.linesep
             if state.reactivate_repl and _check_want_repl():
-                # Server returned to line mode — loop back to REPL.
+                # Server returned to line mode -- loop back to REPL.
                 continue
             # Connection closed.
             break

@@ -137,7 +137,7 @@ if TYPE_CHECKING:
     from .macros import Macro
     from .autoreply import AutoreplyEngine
 
-PASSWORD_CHAR = "\u25cf"
+PASSWORD_CHAR = "\u2593"
 
 log = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ def _save_history_entry(line: str, path: str) -> None:
 _RESERVE_INITIAL = 1
 _RESERVE_WITH_TOOLBAR = 2
 
-# Lazy blessed Terminal singleton — created on first use.
+# Lazy blessed Terminal singleton -- created on first use.
 # Both blessed.Terminal and client_shell.Terminal are named "Terminal"
 # in their respective modules; ``blessed_term`` and ``tty_shell`` are
 # used throughout to distinguish the two when both are in scope.
@@ -394,7 +394,7 @@ def _restore_after_subprocess(
         )
     for r in range(input_row, tsize.lines):
         sys.stdout.write(blessed_term.move_yx(r, 0) + blessed_term.clear_eol)
-    # Re-enable in-band window resize notifications (DEC mode 2048) — the
+    # Re-enable in-band window resize notifications (DEC mode 2048) -- the
     # subprocess may have reset terminal modes, disabling the notification
     # that blessed's notify_on_resize() context manager originally enabled.
     sys.stdout.write("\x1b[?2048h")
@@ -556,7 +556,7 @@ if sys.platform != "win32":
             """
             Update dimensions and reapply scroll region.
 
-            No content scrolling occurs here — ``_on_resize_repaint``
+            No content scrolling occurs here -- ``_on_resize_repaint``
             replays the buffer and saves the cursor at the correct
             position afterward.
             """
@@ -916,14 +916,19 @@ if sys.platform != "win32":
         def _echo_autoreply(self, cmd: str) -> None:
             """Echo an autoreply command into the scroll region."""
             assert self.scroll is not None
+            is_pw = self.telnet_writer.will_echo
+            display_cmd = PASSWORD_CHAR * len(cmd) if is_pw else cmd
             self.stdout.write(self.blessed_term.restore.encode())
-            colored = f"{self.blessed_term.cyan}{cmd}" f"{self.blessed_term.normal}\r\n"
+            colored = f"{self.blessed_term.cyan}{display_cmd}" f"{self.blessed_term.normal}\r\n"
             self.stdout.write(colored.encode())
             self.replay_buf.append(colored.encode())
             self.stdout.write(self.blessed_term.save.encode())
             ts = self.ctx.typescript_file
             if ts is not None:
-                ts.write(cmd + "\r\n")
+                if is_pw:
+                    ts.write("\r\n")
+                else:
+                    ts.write(cmd + "\r\n")
                 ts.flush()
             cursor_col = self.editor.display.cursor
             self.stdout.write(self.blessed_term.move_yx(self.scroll.input_row, cursor_col).encode())
@@ -1052,7 +1057,7 @@ if sys.platform != "win32":
             self._echo_autoreply(f"HIGHLIGHTS {state}")
 
         def _reg_close(self) -> None:
-            """Handle Ctrl+] — close the connection."""
+            """Handle Ctrl+] -- close the connection."""
             self.server_done = True
             self.telnet_writer.close()
 
@@ -1636,7 +1641,7 @@ if sys.platform != "win32":
                             ts.flush()
 
                         is_pw = self.telnet_writer.will_echo
-                        echo = "*" * len(line) if is_pw else line
+                        echo = PASSWORD_CHAR * len(line) if is_pw else line
                         self.stdout.write(bt.restore.encode())
                         colored = f"{bt.yellow}{echo}{bt.normal}\r\n"
                         self.stdout.write(colored.encode())

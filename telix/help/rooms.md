@@ -18,7 +18,7 @@ area.
 | Button | Action |
 |--------|--------|
 | **Bookmark ╾** | Toggle a bookmark on the selected room |
-| **Block ⌀** | Toggle block — blocked rooms are excluded from all travel |
+| **Block ⌀** | Toggle block -- blocked rooms are excluded from all travel |
 | **Home ⌂** | Set as home room for this area (one per area) |
 | **Mark ➽** | Toggle a visual marker (no functional effect) |
 
@@ -78,7 +78,7 @@ current area.
 ### Marks
 
 Marked rooms are marked with **➽**.  Marks are purely visual with no
-functional effect — use them to flag rooms of interest.
+functional effect -- use them to flag rooms of interest.
 
 ### Fast Travel vs Slow Travel
 

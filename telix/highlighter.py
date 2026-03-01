@@ -302,7 +302,7 @@ class HighlightEngine:
         Apply highlight rules to a single line of output.
 
         :param line: A single line of terminal output (may contain SGR sequences).
-        :returns:``(highlighted_line, had_matches)`` — the original line is returned unchanged when
+        :returns:``(highlighted_line, had_matches)`` -- the original line is returned unchanged when
             no rules match.
         """
         if not self.enabled:

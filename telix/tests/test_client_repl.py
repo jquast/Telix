@@ -1076,6 +1076,7 @@ class _CommandTrackingContext(_DynamicRoomContext):
         exits = self._adj.get(current, {})
         if direction in exits:
             self._room_val = exits[direction]
+            self.room_changed.set()
 
 
 class _TrackingWalkWriter(_WalkWriter):
@@ -1092,7 +1093,7 @@ class _TrackingWalkWriter(_WalkWriter):
         self.ctx = _CommandTrackingContext(room_num, adj, blocked_directions)
         self.ctx.writer = self  # type: ignore[assignment]
         self.ctx.echo_command = self._echo_log.append
-        self.ctx.room_arrival_timeout = 0.1
+        self.ctx.room_arrival_timeout = 0.0
         self.ctx.room_graph = types.SimpleNamespace(
             _adj=adj,
             rooms={},
@@ -1178,7 +1179,7 @@ async def test_resume_randomwalk_from_same_room(
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = _WalkWriter(room_num="room1", adj=adj)
 
-    # Run once — walks nowhere (north blocked), saves state
+    # Run once -- walks nowhere (north blocked), saves state
     await _randomwalk(writer.ctx, logging.getLogger("test"), limit=2)
 
     assert writer.ctx.last_walk_mode == "randomwalk"
@@ -1699,6 +1700,7 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     repl.ctx = ctx
     repl.replay_buf = []
     repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
     repl._echo_autoreply("look")
     ts_file.close()
@@ -1728,8 +1730,48 @@ def test_echo_autoreply_no_typescript() -> None:
     repl.ctx = ctx
     repl.replay_buf = []
     repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
     repl._echo_autoreply("look")
+
+
+def test_echo_autoreply_masks_when_will_echo(tmp_path: Any) -> None:
+    """_echo_autoreply masks display and typescript when will_echo is True."""
+    pytest.importorskip("blessed")
+
+    from telix.client_repl import ReplSession
+    from telix.session_context import SessionContext
+
+    bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
+    scroll = types.SimpleNamespace(input_row=0)
+    stdout_writer, stdout_buf = _mock_stdout()
+
+    ctx = SessionContext()
+    ts_path = tmp_path / "typescript"
+    ts_file = open(ts_path, "w", encoding="utf-8", newline="")
+    ctx.typescript_file = ts_file
+
+    repl = object.__new__(ReplSession)
+    repl.blessed_term = bt
+    repl.scroll = scroll
+    repl.stdout = stdout_writer
+    repl.ctx = ctx
+    repl.replay_buf = []
+    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.telnet_writer = types.SimpleNamespace(will_echo=True)
+
+    repl._echo_autoreply("secret123")
+    ts_file.close()
+
+    ts_content = ts_path.read_text(encoding="utf-8", newline="")
+    assert ts_content == "\r\n"
+
+    display_output = bytes(stdout_buf.data).decode()
+    assert "secret123" not in display_output
+    assert "\u2593" * 9 in display_output
+
+    replay = b"".join(repl.replay_buf).decode()
+    assert "secret123" not in replay
 
 
 def test_typescript_will_echo_writes_bare_crlf(tmp_path: Any) -> None:

@@ -96,6 +96,50 @@ def _get_vital_pct(key: str, vitals: dict[str, Any]) -> Optional[int]:
     return int(cur * 100 / mx)
 
 
+def _gmcp_lookup_raw(key: str, gmcp: dict[str, Any]) -> Optional[int]:
+    """Look up *key* directly in any GMCP package dict."""
+    for pkg_data in gmcp.values():
+        if not isinstance(pkg_data, dict):
+            continue
+        raw = pkg_data.get(key)
+        if raw is not None:
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _gmcp_lookup_pct(key: str, gmcp: dict[str, Any]) -> Optional[int]:
+    """Look up *key* (without trailing ``%``) as a value/max pair in any GMCP package."""
+    base = key[:-1] if key.endswith("%") else key
+    for pkg_data in gmcp.values():
+        if not isinstance(pkg_data, dict):
+            continue
+        cur_raw = pkg_data.get(base)
+        if cur_raw is None:
+            continue
+        # Try MaxBase, baseMax, maxbase (case-insensitive scan).
+        max_raw = pkg_data.get(f"Max{base}") or pkg_data.get(f"max{base}")
+        if max_raw is None:
+            lower_target = f"{base.lower()}max"
+            for k, v in pkg_data.items():
+                if k.lower() == f"max{base.lower()}" or k.lower() == lower_target:
+                    max_raw = v
+                    break
+        if max_raw is None:
+            continue
+        try:
+            cur = int(cur_raw)
+            mx = int(max_raw)
+        except (TypeError, ValueError):
+            continue
+        if mx <= 0:
+            continue
+        return int(cur * 100 / mx)
+    return None
+
+
 def _compare(value: int, op: str, threshold: int) -> bool:
     """Evaluate ``value op threshold``."""
     if op == ">":
@@ -140,6 +184,8 @@ def check_condition(when: dict[str, str], ctx: "SessionContext") -> tuple[bool, 
         if key.endswith("%"):
             if vitals is not None:
                 value = _get_vital_pct(key, vitals)
+            if value is None and gmcp:
+                value = _gmcp_lookup_pct(key, gmcp)
             if value is None and captures:
                 base = key[:-1]
                 cur = captures.get(base)
@@ -150,6 +196,8 @@ def check_condition(when: dict[str, str], ctx: "SessionContext") -> tuple[bool, 
         else:
             if vitals is not None:
                 value = _get_vital_raw(key, vitals)
+            if value is None and gmcp:
+                value = _gmcp_lookup_raw(key, gmcp)
             if value is None and captures:
                 value = captures.get(key)
         if value is None:
@@ -978,7 +1026,11 @@ class AutoreplyEngine:
                 self._status = "waiting for prompt"
                 if self._wait_fn is not None:
                     await self._wait_fn()
-            self._status = f"send: {cmd}"
+            writer = self._ctx.writer
+            if writer is not None and getattr(writer, "will_echo", False):
+                self._status = "send: (masked)"
+            else:
+                self._status = f"send: {cmd}"
             self._send_command(cmd)
             sent_count += 1
         self._status = ""
@@ -1006,7 +1058,11 @@ class AutoreplyEngine:
             self._sent_commands.clear()
         if self._echo_fn is not None:
             self._echo_fn(cmd)
-        self._ctx.active_command = cmd
+        writer = self._ctx.writer
+        if writer is not None and getattr(writer, "will_echo", False):
+            self._ctx.active_command = "\u2593" * len(cmd)
+        else:
+            self._ctx.active_command = cmd
         self._ctx.active_command_time = _monotonic()
         if self._ctx.cx_dot is not None:
             self._ctx.cx_dot.trigger()
