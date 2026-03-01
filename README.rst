@@ -62,7 +62,7 @@ Each session stores per-host options: encoding (utf-8, cp437, latin-1, and more)
 optional certificate verification, raw or line mode, connection timeout, environment variables,
 telnet option negotiation, color matching, background color, and ICE colors.
 
-The session list is persisted to ``~/.config/telix/sessions.json``.
+The session list is persisted to ``$XDG_CONFIG_HOME/telix/sessions.json``.
 
 Keyboard shortcuts
 ------------------
@@ -195,7 +195,7 @@ typed at the input line.  Press **F8** to open the macro editor.
 - Macros can be enabled, disabled, copied, reordered, and sorted by
   last-used time.
 - Supported keys: F1--F12, Alt+letter, Ctrl+letter, and single characters.
-- Macros are stored per-session in ``~/.config/telix/macros.json``.
+- Macros are stored per-session in ``$XDG_CONFIG_HOME/telix/macros.json``.
 
 Autoreplies
 -----------
@@ -214,7 +214,7 @@ Patterns use Python regex syntax.  Capture groups (``\1``, ``\2``) can be
 interpolated into the reply text.
 
 Rules are evaluated top-to-bottom; the first match wins unless a rule is
-marked Always.  Stored per-session in ``~/.config/telix/autoreplies.json``.
+marked Always.  Stored per-session in ``$XDG_CONFIG_HOME/telix/autoreplies.json``.
 
 Highlights
 ----------
@@ -236,14 +236,14 @@ Flags:
 - **S (Stop)** -- Cancel any active autodiscover or randomwalk on match.
 - **C (Case-sensitive)** -- Case-sensitive pattern matching.
 
-Stored per-session in ``~/.config/telix/highlights.json``.
+Stored per-session in ``$XDG_CONFIG_HOME/telix/highlights.json``.
 
 Room mapping
 ------------
 
 When the server sends GMCP ``Room.Info`` messages, telix builds an
 incrementally-growing room graph stored in SQLite at
-``~/.local/share/telix/rooms-<host>_<port>.db``.
+``$XDG_DATA_HOME/telix/rooms-<hash>.db``.
 
 The room graph supports:
 
@@ -258,28 +258,44 @@ The room graph supports:
 Press **F7** to open the room browser.  Rooms can be filtered by area,
 sorted by name/ID/distance/last-visited, and traveled to directly.
 
-Chat
-----
+Files
+-----
 
-When the server sends GMCP ``Comm.Channel.Text`` messages, telix persists
-them to ``~/.config/telix/chat-<host>_<port>.json`` (capped at the 1000 most
-recent messages) and tracks unread counts.
+All persistent state follows the `XDG Base Directory Specification
+<https://specifications.freedesktop.org/basedir-spec/latest/>`_.
+Override locations with ``$XDG_CONFIG_HOME`` and ``$XDG_DATA_HOME``.
 
-Configuration files
--------------------
+Common defaults:
 
-All persistent state uses XDG base directories:
+.. list-table::
+   :header-rows: 1
 
-``~/.config/telix/``
-    ``sessions.json``, ``autoreplies.json``, ``macros.json``,
-    ``highlights.json``
+   * - Variable
+     - Linux
+     - macOS
+     - Windows
+   * - ``$XDG_CONFIG_HOME``
+     - ``~/.config``
+     - ``~/Library/Application Support``
+     - ``%APPDATA%``
+   * - ``$XDG_DATA_HOME``
+     - ``~/.local/share``
+     - ``~/Library/Application Support``
+     - ``%LOCALAPPDATA%``
 
-``~/.local/share/telix/``
-    ``history-<hash>`` (command history), ``rooms-<host>_<port>.db``
-    (room graph), ``chat-<host>_<port>.json`` (chat log)
+``$XDG_CONFIG_HOME/telix/`` contains 1 file for all sessions for each feature:
 
-Session-specific files use a SHA-256 slug of ``host:port`` for safe
-filesystem naming.
+ - ``sessions.json``
+ - ``autoreplies.json``
+ - ``macros.json``,
+ - ``highlights.json``
+
+``$XDG_DATA_HOME/telix/`` contains 1 file for each session for each feature.  Session-specific files
+use a SHA-256 slug of ``host:port``:
+
+- ``history-<hash>``
+- ``rooms-<hash>.db``
+- ``chat-<hash>.json``
 
 Contributing
 ------------
