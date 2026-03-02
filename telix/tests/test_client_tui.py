@@ -15,7 +15,9 @@ pytest.importorskip("textual", reason="textual not installed")
 
 # local
 from telix.client_tui import (  # noqa: E402
+    _EDITOR_TABS,
     DEFAULTS_KEY,
+    _PRIMARY_PASTE_COMMANDS,
     SessionConfig,
     MacroEditScreen,
     TelnetSessionApp,
@@ -32,12 +34,10 @@ from telix.client_tui import (  # noqa: E402
     _build_tooltips,
     _get_help_topic,
     _CommandHelpScreen,
-    _RandomwalkDialogScreen,
-    _AutodiscoverDialogScreen,
     _TabbedEditorScreen,
-    _EDITOR_TABS,
+    _RandomwalkDialogScreen,
     _read_primary_selection,
-    _PRIMARY_PASTE_COMMANDS,
+    _AutodiscoverDialogScreen,
 )
 
 
@@ -235,6 +235,66 @@ def test_build_command_missing_host() -> None:
     cfg = SessionConfig(host="", port=23)
     cmd = build_command(cfg)
     assert "" in cmd
+
+
+def test_build_command_websocket_with_ssl() -> None:
+    """WebSocket protocol with SSL builds telix-ws command with wss:// URL."""
+    cfg = SessionConfig(protocol="websocket", host="gel.monster", port=443, ssl=True, ws_path="/ws")
+    cmd = build_command(cfg)
+    assert cmd[0] == sys.executable
+    assert "from telix.ws_client import main; main()" in cmd
+    assert "wss://gel.monster/ws" in cmd
+    assert "telnetlib3" not in " ".join(cmd)
+
+
+def test_build_command_websocket_without_ssl() -> None:
+    """WebSocket protocol without SSL builds URL from host:port."""
+    cfg = SessionConfig(protocol="websocket", host="gel.monster", port=8443)
+    cmd = build_command(cfg)
+    assert "ws://gel.monster:8443" in cmd
+
+
+def test_build_command_websocket_standard_port_omitted() -> None:
+    """Standard ports (443 for wss, 80 for ws) are omitted from the URL."""
+    cfg_wss = SessionConfig(protocol="websocket", host="mud.example", port=443, ssl=True)
+    assert "wss://mud.example" in build_command(cfg_wss)
+    assert ":443" not in " ".join(build_command(cfg_wss))
+
+    cfg_ws = SessionConfig(protocol="websocket", host="mud.example", port=80, ssl=False)
+    assert "ws://mud.example" in build_command(cfg_ws)
+    assert ":80" not in " ".join(build_command(cfg_ws))
+
+
+def test_build_command_websocket_ws_path() -> None:
+    """ws_path is appended to the WebSocket URL."""
+    cfg = SessionConfig(
+        protocol="websocket", host="mud.example", port=4002, ssl=False, ws_path="/game"
+    )
+    cmd = build_command(cfg)
+    assert "ws://mud.example:4002/game" in cmd
+
+
+def test_build_command_websocket_ws_path_no_leading_slash() -> None:
+    """ws_path without leading slash gets one prepended."""
+    cfg = SessionConfig(
+        protocol="websocket", host="mud.example", port=4002, ssl=False, ws_path="ws"
+    )
+    cmd = build_command(cfg)
+    assert "ws://mud.example:4002/ws" in cmd
+
+
+def test_build_command_websocket_ws_path_empty() -> None:
+    """Empty ws_path produces no trailing path."""
+    cfg = SessionConfig(protocol="websocket", host="mud.example", port=4002, ssl=False, ws_path="")
+    cmd = build_command(cfg)
+    assert "ws://mud.example:4002" in cmd
+
+
+def test_build_command_telnet_default_protocol() -> None:
+    """Default protocol is telnet."""
+    cfg = SessionConfig(host="example.com", port=23)
+    cmd = build_command(cfg)
+    assert "telnetlib3" in cmd[2]
 
 
 def test_macro_screen_loads_empty(tmp_path) -> None:
@@ -570,8 +630,7 @@ def test_autodiscover_dialog_all_flags(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = _AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
     screen._write_result(
-        True, "bfs",
-        auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True,
+        True, "bfs", auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True
     )
 
     with open(result_file, "r", encoding="utf-8") as f:
@@ -653,8 +712,7 @@ def test_randomwalk_dialog_all_new_flags(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = _RandomwalkDialogScreen(result_file=result_file, default_visit_level=3)
     screen._write_result(
-        True, 3,
-        auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True,
+        True, 3, auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True
     )
 
     with open(result_file, "r", encoding="utf-8") as f:
@@ -675,9 +733,7 @@ def test_randomwalk_dialog_noreply_with_flags(tmp_path: Any) -> None:
 
 
 def test_randomwalk_dialog_default_autoreplies() -> None:
-    screen = _RandomwalkDialogScreen(
-        default_auto_survey=True, default_autoreplies=False,
-    )
+    screen = _RandomwalkDialogScreen(default_auto_survey=True, default_autoreplies=False)
     assert screen._default_auto_survey is True
     assert screen._default_autoreplies is False
 
@@ -734,10 +790,7 @@ class TestTabbedEditorScreen:
 
     def test_editor_tabs_ids(self) -> None:
         ids = [tab_id for _, tab_id in _EDITOR_TABS]
-        assert ids == [
-            "help", "highlights", "rooms", "macros",
-            "autoreplies", "captures", "bars",
-        ]
+        assert ids == ["help", "highlights", "rooms", "macros", "autoreplies", "captures", "bars"]
 
     def test_create_pane_help(self, tmp_path: Any) -> None:
         from telix.client_tui import _HelpPane
@@ -805,7 +858,7 @@ class TestTabbedEditorScreen:
 
 class TestReadPrimarySelection:
     def test_returns_text_from_first_available_helper(self, monkeypatch: Any) -> None:
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         fake_result = MagicMock()
         fake_result.returncode = 0
@@ -814,12 +867,11 @@ class TestReadPrimarySelection:
             result = _read_primary_selection()
         assert result == "hello world"
         m.assert_called_once_with(
-            _PRIMARY_PASTE_COMMANDS[0],
-            capture_output=True, timeout=2, check=False,
+            _PRIMARY_PASTE_COMMANDS[0], capture_output=True, timeout=2, check=False
         )
 
     def test_tries_next_command_on_file_not_found(self, monkeypatch: Any) -> None:
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         fake_result = MagicMock()
         fake_result.returncode = 0
@@ -841,13 +893,11 @@ class TestReadPrimarySelection:
     def test_returns_empty_when_no_helpers_available(self) -> None:
         from unittest.mock import patch
 
-        with patch(
-            "telix.client_tui.subprocess.run", side_effect=FileNotFoundError,
-        ):
+        with patch("telix.client_tui.subprocess.run", side_effect=FileNotFoundError):
             assert _read_primary_selection() == ""
 
     def test_skips_helper_with_nonzero_exit(self) -> None:
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         fail = MagicMock(returncode=1, stdout=b"")
         ok = MagicMock(returncode=0, stdout=b"ok")
