@@ -456,6 +456,163 @@ def _pause_on_subprocess_error(result: Optional[Any]) -> None:
         pass
 
 
+def _launch_unified_editor(
+    initial_tab: str, ctx: "SessionContext", replay_buf: Optional[Any] = None
+) -> None:
+    """
+    Launch the unified tabbed TUI editor as a subprocess.
+
+    Gathers parameters for all panes, spawns ``unified_editor_main``, and
+    reloads all potentially-modified configs on return.
+
+    :param initial_tab: Tab to open initially (e.g. ``"help"``, ``"macros"``).
+    :param ctx: Session context with file path and definition attributes.
+    :param replay_buf: Optional replay buffer for screen repaint on return.
+    """
+    import json as _json
+    import tempfile
+    import subprocess
+
+    from ._paths import CONFIG_DIR as _config_dir
+    from .client_repl import _get_term, _blocking_fds, _terminal_cleanup, _restore_after_subprocess
+    from .rooms import (
+        rooms_path as _rooms_path_fn,
+        read_fasttravel,
+        fasttravel_path as _fasttravel_path_fn,
+        current_room_path as _current_room_path_fn,
+    )
+
+    session_key = ctx.session_key
+    logfile = _get_logfile_path()
+
+    # -- Gather all pane parameters --
+    highlights_file = ctx.highlights_file or os.path.join(_config_dir, "highlights.json")
+    macros_file = ctx.macros_file or os.path.join(_config_dir, "macros.json")
+    autoreplies_file = ctx.autoreplies_file or os.path.join(_config_dir, "autoreplies.json")
+    progressbars_file = ctx.progressbars_file or os.path.join(_config_dir, "progressbars.json")
+    rooms_file = ctx.rooms_file or _rooms_path_fn(session_key)
+    current_room_file = ctx.current_room_file or _current_room_path_fn(session_key)
+    fasttravel_file = _fasttravel_path_fn(session_key)
+
+    # Flush GMCP snapshot so the bars editor can read it.
+    gmcp_snapshot_file = ctx.gmcp_snapshot_file or ""
+    if gmcp_snapshot_file and ctx.gmcp_data:
+        from .gmcp_snapshot import save_gmcp_snapshot
+
+        save_gmcp_snapshot(gmcp_snapshot_file, session_key, ctx.gmcp_data)
+        ctx._gmcp_dirty = False
+
+    # Autoreply select pattern.
+    engine = ctx.autoreply_engine
+    select_pattern = getattr(engine, "last_matched_pattern", "") if engine else ""
+
+    # Chat / capture data.
+    chat_file = ctx.chat_file or ""
+    ctx.chat_unread = 0
+    initial_channel = ""
+    if ctx.chat_messages:
+        last_msg = ctx.chat_messages[-1]
+        initial_channel = last_msg.get("channel", "")
+
+    capture_file = ""
+    captures = getattr(ctx, "captures", {})
+    capture_log = getattr(ctx, "capture_log", {})
+    if captures or capture_log:
+        fd, capture_file = tempfile.mkstemp(suffix=".json", prefix="captures-")
+        os.close(fd)
+        with open(capture_file, "w", encoding="utf-8") as fh:
+            _json.dump({"captures": captures, "capture_log": capture_log}, fh)
+
+    params = {
+        "initial_tab": initial_tab,
+        "session_key": session_key,
+        "logfile": logfile,
+        "highlights_file": highlights_file,
+        "macros_file": macros_file,
+        "autoreplies_file": autoreplies_file,
+        "progressbars_file": progressbars_file,
+        "rooms_file": rooms_file,
+        "current_room_file": current_room_file,
+        "fasttravel_file": fasttravel_file,
+        "gmcp_snapshot_file": gmcp_snapshot_file,
+        "select_pattern": select_pattern,
+        "chat_file": chat_file,
+        "initial_channel": initial_channel,
+        "capture_file": capture_file,
+    }
+
+    params_json = _json.dumps(params)
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; from telix.client_tui import unified_editor_main; "
+        "unified_editor_main()",
+        params_json,
+    ]
+
+    log = logging.getLogger(__name__)
+
+    global _editor_active  # noqa: PLW0603
+    log.debug(
+        "unified_editor: pre-subprocess initial_tab=%s "
+        "TERM=%s COLORTERM=%s terminal_size=%s",
+        initial_tab,
+        os.environ.get("TERM", ""),
+        os.environ.get("COLORTERM", ""),
+        _safe_terminal_size(),
+    )
+    blessed_term = _get_term()
+    sys.stdout.write(_terminal_cleanup())
+    sys.stdout.write(blessed_term.change_scroll_region(0, blessed_term.height - 1))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.__stderr__.flush()
+    _editor_active = True
+    result = None
+    try:
+        with _blocking_fds():
+            result = subprocess.run(cmd, check=False)
+    except FileNotFoundError:
+        log.warning("could not launch unified editor subprocess")
+    finally:
+        _editor_active = False
+        _pause_on_subprocess_error(result)
+        _restore_after_subprocess(replay_buf)
+        if capture_file:
+            try:
+                os.unlink(capture_file)
+            except OSError:
+                pass
+
+    # Reload all configs that may have been modified.
+    _reload_macros(ctx, macros_file, session_key, log)
+    _reload_highlights(ctx, highlights_file, session_key, log)
+    _reload_autoreplies(ctx, autoreplies_file, session_key, log)
+    _reload_progressbars(ctx, progressbars_file, session_key, log)
+
+    # Reload room graph.
+    room_graph = ctx.room_graph
+    if room_graph is not None:
+        room_graph._load_adjacency()
+
+    # Handle fast travel.
+    steps, noreply = read_fasttravel(fasttravel_file)
+    if steps:
+        from .client_repl_travel import _fast_travel
+
+        log.debug("travel: scheduling %d steps (noreply=%s)", len(steps), noreply)
+        task = asyncio.ensure_future(_fast_travel(steps, ctx, log, noreply=noreply))
+        ctx.travel_task = task
+
+        def _on_done(t: "asyncio.Task[None]") -> None:
+            if ctx.travel_task is t:
+                ctx.travel_task = None
+            if not t.cancelled() and t.exception() is not None:
+                log.warning("fast travel failed: %s", t.exception())
+
+        task.add_done_callback(_on_done)
+
+
 def _launch_tui_editor(
     editor_type: str, ctx: "SessionContext", replay_buf: Optional[Any] = None
 ) -> None:

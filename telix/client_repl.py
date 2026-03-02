@@ -108,6 +108,7 @@ from .client_repl_dialogs import (  # noqa: F401
     _autodiscover_dialog,
     _launch_room_browser,
     _reload_progressbars,
+    _launch_unified_editor,
 )
 from .client_repl_commands import (  # noqa: F401
     _REPEAT_RE,
@@ -911,7 +912,7 @@ if sys.platform != "win32":
         def _render_editor(self, bt: "blessed.Terminal", row: int, width: int) -> str:
             """Render the line editor, scrambling password text."""
             raw = self.editor.render(bt, row, width)
-            if self.editor.password_mode:
+            if self.editor.password_mode and self.editor._buf:
                 raw = raw.replace(PASSWORD_CHAR * len(self.editor._buf), scramble_password())
             return raw
 
@@ -1033,6 +1034,20 @@ if sys.platform != "win32":
             cursor_col = self._editor_cursor()
             self._show_cursor_or_light(self.scroll.input_row, cursor_col)
 
+        def _repaint_after_toggle(self) -> None:
+            """Repaint toolbar and input line after a toggle key."""
+            if self.scroll is None:
+                return
+            bt = self.blessed_term
+            self._update_input_style()
+            self.toolbar.hide_cursor()
+            self.stdout.write(
+                self._render_editor(bt, self.scroll.input_row, self._input_width()).encode()
+            )
+            self.toolbar.render(self.autoreply_engine)
+            cursor_col = self._editor_cursor()
+            self._show_cursor_or_light(self.scroll.input_row, cursor_col)
+
         def _toggle_highlights(self) -> None:
             """Toggle the highlight engine on/off."""
             engine = self.ctx.highlight_engine
@@ -1041,6 +1056,7 @@ if sys.platform != "win32":
             engine.enabled = not engine.enabled
             state = "ON" if engine.enabled else "OFF"
             self._echo_autoreply(f"HIGHLIGHTS {state}")
+            self._repaint_after_toggle()
 
         def _reg_close(self) -> None:
             """Handle Ctrl+] -- close the connection."""
@@ -1058,6 +1074,7 @@ if sys.platform != "win32":
             self.autoreply_engine.enabled = not self.autoreply_engine.enabled
             state = "ON" if self.autoreply_engine.enabled else "OFF"
             self._echo_autoreply(f"AUTOREPLIES {state}")
+            self._repaint_after_toggle()
 
         def _on_walk_done(self, _task: "asyncio.Task[None]") -> None:
             """Repaint the input line when a walk task finishes."""
@@ -1162,13 +1179,16 @@ if sys.platform != "win32":
             self.dispatch.register("KEY_F4", self._discover_mode)
             self.dispatch.register("KEY_F5", self._resume_last_walk)
             self.dispatch.register(
-                "KEY_F7", lambda: _launch_room_browser(self.ctx, self.replay_buf)
+                "KEY_F7",
+                lambda: _launch_unified_editor("rooms", self.ctx, self.replay_buf),
             )
             self.dispatch.register(
-                "KEY_F10", lambda: _launch_chat_viewer(self.ctx, self.replay_buf)
+                "KEY_F10",
+                lambda: _launch_unified_editor("captures", self.ctx, self.replay_buf),
             )
             self.dispatch.register(
-                "KEY_F11", lambda: _launch_tui_editor("progressbars", self.ctx, self.replay_buf)
+                "KEY_F11",
+                lambda: _launch_unified_editor("bars", self.ctx, self.replay_buf),
             )
             self.toolbar.schedule_eta_refresh(
                 self.loop, self.autoreply_engine, self.editor, self.blessed_term
@@ -1367,20 +1387,21 @@ if sys.platform != "win32":
 
             self.dispatch.register(
                 "KEY_F1",
-                lambda: _show_help(
-                    self.macro_defs, replay_buf=self.replay_buf, has_gmcp=self._has_gmcp()
-                ),
+                lambda: _launch_unified_editor("help", self.ctx, self.replay_buf),
             )
             self.dispatch.register(
-                "KEY_F8", lambda: _launch_tui_editor("macros", self.ctx, self.replay_buf)
+                "KEY_F6",
+                lambda: _launch_unified_editor("highlights", self.ctx, self.replay_buf),
             )
             self.dispatch.register(
-                "KEY_F9", lambda: _launch_tui_editor("autoreplies", self.ctx, self.replay_buf)
+                "KEY_F8",
+                lambda: _launch_unified_editor("macros", self.ctx, self.replay_buf),
+            )
+            self.dispatch.register(
+                "KEY_F9",
+                lambda: _launch_unified_editor("autoreplies", self.ctx, self.replay_buf),
             )
             self.dispatch.register("KEY_F21", self._toggle_autoreplies)  # Shift+F9
-            self.dispatch.register(
-                "KEY_F6", lambda: _launch_tui_editor("highlights", self.ctx, self.replay_buf)
-            )
             self.dispatch.register("KEY_F18", self._toggle_highlights)  # Shift+F6
 
             self.ctx.on_gmcp_ready = self._register_gmcp_keys

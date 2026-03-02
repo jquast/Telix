@@ -415,6 +415,7 @@ class SessionListScreen(Screen[None]):
         Binding("b", "toggle_bookmark", "Bookmark"),
         Binding("d", "delete_session", "Delete"),
         Binding("enter", "connect", "Connect"),
+        Binding("f1", "show_help", "Help"),
     ]
 
     CSS = """
@@ -524,7 +525,7 @@ class SessionListScreen(Screen[None]):
         """Add a list of ``(key, cfg)`` pairs as rows to *table*."""
         for key, cfg in items:
             table.add_row(
-                "\u257e" if cfg.bookmarked else "",
+                "\u2021" if cfg.bookmarked else "",
                 cfg.name or cfg.host,
                 str(cfg.port),
                 cfg.encoding,
@@ -700,6 +701,10 @@ class SessionListScreen(Screen[None]):
         self._save()
         self._refresh_table()
         self._select_row(key)
+
+    def action_show_help(self) -> None:
+        """Open the session manager help screen."""
+        self.app.push_screen(_CommandHelpScreen(topic="session"))
 
     def action_connect(self) -> None:
         """Launch a telnet connection to the selected session."""
@@ -1389,6 +1394,21 @@ class _HelpPane(Vertical):
             with VerticalScroll(id="help-scroll"):
                 yield Markdown(content, id="help-content")
 
+    def update_topic(self, topic: str) -> None:
+        """Replace help content with a different topic.
+
+        :param topic: Help topic key (e.g. ``"macro"``, ``"keybindings"``).
+        """
+        if topic == self._topic:
+            return
+        self._topic = topic
+        content = _get_help_topic(topic)
+        try:
+            md = self.query_one("#help-content", Markdown)
+            md.update(content)
+        except NoMatches:
+            pass
+
 
 class _CommandHelpScreen(Screen[None]):
     """Scrollable help screen with context-specific documentation."""
@@ -1619,8 +1639,12 @@ class _EditListPane(Vertical):
         """Placeholder for save key binding hint."""
 
     def action_show_help(self) -> None:
-        """Open the context-sensitive help screen."""
-        self.app.push_screen(_CommandHelpScreen(topic=self._prefix))
+        """Open context-sensitive help, switching to the Help tab if tabbed."""
+        screen = self.screen
+        if isinstance(screen, _TabbedEditorScreen):
+            screen.show_context_help(self._prefix)
+        else:
+            self.app.push_screen(_CommandHelpScreen(topic=self._prefix))
 
     def _matches_search(self, idx: int, query: str) -> bool:
         """Return True if item at *idx* matches the search *query*."""
@@ -4238,17 +4262,19 @@ class RoomBrowserPane(Vertical):
             "room-block": self._do_toggle_block,
             "room-home": self._do_toggle_home,
             "room-mark": self._do_toggle_mark,
-            "room-help": lambda: self.app.push_screen(
-                _CommandHelpScreen(topic="room")
-            ),
+            "room-help": self.action_show_help,
         }
         handler = handlers.get(event.button.id or "")
         if handler:
             handler()
 
     def action_show_help(self) -> None:
-        """Open the room browser help screen."""
-        self.app.push_screen(_CommandHelpScreen(topic="room"))
+        """Open room help, switching to the Help tab if tabbed."""
+        screen = self.screen
+        if isinstance(screen, _TabbedEditorScreen):
+            screen.show_context_help("room")
+        else:
+            self.app.push_screen(_CommandHelpScreen(topic="room"))
 
     def on_key(self, event: events.Key) -> None:
         """Arrow keys navigate between search, buttons, and the room tree."""
@@ -4599,6 +4625,8 @@ class _EditorApp(App[None]):
             saved_theme = load_prefs(DEFAULTS_KEY).get("tui_theme", "")
         if isinstance(saved_theme, str) and saved_theme:
             self.theme = saved_theme
+        else:
+            self.theme = "gruvbox"
         self.push_screen(self._editor_screen, callback=lambda _: self.exit())
 
     def watch_theme(self, old: str, new: str) -> None:
@@ -5121,13 +5149,13 @@ class _TabbedEditorScreen(Screen[None]):
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("escape", "close_or_back", "Close", priority=True),
-        Binding("f1", "switch_tab('help')", "Help", show=False),
-        Binding("f6", "switch_tab('highlights')", "Highlights", show=False),
-        Binding("f7", "switch_tab('rooms')", "Rooms", show=False),
-        Binding("f8", "switch_tab('macros')", "Macros", show=False),
-        Binding("f9", "switch_tab('autoreplies')", "Autoreplies", show=False),
-        Binding("f10", "switch_tab('captures')", "Caps", show=False),
-        Binding("f11", "switch_tab('bars')", "Bars", show=False),
+        Binding("f1", "switch_tab('help')", "Help", show=False, priority=True),
+        Binding("f6", "switch_tab('highlights')", "Highlights", show=False, priority=True),
+        Binding("f7", "switch_tab('rooms')", "Rooms", show=False, priority=True),
+        Binding("f8", "switch_tab('macros')", "Macros", show=False, priority=True),
+        Binding("f9", "switch_tab('autoreplies')", "Autoreplies", show=False, priority=True),
+        Binding("f10", "switch_tab('captures')", "Caps", show=False, priority=True),
+        Binding("f11", "switch_tab('bars')", "Bars", show=False, priority=True),
     ]
 
     CSS = """
@@ -5236,6 +5264,10 @@ class _TabbedEditorScreen(Screen[None]):
         """Switch to *tab_id*, loading it lazily if needed."""
         switcher = self.query_one("#te-content", ContentSwitcher)
         if switcher.current == tab_id:
+            if tab_id == "help":
+                pane = self._panes.get("help")
+                if isinstance(pane, _HelpPane):
+                    pane.update_topic("keybindings")
             return
         switcher.current = tab_id
         for btn in self.query("#te-tab-bar Button"):
@@ -5249,6 +5281,16 @@ class _TabbedEditorScreen(Screen[None]):
                 pane._load_from_file()
                 if hasattr(pane, "_refresh_table"):
                     pane._refresh_table()
+
+    def show_context_help(self, topic: str) -> None:
+        """Switch to the Help tab and display context-sensitive *topic*.
+
+        :param topic: Help topic key (e.g. ``"macro"``, ``"room"``).
+        """
+        self.action_switch_tab("help")
+        pane = self._panes.get("help")
+        if isinstance(pane, _HelpPane):
+            pane.update_topic(topic)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle tab bar button clicks."""
@@ -5973,6 +6015,8 @@ class TelnetSessionApp(App[None]):
         saved_theme = prefs.get("tui_theme")
         if isinstance(saved_theme, str) and saved_theme:
             self.theme = saved_theme
+        else:
+            self.theme = "gruvbox"
         self.push_screen(SessionListScreen())
 
     def watch_theme(self, old: str, new: str) -> None:

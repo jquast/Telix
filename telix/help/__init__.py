@@ -33,4 +33,6 @@ def get_help(topic: str) -> str:
         return _read_topic("keybindings")
     if topic == "progressbar":
         return _read_topic("progressbars")
+    if topic == "session":
+        return _read_topic("sessions")
     raise ValueError(f"unknown help topic: {topic!r}")

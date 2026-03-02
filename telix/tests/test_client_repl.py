@@ -141,6 +141,23 @@ def test_scroll_region_restore_cursor() -> None:
     assert len(bytes(transport.data)) > 0
 
 
+def test_scramble_password_empty_buf_no_replace() -> None:
+    """str.replace with empty search inserts between every char; guard against it."""
+    from telix.client_repl import PASSWORD_CHAR
+    from telix.client_repl_render import scramble_password
+
+    raw = "\x1b[45;1H\x1b[48;2;26;0;0m\x1b[0m" + (" " * 80)
+    search = PASSWORD_CHAR * 0
+    result = raw.replace(search, scramble_password())
+    assert len(result) > len(raw) * 10
+
+    guarded_raw = raw
+    buf_len = 0
+    if buf_len:
+        guarded_raw = raw.replace(PASSWORD_CHAR * buf_len, scramble_password())
+    assert guarded_raw == raw
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_adjusted_naws_active_scroll() -> None:

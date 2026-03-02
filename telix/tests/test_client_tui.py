@@ -411,13 +411,13 @@ def test_tui_main(monkeypatch) -> None:
     assert called
 
 
-@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight"])
+@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight", "session"])
 def test_help_topics_exist(topic: str) -> None:
     content = _get_help_topic(topic)
     assert len(content) > 100
 
 
-@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight"])
+@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight", "session"])
 def test_help_screen_creates(topic: str) -> None:
     screen = _CommandHelpScreen(topic=topic)
     assert screen._pane._topic == topic
@@ -449,6 +449,15 @@ def test_help_topic_highlight_contains_key_sections() -> None:
     assert "### Flags Explained" in content
     assert "### Style Names" in content
     assert "bold_red" in content
+
+
+def test_help_topic_session_contains_key_sections() -> None:
+    content = _get_help_topic("session")
+    assert "## Session Manager" in content
+    assert "### Keyboard Shortcuts" in content
+    assert "### Bookmarks" in content
+    assert "### Flags" in content
+    assert "### Search" in content
 
 
 def test_randomwalk_dialog_writes_visit_level(tmp_path: Any) -> None:
