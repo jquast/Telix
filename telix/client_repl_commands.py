@@ -443,6 +443,7 @@ def _render_command_queue(
     flash_elapsed: float = -1.0,
     hint: str = "",
     progress: Optional[float] = None,
+    base_bg_sgr: str = "",
 ) -> int:
     """
     Render the command queue on the input row.
@@ -454,6 +455,7 @@ def _render_command_queue(
     :param flash_elapsed: Seconds since last command change; drives flash.
     :param hint: Right-aligned dim hint text (e.g. autoreply status).
     :param progress: Until timer progress ``0.0..1.0``, or ``None``.
+    :param base_bg_sgr: Fallback background SGR when no flash is active.
     :returns: Total display width of all rendered fragments.
     """
     if queue is None:
@@ -469,7 +471,7 @@ def _render_command_queue(
 
     active_fg = str(blessed_term.color_hex(_ACTIVE_CMD_BASE_FG))
     bg_rgb = _flash_bg_rgb(_ACTIVE_CMD_BASE_FG, flash_elapsed)
-    active_bg = str(blessed_term.on_color_rgb(*bg_rgb)) if bg_rgb else ""
+    active_bg = str(blessed_term.on_color_rgb(*bg_rgb)) if bg_rgb else base_bg_sgr
     pending_sgr = str(blessed_term.color_rgb(120, 120, 120))
     normal = blessed_term.normal
 
@@ -499,8 +501,8 @@ def _render_command_queue(
         out.write(f"{sgr}{text}{normal}".encode())
     pad = avail - total_w
     if pad > 0:
-        out.write((" " * pad).encode())
-    _write_hint(hint, out, blessed_term, progress=progress)
+        out.write(f"{base_bg_sgr}{' ' * pad}{normal}".encode())
+    _write_hint(hint, out, blessed_term, progress=progress, bg_sgr=base_bg_sgr)
     out.write(normal.encode())
     return total_w
 

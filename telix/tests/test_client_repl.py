@@ -1233,7 +1233,39 @@ from telix.client_repl_render import (  # noqa: E402
     PEAK_YELLOW,
     ActivityDot,
     lerp_rgb,
+    _activity_hint,
+    _ELLIPSIS,
 )
+
+
+class _FakeEngine:
+    def __init__(self, status="", idx=None):
+        self.status_text = status
+        self.exclusive_rule_index = idx
+
+
+class TestActivityHint:
+
+    def test_none_engine(self):
+        assert _activity_hint(None) == ""
+
+    def test_no_truncation_when_cols_zero(self):
+        e = _FakeEngine(status="until /very long pattern here/", idx=3)
+        hint = _activity_hint(e, cols=0)
+        assert "[return to cancel]" in hint
+        assert _ELLIPSIS not in hint
+
+    def test_truncation_with_ellipsis(self):
+        e = _FakeEngine(status="until /a]very{long}pattern/", idx=5)
+        hint = _activity_hint(e, cols=30)
+        assert len(hint) <= 15
+        assert hint.endswith(_ELLIPSIS)
+
+    def test_short_hint_not_truncated(self):
+        e = _FakeEngine(status="delay 1", idx=1)
+        hint = _activity_hint(e, cols=200)
+        assert _ELLIPSIS not in hint
+        assert "[return to cancel]" in hint
 
 
 def test_modem_dot_idle_before_trigger():
@@ -1961,7 +1993,9 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     repl.stdout = stdout_writer
     repl.ctx = ctx
     repl.replay_buf = []
-    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.editor = types.SimpleNamespace(
+        display=types.SimpleNamespace(cursor=0), password_mode=False, _buf=[]
+    )
     repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
     repl._echo_autoreply("look")
@@ -1991,7 +2025,9 @@ def test_echo_autoreply_no_typescript() -> None:
     repl.stdout = stdout_writer
     repl.ctx = ctx
     repl.replay_buf = []
-    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.editor = types.SimpleNamespace(
+        display=types.SimpleNamespace(cursor=0), password_mode=False, _buf=[]
+    )
     repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
     repl._echo_autoreply("look")
@@ -2019,7 +2055,9 @@ def test_echo_autoreply_masks_when_will_echo(tmp_path: Any) -> None:
     repl.stdout = stdout_writer
     repl.ctx = ctx
     repl.replay_buf = []
-    repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0))
+    repl.editor = types.SimpleNamespace(
+        display=types.SimpleNamespace(cursor=0), password_mode=False, _buf=[]
+    )
     repl.telnet_writer = types.SimpleNamespace(will_echo=True)
 
     repl._echo_autoreply("secret123")
@@ -2028,9 +2066,13 @@ def test_echo_autoreply_masks_when_will_echo(tmp_path: Any) -> None:
     ts_content = ts_path.read_text(encoding="utf-8", newline="")
     assert ts_content == "\r\n"
 
+    from telix.client_repl_render import SEXTANT, SCRAMBLE_LEN
+
     display_output = bytes(stdout_buf.data).decode()
     assert "secret123" not in display_output
-    assert "\u2593" * 9 in display_output
+    sextant_set = set(SEXTANT[1:])
+    masked = [ch for ch in display_output if ch in sextant_set]
+    assert len(masked) == SCRAMBLE_LEN
 
     replay = b"".join(repl.replay_buf).decode()
     assert "secret123" not in replay

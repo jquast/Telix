@@ -23,6 +23,8 @@ from dataclasses import field, dataclass
 # 3rd party
 from wcwidth import strip_sequences
 
+from .client_repl_render import scramble_password
+
 if TYPE_CHECKING:
     from .session_context import SessionContext
 
@@ -1002,7 +1004,7 @@ class AutoreplyEngine:
             self._echo_fn(cmd)
         writer = self._ctx.writer
         if writer is not None and getattr(writer, "will_echo", False):
-            self._ctx.active_command = "\u2593" * len(cmd)
+            self._ctx.active_command = scramble_password()
         else:
             self._ctx.active_command = cmd
         self._ctx.active_command_time = _monotonic()

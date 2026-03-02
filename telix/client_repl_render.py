@@ -2,6 +2,7 @@
 
 # std imports
 import time
+import random
 import asyncio
 import logging
 import collections
@@ -38,6 +39,25 @@ for _b in range(1, 63):
     )
 del _b, _u
 
+#: Non-space sextant characters for password scrambling.
+_SEXTANT_VISIBLE = SEXTANT[1:]
+
+
+SCRAMBLE_LEN = 17
+
+
+def scramble_password(length: int = SCRAMBLE_LEN) -> str:
+    """Return *length* random sextant block characters."""
+    return "".join(random.choice(_SEXTANT_VISIBLE) for _ in range(length))
+
+
+def editor_cursor_col(editor: "blessed.line_editor.LineEditor") -> int:
+    """Return cursor column, pinned to :data:`SCRAMBLE_LEN` in password mode."""
+    if editor.password_mode and editor._buf:
+        return SCRAMBLE_LEN
+    return editor.display.cursor
+
+
 #: Sextant bit patterns per light (stoplight order), per column (left, right).
 SEXTANT_BITS = (
     (0x20, 0x10),  # TX: top-left, top-right
@@ -52,9 +72,12 @@ PHASES = ((0, 1), (1, 2), (0, 2))
 STOPLIGHT_WIDTH = 1
 
 
-def _activity_hint(engine: Any) -> str:
+def _activity_hint(engine: Any, cols: int = 0) -> str:
     """
     Build a short autoreply status hint from *engine*.
+
+    When *cols* is positive the hint is truncated with an ellipsis so it
+    never exceeds half the terminal width.
 
     :returns: Hint string like ``"#3 | until /pat/  [return to cancel]"``,
         or ``""`` when there is nothing to display.
@@ -68,9 +91,14 @@ def _activity_hint(engine: Any) -> str:
     st = getattr(engine, "status_text", "")
     if st:
         parts.append(st)
-    if parts:
-        return " | ".join(parts) + "  [return to cancel]"
-    return ""
+    if not parts:
+        return ""
+    hint = " | ".join(parts) + "  [return to cancel]"
+    if cols > 0:
+        max_w = cols // 2
+        if len(hint) > max_w > 1:
+            hint = hint[: max_w - 1] + _ELLIPSIS
+    return hint
 
 
 def _until_progress(engine: Any) -> Optional[float]:
@@ -1478,8 +1506,12 @@ class ToolbarRenderer:
             if show_cmd:
                 from .client_repl_commands import _render_command_queue, _render_active_command
 
-                hint = _activity_hint(engine)
+                hint = _activity_hint(engine, bt.width)
                 prog = _until_progress(engine)
+                bg = (
+                    _STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg
+                    else _STYLE_NORMAL["bg_sgr"]
+                )
                 if cq is not None:
                     cursor_col = _render_command_queue(
                         cq,
@@ -1488,6 +1520,7 @@ class ToolbarRenderer:
                         flash_elapsed=ac_elapsed,
                         hint=hint,
                         progress=prog,
+                        base_bg_sgr=bg,
                     )
                 else:
                     cursor_col = _render_active_command(
@@ -1497,6 +1530,7 @@ class ToolbarRenderer:
                         flash_elapsed=ac_elapsed,
                         hint=hint,
                         progress=prog,
+                        base_bg_sgr=bg,
                     )
                 if prog is not None:
                     still = True
@@ -1507,7 +1541,7 @@ class ToolbarRenderer:
                     self.out.write(bt.move_yx(input_row, cursor_col).encode())
                     self.show_cursor()
             else:
-                hint = _activity_hint(engine)
+                hint = _activity_hint(engine, bt.width)
                 hint_w = len(hint) if hint else 0
                 edit_w = max(2, bt.width - hint_w)
                 if not still:
@@ -1531,7 +1565,7 @@ class ToolbarRenderer:
                 else:
                     self._last_hint_split = None
                 if prog is None:
-                    cursor_col = editor.display.cursor
+                    cursor_col = editor_cursor_col(editor)
                     self.restore_cursor(bt, input_row, cursor_col, is_ar_bg)
 
             if still:
@@ -1585,7 +1619,7 @@ class ToolbarRenderer:
                     self.ctx.command_queue is not None or self.ctx.active_command is not None
                 )
                 if not has_command:
-                    cursor_col = editor.display.cursor
+                    cursor_col = editor_cursor_col(editor)
                     input_row = self.scroll.input_row
                     engine = autoreply_engine
                     is_ar_bg = self._is_autoreply_bg(engine)
@@ -1623,7 +1657,7 @@ class ToolbarRenderer:
                 self._last_progress_hint = ""
                 self.schedule_cursor_show(loop)
                 return
-            hint = _activity_hint(engine)
+            hint = _activity_hint(engine, bt.width)
             if not hint:
                 self._until_progress_active = False
                 self._last_progress_hint = ""

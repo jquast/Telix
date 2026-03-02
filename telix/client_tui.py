@@ -3212,7 +3212,7 @@ class ProgressBarEditPane(_EditListPane):
         table.add_column("Value", width=14, key="value")
         table.add_column("Max", width=14, key="max")
         table.add_column("Enabled", width=8, key="enabled")
-        table.add_column("Color", width=8, key="color")
+        table.add_column("Color", width=10, key="color")
         self._load_gmcp_packages()
         self._load_from_file()
         self._do_detect(silent=True)
@@ -3232,9 +3232,11 @@ class ProgressBarEditPane(_EditListPane):
         q = query.lower()
         return q in bar.name.lower() or q in bar.gmcp_package.lower()
 
+    _SWATCH_STEPS = 10
+
     @staticmethod
     def _color_swatch(bar: _ProgressBarTuple) -> "RichText":
-        """Build a gradient-colored label for the Color column."""
+        """Build a solid-block gradient swatch for the Color column."""
         from rich.text import Text
 
         from .progressbars import BarConfig, bar_color_at
@@ -3244,12 +3246,12 @@ class ProgressBarEditPane(_EditListPane):
             color_mode=bar.color_mode, color_name_max=bar.color_name_max,
             color_name_min=bar.color_name_min, color_path=bar.color_path,
         )
-        label = " theme " if bar.color_mode == "theme" else " custom"
+        steps = ProgressBarEditPane._SWATCH_STEPS
         swatch = Text()
-        for i, ch in enumerate(label):
-            f = i / max(1, len(label) - 1)
+        for i in range(steps):
+            f = i / max(1, steps - 1)
             c = bar_color_at(f, cfg)
-            swatch.append(ch, style=f"bold {c}")
+            swatch.append(" ", style=f"on {c}")
         return swatch
 
     def _refresh_table(self) -> None:
@@ -3656,6 +3658,8 @@ class ProgressBarEditPane(_EditListPane):
 
 _NAME_COL_BASE = 17
 _ID_COL_BASE = 10
+_BUTTON_COL_MIN = 20
+_BUTTON_COL_GROW = 15
 
 # Colors for room tree decorations.
 _BOOKMARK_STYLE = "#ffffff"
@@ -3708,7 +3712,7 @@ class _RoomTree(Tree[str]):
         elif room_num and room_num in self._marked:
             icon = RichText("\u27bd ", style=_MARKED_STYLE)
         elif room_num and room_num in self._bookmarked:
-            icon = RichText("\u257e ", style=_BOOKMARK_STYLE)
+            icon = RichText("\u2021 ", style=_BOOKMARK_STYLE)
         else:
             icon = RichText("  ")
 
@@ -3790,9 +3794,9 @@ class RoomBrowserPane(Vertical):
     #room-status { height: 1; margin-top: 0; }
     #room-count { width: auto; }
     #room-exits { height: 1; width: 100%; }
-    #room-distance { width: auto; text-align: right; }
+    #room-distance { width: 1fr; text-align: right; }
     #room-marker-bar { height: auto; }
-    #room-marker-bar Button { width: 14; min-width: 0; margin-right: 1; }
+    #room-marker-bar Button { width: 13; min-width: 0; margin-right: 1; }
     #room-total { height: 1; margin-top: 0; }
     Footer FooterLabel { margin: 0; }
     """
@@ -3823,9 +3827,12 @@ class RoomBrowserPane(Vertical):
 
     def _heading_text(self) -> str:
         """Return the column heading string for the tree."""
-        info_label = "[Last]" if self._sort_mode == "last_visited" else "[Dist]"
+        if self._sort_mode == "last_visited":
+            info_col = "[Last]".rjust(8)
+        else:
+            info_col = "Dist".rjust(5)
         nc = self._name_col
-        return f"      {'Name'.ljust(nc)} {'(N)'.rjust(6)} {info_label.rjust(8)}  #ID"
+        return f"    {'Name'.ljust(nc)} {'(N)'.rjust(6)} {info_col} #ID"
 
     def compose(self) -> ComposeResult:
         """Build the room browser layout."""
@@ -3852,7 +3859,7 @@ class RoomBrowserPane(Vertical):
                         yield Static("", id="room-distance")
                     yield Static("", id="room-exits")
                     with Horizontal(id="room-marker-bar"):
-                        yield Button("Bookmark \u257e", variant="warning", id="room-bookmark")
+                        yield Button("Bookmark \u2021", variant="warning", id="room-bookmark")
                         yield Button("Block \u2300", variant="error", id="room-block")
                         yield Button("Home \u2302", variant="primary", id="room-home")
                         yield Button("Mark \u27bd", variant="default", id="room-mark")
@@ -3864,26 +3871,61 @@ class RoomBrowserPane(Vertical):
         except ScreenStackError:
             self.app.exit()
 
+    def _max_area_len(self) -> int:
+        """Return the length of the longest area name in loaded rooms."""
+        best = 0
+        for _, _, area, _, _, _, _, _, _ in self._all_rooms:
+            if len(area) > best:
+                best = len(area)
+        return best
+
+    def _estimate_button_col_width(self) -> int:
+        """Return the computed button column width (mirrors on_mount sizing)."""
+        need = self._max_area_len() + 4
+        return min(_BUTTON_COL_MIN + _BUTTON_COL_GROW, max(_BUTTON_COL_MIN, need))
+
+    def _reflow_columns(self) -> None:
+        """Recompute column widths for the current terminal size."""
+        col_w = self._estimate_button_col_width()
+        self.query_one("#room-button-col").styles.width = col_w
+        term_w = self.app.size.width
+        # Panel chrome: border (2) + padding (2) + button-col padding-right (1).
+        # Row fixed parts: icon (2) + arrow (2) + gaps/count/dist (14) + " #" (2).
+        self._id_width = _ID_COL_BASE + 5
+        chrome = 5
+        row_fixed = 19 + self._id_width
+        available = term_w - col_w - chrome - row_fixed
+        self._name_col = max(_NAME_COL_BASE, available)
+        try:
+            self.query_one("#room-heading", Static).update(self._heading_text())
+        except NoMatches:
+            pass
+
     def on_mount(self) -> None:
         """Load rooms from file and populate tree."""
         css_vars = self.app.get_css_variables()
         fg_muted = css_vars.get("foreground-muted", "")
         if fg_muted:
             self._muted_style = fg_muted[:7] if len(fg_muted) >= 7 else fg_muted
-        term_w = self.app.size.width
-        extra = max(0, term_w - 80)
-        self._name_col = _NAME_COL_BASE + extra
-        self._id_width = _ID_COL_BASE + 5
         tree = self.query_one("#room-tree", Tree)
         tree.show_root = False
         tree.guide_depth = 3
         self._load_rooms()
+        self._reflow_columns()
         self._compute_distances()
         self._populate_area_dropdown()
         self._sort_rooms()
         self._refresh_tree()
         self._mounted = True
         self.call_after_refresh(self._select_current_room)
+
+    def on_resize(self, event: "events.Resize") -> None:
+        """Reflow columns and rebuild the tree on terminal resize."""
+        if not self._mounted:
+            return
+        self._reflow_columns()
+        search_val = self.query_one("#room-search", Input).value
+        self._refresh_tree(search_val)
 
     def _select_room_node(self, room_num: str) -> bool:
         """

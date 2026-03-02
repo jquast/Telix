@@ -85,6 +85,8 @@ from .client_repl_render import (  # noqa: F401
     _layout_toolbar,
     _until_progress,
     _center_truncate,
+    scramble_password,
+    editor_cursor_col,
 )
 from .client_repl_travel import (  # noqa: F401
     _DEFAULT_WALK_LIMIT,
@@ -890,7 +892,7 @@ if sys.platform != "win32":
             """Echo an autoreply command into the scroll region."""
             assert self.scroll is not None
             is_pw = self.telnet_writer.will_echo
-            display_cmd = PASSWORD_CHAR * len(cmd) if is_pw else cmd
+            display_cmd = scramble_password() if is_pw else cmd
             self.stdout.write(self.blessed_term.restore.encode())
             colored = f"{self.blessed_term.cyan}{display_cmd}" f"{self.blessed_term.normal}\r\n"
             self.stdout.write(colored.encode())
@@ -903,8 +905,19 @@ if sys.platform != "win32":
                 else:
                     ts.write(cmd + "\r\n")
                 ts.flush()
-            cursor_col = self.editor.display.cursor
+            cursor_col = self._editor_cursor()
             self.stdout.write(self.blessed_term.move_yx(self.scroll.input_row, cursor_col).encode())
+
+        def _render_editor(self, bt: "blessed.Terminal", row: int, width: int) -> str:
+            """Render the line editor, scrambling password text."""
+            raw = self.editor.render(bt, row, width)
+            if self.editor.password_mode:
+                raw = raw.replace(PASSWORD_CHAR * len(self.editor._buf), scramble_password())
+            return raw
+
+        def _editor_cursor(self) -> int:
+            """Return cursor column, pinned to scramble length in password mode."""
+            return editor_cursor_col(self.editor)
 
         def _insert_into_prompt(self, text: str) -> None:
             """Insert text into the line editor buffer."""
@@ -1015,9 +1028,9 @@ if sys.platform != "win32":
             assert self.scroll is not None
             self._update_input_style()
             self.stdout.write(
-                self.editor.render(bt, self.scroll.input_row, self._input_width()).encode()
+                self._render_editor(bt, self.scroll.input_row, self._input_width()).encode()
             )
-            cursor_col = self.editor.display.cursor
+            cursor_col = self._editor_cursor()
             self._show_cursor_or_light(self.scroll.input_row, cursor_col)
 
         def _toggle_highlights(self) -> None:
@@ -1054,10 +1067,10 @@ if sys.platform != "win32":
             self._update_input_style()
             self.toolbar.hide_cursor()
             self.stdout.write(
-                self.editor.render(bt, self.scroll.input_row, self._input_width()).encode()
+                self._render_editor(bt, self.scroll.input_row, self._input_width()).encode()
             )
             self.toolbar.render(self.autoreply_engine)
-            cursor_col = self.editor.display.cursor
+            cursor_col = self._editor_cursor()
             self._show_cursor_or_light(self.scroll.input_row, cursor_col)
 
         def _discover_mode(self) -> None:
@@ -1190,7 +1203,7 @@ if sys.platform != "win32":
                 )
                 if not cmd_visible:
                     self.stdout.write(
-                        self.editor.render(
+                        self._render_editor(
                             self.blessed_term, self.scroll.input_row, self._input_width()
                         ).encode()
                     )
@@ -1202,11 +1215,18 @@ if sys.platform != "win32":
             ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
             return self.ctx.discover_active or self.ctx.randomwalk_active or ar
 
+        @property
+        def _bg_sgr(self) -> str:
+            """Return the current input-line background SGR sequence."""
+            if self._is_autoreply_bg:
+                return _STYLE_AUTOREPLY["bg_sgr"]
+            return _STYLE_NORMAL["bg_sgr"]
+
         _HELP_HINT = "press F1 for help"
 
         def _activity_hint(self) -> str:
             """Build a short status string for the current activity."""
-            return _activity_hint(self.autoreply_engine)
+            return _activity_hint(self.autoreply_engine, self.blessed_term.width)
 
         def _hint_text(self) -> str:
             """Return the current hint string (activity or help)."""
@@ -1315,10 +1335,10 @@ if sys.platform != "win32":
             self.toolbar.hide_cursor()
             self._update_input_style()
             self.stdout.write(
-                self.editor.render(bt, self.scroll.input_row, self._input_width()).encode()
+                self._render_editor(bt, self.scroll.input_row, self._input_width()).encode()
             )
             self.toolbar.render(self.autoreply_engine)
-            cursor_col = self.editor.display.cursor
+            cursor_col = self._editor_cursor()
             self._show_cursor_or_light(self.scroll.input_row, cursor_col)
 
         def _register_callbacks(self) -> None:
@@ -1383,6 +1403,7 @@ if sys.platform != "win32":
                     flash_elapsed=_monotonic() - self.ctx.active_command_time,
                     hint=self._activity_hint(),
                     progress=_until_progress(self.autoreply_engine),
+                    base_bg_sgr=self._bg_sgr,
                 ),
             )
             self.ctx.command_queue = q
@@ -1495,6 +1516,7 @@ if sys.platform != "win32":
                 ac_elapsed = _monotonic() - self.ctx.active_command_time
                 hint = self._activity_hint()
                 prog = _until_progress(self.autoreply_engine)
+                bg = self._bg_sgr
                 if cq_s is not None:
                     cursor_col = _render_command_queue(
                         cq_s,
@@ -1503,6 +1525,7 @@ if sys.platform != "win32":
                         flash_elapsed=ac_elapsed,
                         hint=hint,
                         progress=prog,
+                        base_bg_sgr=bg,
                     )
                 elif ac_s is not None and ac_elapsed < _FLASH_DURATION:
                     cursor_col = _render_active_command(
@@ -1512,13 +1535,14 @@ if sys.platform != "win32":
                         flash_elapsed=ac_elapsed,
                         hint=hint,
                         progress=prog,
+                        base_bg_sgr=bg,
                     )
                 else:
                     self._update_input_style()
                     self.stdout.write(
-                        self.editor.render(bt, scroll.input_row, self._input_width()).encode()
+                        self._render_editor(bt, scroll.input_row, self._input_width()).encode()
                     )
-                    cursor_col = self.editor.display.cursor
+                    cursor_col = self._editor_cursor()
                 needs_reflash = self.toolbar.render(self.autoreply_engine)
                 if needs_reflash and not self.toolbar.flash_active:
                     self.toolbar.flash_active = True
@@ -1537,7 +1561,7 @@ if sys.platform != "win32":
             tx_dot = self.stoplight.tx
             self._update_input_style()
             self.stdout.write(
-                self.editor.render(bt, scroll.input_row, self._input_width()).encode()
+                self._render_editor(bt, scroll.input_row, self._input_width()).encode()
             )
             chained_task_ref: list[Optional[asyncio.Task[None]]] = [None]
             with bt.raw(), bt.notify_on_resize():
@@ -1566,10 +1590,10 @@ if sys.platform != "win32":
                         self.toolbar.hide_cursor()
                         self._update_input_style()
                         self.stdout.write(
-                            self.editor.render(bt, scroll.input_row, self._input_width()).encode()
+                            self._render_editor(bt, scroll.input_row, self._input_width()).encode()
                         )
                         self.toolbar.render(self.autoreply_engine)
-                        cursor_col = self.editor.display.cursor
+                        cursor_col = self._editor_cursor()
                         self._show_cursor_or_light(scroll.input_row, cursor_col)
                         continue
 
@@ -1584,9 +1608,9 @@ if sys.platform != "win32":
                         self.toolbar.hide_cursor()
                         self._update_input_style()
                         self.stdout.write(
-                            self.editor.render(bt, scroll.input_row, self._input_width()).encode()
+                            self._render_editor(bt, scroll.input_row, self._input_width()).encode()
                         )
-                        cursor_col = self.editor.display.cursor
+                        cursor_col = self._editor_cursor()
                         self._show_cursor_or_light(scroll.input_row, cursor_col)
                         continue
 
@@ -1614,7 +1638,7 @@ if sys.platform != "win32":
                             ts.flush()
 
                         is_pw = self.telnet_writer.will_echo
-                        echo = PASSWORD_CHAR * len(line) if is_pw else line
+                        echo = scramble_password() if is_pw else line
                         self.stdout.write(bt.restore.encode())
                         colored = f"{bt.yellow}{echo}{bt.normal}\r\n"
                         self.stdout.write(colored.encode())
@@ -1692,15 +1716,16 @@ if sys.platform != "win32":
                                 flash_elapsed=ac_elapsed2,
                                 hint=self._activity_hint(),
                                 progress=_until_progress(self.autoreply_engine),
+                                base_bg_sgr=self._bg_sgr,
                             )
                         else:
                             self._update_input_style()
                             self.stdout.write(
-                                self.editor.render(
+                                self._render_editor(
                                     bt, scroll.input_row, self._input_width()
                                 ).encode()
                             )
-                            cursor_col = self.editor.display.cursor
+                            cursor_col = self._editor_cursor()
                         needs_reflash = self.toolbar.render(self.autoreply_engine)
                         if needs_reflash and not self.toolbar.flash_active:
                             self.toolbar.flash_active = True
