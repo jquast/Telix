@@ -6,6 +6,9 @@ Provides :func:`telix_client_shell`, a drop-in replacement for
 :class:`~telix.session_context.SessionContext`, loads per-session configs
 (macros, autoreplies, highlights, chat, rooms), and alternates between
 REPL and raw event loops based on telnet negotiation state.
+
+Also provides :func:`ws_client_shell` for WebSocket connections using
+the ``gmcp.mudstandards.org`` wire format.
 """
 
 from __future__ import annotations
@@ -30,32 +33,37 @@ from telnetlib3.stream_writer import TelnetWriter, TelnetWriterUnicode
 # local
 from . import _paths
 from .client_repl import repl_event_loop
+from .ws_transport import WebSocketReader, WebSocketWriter
 from .session_context import SessionContext
 
 log = logging.getLogger(__name__)
 
-__all__ = ("telix_client_shell",)
+__all__ = ("telix_client_shell", "ws_client_shell")
 
 
-def _build_session_key(writer: Union[TelnetWriter, TelnetWriterUnicode]) -> str:
+def _build_session_key(writer: Union[TelnetWriter, TelnetWriterUnicode, WebSocketWriter]) -> str:
     """
     Derive ``host:port`` session key from CLI arguments or peername.
 
-    Prefers the original hostname from ``sys.argv`` over the resolved IP
-    from :func:`socket.getpeername`, so that session-specific files
-    (history, rooms, macros, etc.) are keyed by the human-readable
-    hostname used to connect.
+    For telnet writers, prefers the original hostname from ``sys.argv``
+    over the resolved IP from :func:`socket.getpeername`, so that
+    session-specific files (history, rooms, macros, etc.) are keyed by
+    the human-readable hostname used to connect.
+
+    For WebSocket writers, falls through directly to peername since the
+    hostname is already set by the WebSocket client.
     """
-    import sys
+    if not isinstance(writer, WebSocketWriter):
+        import sys
 
-    try:
-        from telnetlib3.client import _get_argument_parser
+        try:
+            from telnetlib3.client import _get_argument_parser
 
-        args = _get_argument_parser().parse_known_args(sys.argv[1:])[0]
-        if args.host:
-            return f"{args.host}:{args.port}"
-    except (SystemExit, Exception):
-        pass
+            args = _get_argument_parser().parse_known_args(sys.argv[1:])[0]
+            if args.host:
+                return f"{args.host}:{args.port}"
+        except (SystemExit, Exception):
+            pass
     peername = writer.get_extra_info("peername")
     if peername:
         return f"{peername[0]}:{peername[1]}"
@@ -122,7 +130,7 @@ def _load_configs(ctx: SessionContext) -> None:
     ctx.on_chat_channels = lambda data: setattr(ctx, "chat_channels", data)
 
     # rooms
-    from .rooms import rooms_path, current_room_path, RoomStore, write_current_room
+    from .rooms import RoomStore, rooms_path, current_room_path, write_current_room
 
     rooms_file = rooms_path(session_key)
     ctx.rooms_file = rooms_file
@@ -306,3 +314,77 @@ async def telix_client_shell(
             break
 
         ctx.close()
+
+
+async def ws_client_shell(reader: WebSocketReader, writer: WebSocketWriter) -> None:
+    """
+    Telix client shell for WebSocket connections.
+
+    Simpler counterpart to :func:`telix_client_shell` -- WebSocket
+    connections are always line-mode (no raw/kludge switching), so this
+    function creates a :class:`SessionContext`, loads configs, wires GMCP
+    dispatch, and runs a single pass of the REPL event loop.
+
+    The pseudo-prompt signal (GA/EOR) is fired by the receive loop in
+    :mod:`~telix.ws_client` after each BINARY frame delivery, giving the
+    REPL the same prompt boundary as telnet.
+
+    :param reader: :class:`WebSocketReader` fed by the receive loop.
+    :param writer: :class:`WebSocketWriter` wrapping the WebSocket connection.
+    """
+    # 1. Build SessionContext and attach to writer.
+    session_key = _build_session_key(writer)
+    ctx = SessionContext(session_key=session_key)
+    ctx.writer = writer
+    ctx.repl_enabled = True
+    writer.ctx = ctx
+
+    # 2. Load per-session configs.
+    _load_configs(ctx)
+
+    # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
+    from .ws_transport import _GMCP
+
+    def _on_gmcp(package: str, data: Any) -> None:
+        if package == "Comm.Channel.Text":
+            if ctx.on_chat_text is not None:
+                ctx.on_chat_text(data)
+        elif package == "Comm.Channel.List":
+            if ctx.on_chat_channels is not None:
+                ctx.on_chat_channels(data)
+        elif package == "Room.Info":
+            if ctx.on_room_info is not None:
+                ctx.on_room_info(data)
+
+    writer.set_ext_callback(_GMCP, _on_gmcp)
+
+    keyboard_escape = "\x1d"
+
+    # Terminal / repl_event_loop / _flush_color_filter are typed for
+    # TelnetWriter but accept any duck-compatible writer at runtime.
+    with Terminal(telnet_writer=writer) as tty_shell:  # type: ignore[arg-type]
+        linesep = "\n"
+        stdout = await tty_shell.make_stdout()
+        tty_shell.setup_winch()
+
+        from telnetlib3 import accessories
+
+        escape_name = accessories.name_unicode(keyboard_escape)
+        banner_sep = "\r\n" if tty_shell._istty else linesep
+        stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
+
+        # WebSocket is always line-mode: run REPL once (no raw loop).
+        if tty_shell._istty:
+            await repl_event_loop(
+                reader,  # type: ignore[arg-type]
+                writer,  # type: ignore[arg-type]
+                tty_shell,
+                stdout,
+                history_file=ctx.history_file,
+            )
+
+        _flush_color_filter(writer, stdout)  # type: ignore[arg-type]
+        stdout.write(f"\033[m{linesep}Connection closed.{linesep}".encode())
+        tty_shell.cleanup_winch()
+
+    ctx.close()

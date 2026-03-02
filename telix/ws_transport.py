@@ -1,0 +1,267 @@
+"""
+WebSocket reader/writer adapters for MUD client sessions.
+
+Provides :class:`WebSocketReader` and :class:`WebSocketWriter`, which
+present a compatible interface to telnetlib3's
+:class:`~telnetlib3.stream_reader.TelnetReader` and
+:class:`~telnetlib3.stream_writer.TelnetWriter` so that the REPL and
+shell can operate over a WebSocket transport without modification.
+
+The ``gmcp.mudstandards.org`` wire format is used:
+
+- **BINARY frames** carry raw ANSI/UTF-8 game text.
+- **TEXT frames** carry GMCP messages in ``"Package.Name json"`` format.
+
+Each delivered BINARY frame fires the stored GA/EOR IAC callback as a
+pseudo-prompt signal, giving the REPL the same prompt boundary that
+telnet provides via IAC GA / IAC EOR.
+"""
+
+from __future__ import annotations
+
+# std imports
+import json
+import asyncio
+import logging
+from typing import Any, Dict, Tuple, Union, Optional
+
+log = logging.getLogger(__name__)
+
+# IAC command bytes used as callback keys (matching telnetlib3 conventions).
+_GA = b"\xf9"
+_CMD_EOR = b"\xef"
+# GMCP telopt byte used as ext callback key.
+_GMCP = b"\xc9"
+
+__all__ = ("WebSocketReader", "WebSocketWriter", "parse_gmcp_frame")
+
+
+def parse_gmcp_frame(text: str) -> Tuple[str, Any]:
+    """
+    Parse a GMCP TEXT frame into ``(package_name, payload)``.
+
+    The format is ``"Package.Name optional_json_payload"``.  If no payload
+    is present, *payload* is ``None``.  Malformed JSON is returned as a
+    raw string.
+
+    :param text: Raw TEXT frame content.
+    :returns: ``(package_name, parsed_payload)``
+    :raises ValueError: If *text* is empty.
+    """
+    if not text:
+        raise ValueError("empty GMCP frame")
+    parts = text.split(" ", 1)
+    package = parts[0]
+    if len(parts) == 1:
+        return (package, None)
+    raw = parts[1]
+    try:
+        return (package, json.loads(raw))
+    except (json.JSONDecodeError, ValueError):
+        return (package, raw)
+
+
+class WebSocketReader:
+    """
+    Async reader fed by WebSocket BINARY frames.
+
+    Presents the same ``read()`` / ``at_eof()`` interface as
+    :class:`~telnetlib3.stream_reader.TelnetReader` so the REPL's
+    ``_read_server`` loop works without changes.
+    """
+
+    def __init__(self) -> None:
+        """Initialise the reader with an empty queue."""
+        self._buffer: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        self._eof = False
+
+    def feed_data(self, data: bytes) -> None:
+        """
+        Enqueue decoded text from a BINARY WebSocket frame.
+
+        :param data: Raw bytes (UTF-8 encoded game text).
+        """
+        self._buffer.put_nowait(data.decode("utf-8", errors="replace"))
+
+    def feed_eof(self) -> None:
+        """Signal end-of-stream."""
+        self._eof = True
+        self._buffer.put_nowait(None)
+
+    def at_eof(self) -> bool:
+        """Return ``True`` if EOF has been signalled."""
+        return self._eof
+
+    async def read(self, n: int = -1) -> str:
+        """
+        Read the next chunk of server text.
+
+        Blocks until data is available.  Returns an empty string at EOF.
+
+        :param n: Ignored (present for API compatibility).
+        """
+        if self._eof and self._buffer.empty():
+            return ""
+        chunk = await self._buffer.get()
+        if chunk is None:
+            return ""
+        return chunk
+
+    # telnetlib3 TelnetReader compatibility -- the REPL calls this
+    # to wake the reader when a prompt signal arrives mid-read.
+    def _wakeup_waiter(self) -> None:
+        """Wake any blocked ``read()`` call (feed empty string to unblock)."""
+        self._buffer.put_nowait("")
+
+
+class _NullOptionSet:
+    """Stub for ``telnet_writer.local_option`` / ``remote_option``."""
+
+    @staticmethod
+    def enabled(key: Any) -> bool:
+        """Return ``False`` for all telnet options."""
+        return False
+
+
+class WebSocketWriter:
+    """
+    Writer that sends data over a WebSocket connection.
+
+    Presents the subset of :class:`~telnetlib3.stream_writer.TelnetWriter`
+    that the REPL and shell actually use: ``write()``, ``close()``,
+    ``is_closing()``, ``will_echo``, ``mode``, ``get_extra_info()``,
+    ``set_ext_callback()``, ``set_iac_callback()``, and ``log``.
+
+    Also provides stubs for telnet-specific attributes (``local_option``,
+    ``remote_option``, ``client``, ``_send_naws``, ``handle_send_naws``)
+    so that code shared with the telnet path does not need conditionals.
+    """
+
+    def __init__(self, ws: Any, peername: Optional[Tuple[str, int]] = None) -> None:
+        """
+        Initialise the writer.
+
+        :param ws: A ``websockets`` connection object.
+        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        """
+        self._ws = ws
+        self._closing = False
+        self._peername = peername
+        self._ext_callback: Dict[bytes, Any] = {}
+        self._iac_callback: Dict[bytes, Any] = {}
+        self._send_queue: asyncio.Queue[Any] = asyncio.Queue()
+        self.ctx: Any = None
+        self.log = logging.getLogger("telix.ws_transport")
+        self.will_echo: bool = False
+        self.mode: str = "local"
+
+        # Telnetlib3 compatibility stubs.
+        self.local_option = _NullOptionSet()
+        self.remote_option = _NullOptionSet()
+        self.client: bool = True
+        self.handle_send_naws: Any = None
+
+    def write(self, text: Union[str, bytes]) -> None:
+        """
+        Enqueue *text* for sending as a BINARY WebSocket frame.
+
+        The actual send is performed by the :meth:`drain` background task.
+
+        :param text: Text to send (str is encoded to UTF-8; bytes passed through).
+        """
+        self._send_queue.put_nowait(text.encode("utf-8") if isinstance(text, str) else text)
+
+    def _send_naws(self) -> None:
+        """No-op stub for telnetlib3 NAWS negotiation."""
+
+    def close(self) -> None:
+        """Mark the writer as closing and signal :meth:`drain` to stop."""
+        self._closing = True
+        self._send_queue.put_nowait(None)
+
+    def is_closing(self) -> bool:
+        """Return ``True`` if :meth:`close` has been called."""
+        return self._closing
+
+    def get_extra_info(self, name: str, default: Any = None) -> Any:
+        """
+        Return transport metadata.
+
+        :param name: Key name (only ``"peername"`` and ``"ssl_object"`` supported).
+        :param default: Value to return if *name* is not available.
+        """
+        if name == "peername":
+            return self._peername if self._peername is not None else default
+        if name == "ssl_object":
+            return None
+        return default
+
+    def set_ext_callback(self, key: bytes, callback: Any) -> None:
+        r"""
+        Register an extension callback (e.g. GMCP).
+
+        :param key: Telopt byte (e.g. ``b'\xc9'`` for GMCP).
+        :param callback: Callable receiving ``(package, data)``.
+        """
+        self._ext_callback[key] = callback
+
+    def set_iac_callback(self, key: bytes, callback: Any) -> None:
+        r"""
+        Register an IAC callback (e.g. GA, EOR).
+
+        :param key: IAC command byte (e.g. ``b'\xf9'`` for GA).
+        :param callback: Callable receiving the command byte.
+        """
+        self._iac_callback[key] = callback
+
+    def dispatch_gmcp(self, package: str, data: Any) -> None:
+        """
+        Dispatch a parsed GMCP message to the registered ext callback.
+
+        :param package: GMCP package name (e.g. ``"Room.Info"``).
+        :param data: Parsed JSON payload (or ``None``).
+        """
+        cb = self._ext_callback.get(_GMCP)
+        if cb is not None:
+            cb(package, data)
+
+    def send_gmcp(self, package: str, data: Any = None) -> None:
+        """
+        Enqueue a GMCP message for sending as a TEXT WebSocket frame.
+
+        The actual send is performed by the :meth:`drain` background task.
+
+        :param package: GMCP package name.
+        :param data: JSON-serialisable payload, or ``None``.
+        """
+        if data is None:
+            self._send_queue.put_nowait(package)
+        else:
+            self._send_queue.put_nowait(f"{package} {json.dumps(data)}")
+
+    async def drain(self) -> None:
+        """
+        Send queued messages over the WebSocket until closed.
+
+        Must be run as a background task.  Items are sent in FIFO order.
+        Stops when a ``None`` sentinel is received (placed by :meth:`close`).
+        """
+        while True:
+            item = await self._send_queue.get()
+            if item is None:
+                break
+            await self._ws.send(item)
+
+    def fire_prompt_signal(self) -> None:
+        """
+        Fire GA and EOR IAC callbacks as a pseudo-prompt signal.
+
+        Called after delivering each BINARY frame's content.  WebSocket message boundaries are a
+        reliable prompt signal since each server output cycle produces one message.
+        """
+        ga_cb = self._iac_callback.get(_GA)
+        if ga_cb is not None:
+            ga_cb(_GA)
+        eor_cb = self._iac_callback.get(_CMD_EOR)
+        if eor_cb is not None:
+            eor_cb(_CMD_EOR)

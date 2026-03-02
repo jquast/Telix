@@ -8,7 +8,10 @@ from typing import Any, Union, Callable, Optional, Awaitable
 
 # 3rd party
 from telnetlib3.stream_writer import TelnetWriter, TelnetWriterUnicode
-from telnetlib3._session_context import TelnetSessionContext  # pylint: disable=no-name-in-module
+from telnetlib3._session_context import TelnetSessionContext
+
+# local
+from .ws_transport import WebSocketWriter
 
 
 class _CommandQueue:
@@ -40,7 +43,7 @@ class SessionContext(TelnetSessionContext):
         super().__init__()
 
         # back-reference to the writer (set by _session_shell)
-        self.writer: Optional[Union[TelnetWriter, TelnetWriterUnicode]] = None
+        self.writer: Optional[Union[TelnetWriter, TelnetWriterUnicode, WebSocketWriter]] = None
 
         # identity
         self.session_key: str = session_key

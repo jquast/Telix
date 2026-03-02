@@ -28,13 +28,16 @@ Architecture
 ------------
 
 telix is a TUI telnet and MUD client layered on top of `telnetlib3
-<https://github.com/jquast/telnetlib3>`_::
+<https://github.com/jquast/telnetlib3>`_ and `websockets
+<https://github.com/python-websockets/websockets>`_::
 
     telix  -->  telnetlib3  -->  wcwidth
       |
+      +--> websockets
+      |
       +--> blessed, textual
 
-**telnetlib3 must never import from telix.** Use `writer.ctx` session context or callback hooks.
+**telnetlib3 must never import from telix.** Use ``writer.ctx`` session context or callback hooks.
 
 Module map::
 
@@ -42,6 +45,9 @@ Module map::
     ├── main.py                 CLI entry (TUI or direct connect)
     ├── session_context.py      Per-connection mutable state
     ├── client_shell.py         Shell callback (drop-in for telnetlib3)
+    │
+    ├── ws_transport.py         WebSocket reader/writer adapters
+    ├── ws_client.py            WebSocket connection launcher (telix-ws)
     │
     ├── client_repl.py          blessed LineEditor REPL event loop
     ├── client_repl_render.py   Toolbar / status line rendering
@@ -137,11 +143,18 @@ telix connects to a remote host by calling ``telnetlib3.open_connection()``
 with ``--shell=telix.client_shell.telix_client_shell``, a drop-in
 replacement for ``telnetlib3.client_shell.telnet_client_shell``.
 
-Every ``TelnetWriter`` has a ``.ctx`` attribute that defaults to a
-``TelnetSessionContext``.  telix's ``SessionContext`` subclasses
-``TelnetSessionContext``, adding MUD-specific state (rooms, macros,
-highlights, chat, etc.).  The shell callback creates a ``SessionContext``
-and assigns it to ``writer.ctx``.
+For WebSocket connections, ``ws_client.py`` connects via
+``websockets.connect()`` using the ``gmcp.mudstandards.org`` subprotocol
+and calls ``ws_client_shell(reader, writer)`` with adapter objects
+(``WebSocketReader``/``WebSocketWriter``) that present the same
+interface as telnetlib3's reader/writer pair.
+
+Every ``TelnetWriter`` (or ``WebSocketWriter``) has a ``.ctx``
+attribute that defaults to a ``TelnetSessionContext``.  telix's
+``SessionContext`` subclasses ``TelnetSessionContext``, adding
+MUD-specific state (rooms, macros, highlights, chat, etc.).  The
+shell callback creates a ``SessionContext`` and assigns it to
+``writer.ctx``.
 
 telix's ``SessionContext`` also provides ``captures`` (a flat
 ``dict[str, int]`` of captured variables) and ``capture_log`` (a
