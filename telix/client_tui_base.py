@@ -739,6 +739,10 @@ class SessionListScreen(textual.screen.Screen[None]):
                 sys.stdout.flush()
         self.refresh_table()
         self.select_row(key)
+        # Textual's app.suspend() re-enters the alternate screen buffer
+        # (which is blank) but does not mark the screen dirty for a full
+        # repaint.  Without this, widgets only redraw on hover.
+        self.screen.refresh()
 
     def do_edit_result(self, config: SessionConfig | None) -> None:
         if config is None:
