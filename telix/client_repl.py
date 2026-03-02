@@ -1477,13 +1477,25 @@ if sys.platform != "win32":
                 ar = self.is_autoreply_bg
                 if cq_s is not None:
                     cursor_col = render_command_queue(
-                        cq_s, scroll, self.stdout, flash_elapsed=ac_elapsed,
-                        hint=hint, progress=prog, base_bg_sgr=bg, autoreply=ar,
+                        cq_s,
+                        scroll,
+                        self.stdout,
+                        flash_elapsed=ac_elapsed,
+                        hint=hint,
+                        progress=prog,
+                        base_bg_sgr=bg,
+                        autoreply=ar,
                     )
                 elif ac_s is not None and ac_elapsed < FLASH_DURATION:
                     cursor_col = render_active_command(
-                        ac_s, scroll, self.stdout, flash_elapsed=ac_elapsed,
-                        hint=hint, progress=prog, base_bg_sgr=bg, autoreply=ar,
+                        ac_s,
+                        scroll,
+                        self.stdout,
+                        flash_elapsed=ac_elapsed,
+                        hint=hint,
+                        progress=prog,
+                        base_bg_sgr=bg,
+                        autoreply=ar,
                     )
                 else:
                     self.update_input_style()

@@ -1528,9 +1528,7 @@ class ToolbarRenderer:
                 self.last_ar_bg = is_ar_bg
                 dmz_row = self.scroll.scroll_bottom + 1
                 if dmz_row < input_row:
-                    self.out.write(
-                        (bt.move_yx(dmz_row, 0) + dmz_line(bt.width, is_ar_bg)).encode()
-                    )
+                    self.out.write((bt.move_yx(dmz_row, 0) + dmz_line(bt.width, is_ar_bg)).encode())
 
             cq = self.ctx.command_queue
             ac = self.ctx.active_command
@@ -1544,13 +1542,25 @@ class ToolbarRenderer:
                 bg = STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
                 if cq is not None:
                     cursor_col = client_repl_commands.render_command_queue(
-                        cq, self.scroll, self.out, flash_elapsed=ac_elapsed,
-                        hint=hint, progress=prog, base_bg_sgr=bg, autoreply=is_ar_bg,
+                        cq,
+                        self.scroll,
+                        self.out,
+                        flash_elapsed=ac_elapsed,
+                        hint=hint,
+                        progress=prog,
+                        base_bg_sgr=bg,
+                        autoreply=is_ar_bg,
                     )
                 else:
                     cursor_col = client_repl_commands.render_active_command(
-                        ac, self.scroll, self.out, flash_elapsed=ac_elapsed,
-                        hint=hint, progress=prog, base_bg_sgr=bg, autoreply=is_ar_bg,
+                        ac,
+                        self.scroll,
+                        self.out,
+                        flash_elapsed=ac_elapsed,
+                        hint=hint,
+                        progress=prog,
+                        base_bg_sgr=bg,
+                        autoreply=is_ar_bg,
                     )
                 if prog is not None:
                     still = True
