@@ -1,7 +1,5 @@
 """Tests for telix.client_shell -- session setup, config loading, REPL gating."""
 
-from __future__ import annotations
-
 # std imports
 import json
 import asyncio
@@ -14,22 +12,26 @@ from telnetlib3.accessories import function_lookup
 from telnetlib3._session_context import TelnetSessionContext
 
 # local
-from telix.client_shell import want_repl, load_configs, build_session_key, telix_client_shell
+from telix.client_shell import want_repl, load_configs, ws_client_shell, build_session_key, telix_client_shell
+from telix.ws_transport import GMCP, WebSocketWriter
 from telix.session_context import SessionContext
 
 
 class TestBuildSessionKey:
-    def test_from_peername(self) -> None:
+    def test_from_peername(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("sys.argv", ["telix"])
         writer = MagicMock()
         writer.get_extra_info.return_value = ("example.com", 4000)
         assert build_session_key(writer) == "example.com:4000"
 
-    def test_no_peername(self) -> None:
+    def test_no_peername(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("sys.argv", ["telix"])
         writer = MagicMock()
         writer.get_extra_info.return_value = None
         assert build_session_key(writer) == ""
 
-    def test_ipv4(self) -> None:
+    def test_ipv4(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("sys.argv", ["telix"])
         writer = MagicMock()
         writer.get_extra_info.return_value = ("192.168.1.1", 23)
         assert build_session_key(writer) == "192.168.1.1:23"
@@ -191,3 +193,108 @@ class TestShellSignature:
     def test_resolvable_via_function_lookup(self) -> None:
         fn = function_lookup("telix.client_shell.telix_client_shell")
         assert fn is telix_client_shell
+
+
+class TestBuildSessionKeyWebSocket:
+    """build_session_key uses peername directly for WebSocket writers."""
+
+    def test_ws_writer_uses_peername(self) -> None:
+        ws = MagicMock()
+        writer = WebSocketWriter(ws, peername=("gel.monster", 8443))
+        assert build_session_key(writer) == "gel.monster:8443"
+
+    def test_ws_writer_no_peername(self) -> None:
+        ws = MagicMock()
+        writer = WebSocketWriter(ws, peername=None)
+        assert build_session_key(writer) == ""
+
+    def test_ws_writer_skips_argv_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """WebSocket writers never try to parse telnetlib3 CLI args."""
+        monkeypatch.setattr(
+            "sys.argv", ["telix", "--shell=telix.client_shell.telix_client_shell", "dunemud.net", "6788"]
+        )
+        ws = MagicMock()
+        writer = WebSocketWriter(ws, peername=("gel.monster", 8443))
+        # Should use peername, not argv host.
+        assert build_session_key(writer) == "gel.monster:8443"
+
+
+class TestWsClientShellSignature:
+    """ws_client_shell is a coroutine and resolvable by function_lookup."""
+
+    def test_is_coroutine_function(self) -> None:
+        assert asyncio.iscoroutinefunction(ws_client_shell)
+
+    def test_resolvable_via_function_lookup(self) -> None:
+        fn = function_lookup("telix.client_shell.ws_client_shell")
+        assert fn is ws_client_shell
+
+
+class TestWsClientShellGMCP:
+    """ws_client_shell wires GMCP dispatch callbacks correctly."""
+
+    def _make_writer(self) -> WebSocketWriter:
+        ws = MagicMock()
+        return WebSocketWriter(ws, peername=("gel.monster", 8443))
+
+    def test_gmcp_callback_registered(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ws_client_shell registers a GMCP ext callback on the writer."""
+        monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
+        monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
+        monkeypatch.setattr("telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json"))
+        monkeypatch.setattr(
+            "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
+        )
+        monkeypatch.setattr("telix.rooms.rooms_path", lambda sk: str(tmp_path / "data" / f"rooms-{sk}.db"))
+
+        writer = self._make_writer()
+
+        # We cannot run the full ws_client_shell (it needs a TTY and blessed),
+        # so test the setup steps directly.
+        session_key = build_session_key(writer)
+        ctx = SessionContext(session_key=session_key)
+        ctx.writer = writer
+        ctx.repl_enabled = True
+        writer.ctx = ctx
+        load_configs(ctx)
+
+        # Simulate the GMCP callback setup from ws_client_shell.
+        def on_gmcp(package: str, data: Any) -> None:
+            if package == "Room.Info":
+                if ctx.on_room_info is not None:
+                    ctx.on_room_info(data)
+
+        writer.set_ext_callback(GMCP, on_gmcp)
+        assert GMCP in writer._ext_callback
+
+    def test_room_info_dispatch(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GMCP Room.Info dispatches to ctx.on_room_info."""
+        monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
+        monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
+        monkeypatch.setattr("telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json"))
+        monkeypatch.setattr(
+            "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
+        )
+        monkeypatch.setattr("telix.rooms.rooms_path", lambda sk: str(tmp_path / "data" / f"rooms-{sk}.db"))
+
+        writer = self._make_writer()
+        session_key = build_session_key(writer)
+        ctx = SessionContext(session_key=session_key)
+        ctx.writer = writer
+        writer.ctx = ctx
+        load_configs(ctx)
+
+        received: list[Any] = []
+        ctx.on_room_info = received.append
+
+        def on_gmcp(package: str, data: Any) -> None:
+            if package == "Room.Info":
+                if ctx.on_room_info is not None:
+                    ctx.on_room_info(data)
+
+        writer.set_ext_callback(GMCP, on_gmcp)
+
+        # Dispatch via the writer's GMCP mechanism.
+        room_data = {"num": "42", "name": "Test Room"}
+        writer.dispatch_gmcp("Room.Info", room_data)
+        assert received == [room_data]

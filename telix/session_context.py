@@ -7,7 +7,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import macros, autoreply, gmcp_snapshot
+from . import macros, autoreply, ws_transport, gmcp_snapshot
 
 
 class CommandQueue:
@@ -39,7 +39,12 @@ class SessionContext(telnetlib3._session_context.TelnetSessionContext):
         super().__init__()
 
         # back-reference to the writer (set by session_shell)
-        self.writer: telnetlib3.stream_writer.TelnetWriter | telnetlib3.stream_writer.TelnetWriterUnicode | None = None
+        self.writer: (
+            telnetlib3.stream_writer.TelnetWriter
+            | telnetlib3.stream_writer.TelnetWriterUnicode
+            | ws_transport.WebSocketWriter
+            | None
+        ) = None
 
         # identity
         self.session_key: str = session_key
