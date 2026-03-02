@@ -357,7 +357,7 @@ class TestDrain:
 
 
 class TestWsClientParser:
-    """ws_client.build_parser() supports --no-repl."""
+    """ws_client.build_parser() supports --no-repl and new transport flags."""
 
     def test_no_repl_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
@@ -370,3 +370,27 @@ class TestWsClientParser:
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.no_repl is False
+
+    def test_typescript_flag_accepted(self) -> None:
+        from telix.ws_client import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["wss://example.com", "--typescript", "path/file.txt"])
+        assert args.typescript == "path/file.txt"
+
+    def test_typescript_defaults_empty(self) -> None:
+        from telix.ws_client import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["wss://example.com"])
+        assert args.typescript == ""
+
+    def test_logfile_mode_rewrite(self) -> None:
+        from telix.ws_client import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["wss://example.com", "--logfile-mode", "rewrite"])
+        assert args.logfile_mode == "rewrite"
+
+    def test_typescript_mode_defaults_append(self) -> None:
+        from telix.ws_client import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["wss://example.com"])
+        assert args.typescript_mode == "append"

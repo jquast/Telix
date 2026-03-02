@@ -90,6 +90,22 @@ class TestDirectoryToSessions:
         sessions = directory_to_sessions()
         assert sessions["1984.ws:23"].bookmarked is True
 
+    def test_bbs_presets_applied(self) -> None:
+        sessions = directory_to_sessions()
+        bbs = next(v for v in sessions.values() if v.mode == "raw")
+        assert bbs.colormatch == "vga"
+        assert bbs.ice_colors is True
+        assert bbs.no_repl is True
+        assert bbs.compression is None
+
+    def test_mud_presets_applied(self) -> None:
+        sessions = directory_to_sessions()
+        mud = next(v for v in sessions.values() if v.compression is True)
+        assert mud.colormatch == "none"
+        assert mud.ice_colors is False
+        assert mud.mode == "line"
+        assert mud.no_repl is False
+
 
 class TestParseLine:
     def test_comment_line(self) -> None:

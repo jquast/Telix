@@ -3,7 +3,7 @@
 Introduction
 ============
 
-A modern telnet client designed especially for BBSs_ and MUDs_.
+A modern telnet and WebSocket client designed especially for BBSs_ and MUDs_.
 
 
 Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
@@ -22,6 +22,7 @@ Features
 - **Advanced MUD Features** like macros, autoreplies, highlights, room mapping, travel,
   random walk, autodiscover, progress bars, and chat
 - **Advanced Telnet** with SSL/TLS, NAWS, GMCP, MCCP, BINARY, SGA, ECHO, EOR, GA and more
+- **WebSocket** connections using the ``gmcp.mudstandards.org`` subprotocol
 - **BBS/Scene Art** support for CP437, PETSCII, ATASCII, iCE colors, 24-bit color
 
 Installation
@@ -40,9 +41,20 @@ Launch the Session Manager::
 
     telix
 
-Connect directly to a host::
+Connect directly to a host via Telnet::
 
     telix mud.example.com 4000
+
+Connect directly via WebSocket::
+
+    telix ws://mud.example.com:4000
+    telix wss://mud.example.com
+    telix wss://mud.example.com/ws
+
+The scheme determines transport and SSL: ``ws://`` is plain WebSocket
+(default port 80) and ``wss://`` is WebSocket over TLS (default port 443).
+An optional path (e.g. ``/ws``) is passed verbatim to the server.  The port
+is omitted from the URL when it matches the scheme default.
 
 Run ``telix --help`` for the full list of options.
 

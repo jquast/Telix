@@ -57,7 +57,7 @@ Telix code file overview::
     ├── client_shell.py         Shell callback (drop-in for telnetlib3)
     │
     ├── ws_transport.py         WebSocket reader/writer adapters
-    ├── ws_client.py            WebSocket connection launcher (telix-ws)
+    ├── ws_client.py            WebSocket connection core (run_ws_client, build_parser)
     │
     ├── client_repl.py          blessed LineEditor REPL event loop
     ├── client_repl_render.py   Toolbar / status line rendering
@@ -173,17 +173,26 @@ Development workflow
 Integration boundaries
 ----------------------
 
-Telix injects ``--shell=telix.client_shell.telix_client_shell`` into
-``sys.argv`` and calls ``telnetlib3.client.run_client()``, which
-parses the CLI arguments and opens the connection.  The shell function
-is a drop-in replacement for
-``telnetlib3.client_shell.telnet_client_shell``.
+``telix.main`` is the single CLI entry point.  It inspects the first
+positional argument and routes to one of three paths:
 
-For WebSocket connections, ``ws_client.py`` connects via
-``websockets.connect()`` using the ``gmcp.mudstandards.org``
-subprotocol and calls ``ws_client_shell(reader, writer)`` with adapter
-objects (``WebSocketReader``/``WebSocketWriter``) that present the
-same interface as telnetlib3's reader/writer pair.
+- **No argument** -- launches the Textual TUI session manager.
+- **``ws://`` or ``wss://`` URL** -- parses WS-specific flags via
+  ``ws_client.build_parser()`` and calls ``ws_client.run_ws_client()``,
+  which connects via ``websockets.connect()`` using the
+  ``gmcp.mudstandards.org`` subprotocol and invokes
+  ``ws_client_shell(reader, writer)`` with
+  ``WebSocketReader``/``WebSocketWriter`` adapters.
+- **Plain host** -- injects ``--shell=telix.client_shell.telix_client_shell``
+  into ``sys.argv`` and calls ``telnetlib3.client.run_client()``, which
+  parses all remaining CLI arguments and opens the Telnet connection.  The
+  shell is a drop-in replacement for
+  ``telnetlib3.client_shell.telnet_client_shell``.
+
+The TUI launches connection subprocesses via ``subprocess.Popen``.  Both
+transports use the same ``python -c "from telix.main import main; main()"``
+invocation -- the URL or host argument in the subprocess command determines
+which path ``main`` takes.
 
 Every ``TelnetWriter`` (or ``WebSocketWriter``) has a ``.ctx``
 attribute that defaults to a ``TelnetSessionContext``.  Telix's

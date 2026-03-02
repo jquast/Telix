@@ -1,17 +1,13 @@
 """
-WebSocket client entry point for telix.
+WebSocket client for telix.
 
-Provides :func:`main`, the ``telix-ws`` console script entry point, and
-:func:`run_ws_client`, which connects to a WebSocket MUD server using
-the ``gmcp.mudstandards.org`` subprotocol, creates reader/writer
-adapters, runs the receive loop, and invokes the telix shell.
-
-This module mirrors the role of ``telnetlib3.client`` but for WebSocket
-connections.  The TUI launches it as a subprocess (the same way it
-launches ``telnetlib3-client`` for telnet sessions).
+Provides :func:`run_ws_client` and :func:`build_parser`, called by
+:func:`telix.main.main` when a ``ws://`` or ``wss://`` URL is given on the
+command line.  Connects via ``websockets.connect()`` using the
+``gmcp.mudstandards.org`` subprotocol, creates reader/writer adapters, runs
+the receive loop, and invokes the telix shell.
 """
 
-import sys
 import asyncio
 import logging
 import argparse
@@ -31,7 +27,13 @@ WS_SUBPROTOCOL = "gmcp.mudstandards.org"
 
 
 async def run_ws_client(
-    url: str, shell: str = "telix.client_shell.ws_client_shell", no_repl: bool = False
+    url: str,
+    shell: str = "telix.client_shell.ws_client_shell",
+    no_repl: bool = False,
+    logfile: str = "",
+    typescript: str = "",
+    logfile_mode: str = "append",
+    typescript_mode: str = "append",
 ) -> None:
     """
     Connect to a WebSocket MUD server and run the telix shell.
@@ -39,7 +41,18 @@ async def run_ws_client(
     :param url: WebSocket URL (e.g. ``wss://gel.monster:8443``).
     :param shell: Dotted path to the shell coroutine.
     :param no_repl: If ``True``, skip the interactive REPL (raw I/O only).
+    :param logfile: Optional path to write log output.
+    :param typescript: Optional path to record session transcript.
+    :param logfile_mode: ``"append"`` (default) or ``"rewrite"`` the log file.
+    :param typescript_mode: ``"append"`` (default) or ``"rewrite"`` the typescript file.
     """
+    if logfile:
+        telnetlib3.accessories.make_logger(
+            name="telix",
+            loglevel="info",
+            logfile=logfile,
+            filemode="w" if logfile_mode == "rewrite" else "a",
+        )
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or "localhost"
     port = parsed.port or (443 if parsed.scheme == "wss" else 80)
@@ -60,6 +73,8 @@ async def run_ws_client(
 
         writer.ctx = telnetlib3._session_context.TelnetSessionContext()
         writer.ctx.no_repl = no_repl
+        writer.ctx.typescript_path = typescript
+        writer.ctx.typescript_mode = typescript_mode
 
         async def receive_loop() -> None:
             """Read WebSocket frames and dispatch to reader/writer."""
@@ -97,8 +112,8 @@ async def run_ws_client(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for ``telix-ws``."""
-    parser = argparse.ArgumentParser(prog="telix-ws", description="Connect to a WebSocket MUD server.")
+    """Build the argument parser for WebSocket connections via ``telix``."""
+    parser = argparse.ArgumentParser(prog="telix", description="Connect to a WebSocket MUD server.")
     parser.add_argument("url", help="WebSocket URL (e.g. wss://gel.monster:8443)")
     parser.add_argument(
         "--shell",
@@ -112,18 +127,22 @@ def build_parser() -> argparse.ArgumentParser:
         dest="no_repl",
         help="Disable the interactive REPL (raw I/O only).",
     )
+    parser.add_argument("--logfile", default="", metavar="FILE", help="Write log to FILE.")
+    parser.add_argument(
+        "--typescript", default="", metavar="FILE", help="Record session to FILE."
+    )
+    parser.add_argument(
+        "--logfile-mode",
+        default="append",
+        choices=["append", "rewrite"],
+        dest="logfile_mode",
+        help="Log file write mode: append (default) or rewrite.",
+    )
+    parser.add_argument(
+        "--typescript-mode",
+        default="append",
+        choices=["append", "rewrite"],
+        dest="typescript_mode",
+        help="Typescript write mode: append (default) or rewrite.",
+    )
     return parser
-
-
-def main() -> None:
-    """Entry point for the ``telix-ws`` console script."""
-    parser = build_parser()
-    args = parser.parse_args()
-
-    try:
-        asyncio.run(run_ws_client(url=args.url, shell=args.shell, no_repl=args.no_repl))
-    except KeyboardInterrupt:
-        pass
-    except OSError as err:
-        print(f"Error: {err}", file=sys.stderr)
-        sys.exit(1)

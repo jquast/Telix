@@ -12,11 +12,13 @@ the ``gmcp.mudstandards.org`` wire format.
 """
 
 # std imports
+import io
 import os
 import sys
 import typing
 import asyncio
 import logging
+import contextlib
 
 # 3rd party
 import telnetlib3
@@ -68,12 +70,20 @@ def build_session_key(
         if peername:
             return f"{peername[0]}:{peername[1]}"
         return ""
+    _stderr_buf = io.StringIO()
     try:
-        args = telnetlib3.client._get_argument_parser().parse_known_args(sys.argv[1:])[0]
+        with contextlib.redirect_stderr(_stderr_buf):
+            args = telnetlib3.client._get_argument_parser().parse_known_args(sys.argv[1:])[0]
         if args.host:
             return f"{args.host}:{args.port}"
     except (SystemExit, Exception):
         pass
+    finally:
+        lines = [line for line in _stderr_buf.getvalue().splitlines() if line.strip()]
+        if lines:
+            log.error("stderr captured during argv parse:")
+            for line in lines:
+                log.error("%s", line)
     peername = writer.get_extra_info("peername")
     if peername:
         return f"{peername[0]}:{peername[1]}"
@@ -329,50 +339,65 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
     ctx = session_context.SessionContext(session_key=session_key)
     ctx.writer = writer
     ctx.repl_enabled = not old_ctx.no_repl
+    typescript_path = getattr(old_ctx, "typescript_path", "")
+    typescript_mode = getattr(old_ctx, "typescript_mode", "append")
     writer.ctx = ctx
 
-    # 2. Load per-session configs.
-    load_configs(ctx)
+    ts_file = None
+    if typescript_path:
+        ts_file = open(  # noqa: SIM115
+            typescript_path,
+            "w" if typescript_mode == "rewrite" else "a",
+            encoding="utf-8",
+        )
+        ctx.typescript_file = ts_file
 
-    # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
-    def on_gmcp(package: str, data: typing.Any) -> None:
-        if package == "Comm.Channel.Text":
-            if ctx.on_chat_text is not None:
-                ctx.on_chat_text(data)
-        elif package == "Comm.Channel.List":
-            if ctx.on_chat_channels is not None:
-                ctx.on_chat_channels(data)
-        elif package == "Room.Info":
-            if ctx.on_room_info is not None:
-                ctx.on_room_info(data)
+    try:
+        # 2. Load per-session configs.
+        load_configs(ctx)
 
-    writer.set_ext_callback(ws_transport.GMCP, on_gmcp)
+        # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
+        def on_gmcp(package: str, data: typing.Any) -> None:
+            if package == "Comm.Channel.Text":
+                if ctx.on_chat_text is not None:
+                    ctx.on_chat_text(data)
+            elif package == "Comm.Channel.List":
+                if ctx.on_chat_channels is not None:
+                    ctx.on_chat_channels(data)
+            elif package == "Room.Info":
+                if ctx.on_room_info is not None:
+                    ctx.on_room_info(data)
 
-    keyboard_escape = "\x1d"
+        writer.set_ext_callback(ws_transport.GMCP, on_gmcp)
 
-    # Terminal / repl_event_loop / _flush_color_filter are typed for
-    # TelnetWriter but accept any duck-compatible writer at runtime.
-    with telnetlib3.client_shell.Terminal(telnet_writer=writer) as tty_shell:  # type: ignore[arg-type]
-        linesep = "\n"
-        stdout = await tty_shell.make_stdout()
-        tty_shell.setup_winch()
+        keyboard_escape = "\x1d"
 
-        escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)
-        banner_sep = "\r\n" if tty_shell._istty else linesep
-        stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
+        # Terminal / repl_event_loop / _flush_color_filter are typed for
+        # TelnetWriter but accept any duck-compatible writer at runtime.
+        with telnetlib3.client_shell.Terminal(telnet_writer=writer) as tty_shell:  # type: ignore[arg-type]
+            linesep = "\n"
+            stdout = await tty_shell.make_stdout()
+            tty_shell.setup_winch()
 
-        # WebSocket is always line-mode: run REPL once (no raw loop).
-        if tty_shell._istty and ctx.repl_enabled:
-            await client_repl.repl_event_loop(
-                reader,  # type: ignore[arg-type]
-                writer,  # type: ignore[arg-type]
-                tty_shell,
-                stdout,
-                history_file=ctx.history_file,
-            )
+            escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)
+            banner_sep = "\r\n" if tty_shell._istty else linesep
+            stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
-        telnetlib3.client_shell._flush_color_filter(writer, stdout)  # type: ignore[arg-type]
-        stdout.write(f"\033[m{linesep}Connection closed.{linesep}".encode())
-        tty_shell.cleanup_winch()
+            # WebSocket is always line-mode: run REPL once (no raw loop).
+            if tty_shell._istty and ctx.repl_enabled:
+                await client_repl.repl_event_loop(
+                    reader,  # type: ignore[arg-type]
+                    writer,  # type: ignore[arg-type]
+                    tty_shell,
+                    stdout,
+                    history_file=ctx.history_file,
+                )
 
-    ctx.close()
+            telnetlib3.client_shell._flush_color_filter(writer, stdout)  # type: ignore[arg-type]
+            stdout.write(f"\033[m{linesep}Connection closed.{linesep}".encode())
+            tty_shell.cleanup_winch()
+
+        ctx.close()
+    finally:
+        if ts_file is not None:
+            ts_file.close()

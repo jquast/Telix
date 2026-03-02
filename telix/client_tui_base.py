@@ -328,7 +328,9 @@ class SessionConfig:
     always_do: str = ""
     loglevel: str = "warn"
     logfile: str = ""
+    logfile_mode: str = "append"
     typescript: str = ""
+    typescript_mode: str = "append"
     no_repl: bool = False
 
     # Bookmarked sessions sort to top of the list
@@ -377,7 +379,9 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
     ("send_environ", "--send-environ", "TERM,LANG,COLUMNS,LINES,COLORTERM"),
     ("loglevel", "--loglevel", "warn"),
     ("logfile", "--logfile", ""),
+    ("logfile_mode", "--logfile-mode", "append"),
     ("typescript", "--typescript", ""),
+    ("typescript_mode", "--typescript-mode", "append"),
     ("ssl_cafile", "--ssl-cafile", ""),
 ]
 
@@ -464,9 +468,18 @@ def build_ws_command(config: SessionConfig) -> list[str]:
     if ws_path and not ws_path.startswith("/"):
         ws_path = "/" + ws_path
     url = f"{scheme}://{host_part}{ws_path}"
-    cmd = [sys.executable, "-c", "from telix.ws_client import main; main()", url]
+    cmd = [sys.executable, "-c", "from telix.main import main; main()", url]
     if config.no_repl:
         cmd.append("--no-repl")
+    for field, flag, default in [
+        ("logfile", "--logfile", ""),
+        ("typescript", "--typescript", ""),
+        ("logfile_mode", "--logfile-mode", "append"),
+        ("typescript_mode", "--typescript-mode", "append"),
+    ]:
+        value = getattr(config, field, default)
+        if value != default:
+            cmd += [flag, str(value)]
     return cmd
 
 
@@ -904,6 +917,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
     .field-input {
         width: 1fr;
     }
+    #logfile-mode, #typescript-mode {
+        width: auto;
+        height: auto;
+    }
     .switch-row {
         height: 3;
     }
@@ -942,14 +959,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         height: auto;
         padding-left: 2;
     }
-    #ws-path-row {
+    #ws-path {
+        width: 12;
         display: none;
     }
-    #ws-path-row.visible {
+    #ws-path.visible {
         display: block;
-    }
-    #ssl-compress-row.ws-hidden {
-        display: none;
     }
     #ssl-compress-row {
         height: auto;
@@ -1091,10 +1106,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 with textual.containers.Horizontal(id="ssl-col"):
                     yield textual.widgets.Label("SSL/TLS", id="ssl-label")
                     yield textual.widgets.Switch(value=cfg.ssl, id="ssl")
-            with textual.containers.Horizontal(id="ws-path-row"):
-                yield textual.widgets.Label("WS Path", classes="conn-label")
                 yield textual.widgets.Input(
-                    value=cfg.ws_path, placeholder="/ws", id="ws-path", classes="field-input"
+                    value=cfg.ws_path,
+                    placeholder="/ws",
+                    id="ws-path",
+                    tooltip="WebSocket path appended to URL",
                 )
         else:
             with textual.containers.Horizontal(classes="switch-row"):
@@ -1178,19 +1194,30 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             "Send Environ", textual.widgets.Input(value=cfg.send_environ, id="send-environ", classes="field-input")
         )
         yield textual.containers.Horizontal(
-            textual.widgets.Label("Log Level:", classes="field-label"),
+            textual.widgets.Label("LogFile", classes="field-label"),
+            textual.widgets.Input(value=cfg.logfile, placeholder="path", id="logfile", classes="field-input"),
+            textual.widgets.Label("Level", classes="field-label-short"),
             textual.widgets.Select(
                 [(v, v) for v in ("trace", "debug", "info", "warn", "error", "critical")],
                 value=cfg.loglevel,
                 id="loglevel",
             ),
-            textual.widgets.Label("file:", classes="field-label-short"),
-            textual.widgets.Input(value=cfg.logfile, placeholder="path", id="logfile", classes="field-input"),
+            textual.widgets.RadioSet(
+                textual.widgets.RadioButton("Append", value=cfg.logfile_mode == "append"),
+                textual.widgets.RadioButton("Rewrite", value=cfg.logfile_mode == "rewrite"),
+                id="logfile-mode",
+            ),
             classes="field-row",
         )
-        yield self.field_row(
-            "Typescript",
+        yield textual.containers.Horizontal(
+            textual.widgets.Label("Typescript", classes="field-label"),
             textual.widgets.Input(value=cfg.typescript, placeholder="path", id="typescript", classes="field-input"),
+            textual.widgets.RadioSet(
+                textual.widgets.RadioButton("Append", value=cfg.typescript_mode == "append"),
+                textual.widgets.RadioButton("Rewrite", value=cfg.typescript_mode == "rewrite"),
+                id="typescript-mode",
+            ),
+            classes="field-row",
         )
 
     def compose(self) -> textual.app.ComposeResult:
@@ -1279,8 +1306,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
 
     def apply_protocol_visibility(self, is_ws: bool) -> None:
         """Toggle visibility of telnet-only and websocket-only widgets."""
-        self.query_one("#ssl-compress-row").set_class(is_ws, "ws-hidden")
-        self.query_one("#ws-path-row").set_class(is_ws, "visible")
+        self.query_one("#ws-path").set_class(is_ws, "visible")
         port_input = self.query_one("#port", textual.widgets.Input)
         port_input.placeholder = "443" if is_ws else "23"
         port_val = int_val(port_input.value, 0)
@@ -1473,7 +1499,17 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         cfg.always_do = self.config.always_do
         cfg.loglevel = self.query_one("#loglevel", textual.widgets.Select).value
         cfg.logfile = self.query_one("#logfile", textual.widgets.Input).value.strip()
+        cfg.logfile_mode = (
+            "rewrite"
+            if self.query_one("#logfile-mode", textual.widgets.RadioSet).pressed_index == 1
+            else "append"
+        )
         cfg.typescript = self.query_one("#typescript", textual.widgets.Input).value.strip()
+        cfg.typescript_mode = (
+            "rewrite"
+            if self.query_one("#typescript-mode", textual.widgets.RadioSet).pressed_index == 1
+            else "append"
+        )
         cfg.no_repl = not self.query_one("#use-repl", textual.widgets.Switch).value
 
         return cfg

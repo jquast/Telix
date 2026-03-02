@@ -7,7 +7,7 @@ import asyncio
 import telnetlib3.client
 
 # local
-from . import directory, client_tui_base, client_tui_dialogs
+from . import directory, client_tui_base, client_tui_dialogs, ws_client
 
 
 def reinit() -> None:
@@ -21,11 +21,36 @@ def main() -> None:
     """
     Entry point for the ``telix`` command.
 
-    Without a host argument, launches the TUI session manager. With a host argument, connects directly via telnetlib3's
-    client.
+    Without arguments, launches the TUI session manager.  With a ``ws://`` or
+    ``wss://`` URL, connects directly via WebSocket.  With a host argument,
+    connects directly via telnetlib3's client.
     """
     if "--reinit" in sys.argv[1:]:
         reinit()
+        return
+
+    has_ws_url = any(arg.startswith(("ws://", "wss://")) for arg in sys.argv[1:])
+
+    if has_ws_url:
+        parser = ws_client.build_parser()
+        args = parser.parse_args()
+        try:
+            asyncio.run(
+            ws_client.run_ws_client(
+                url=args.url,
+                shell=args.shell,
+                no_repl=args.no_repl,
+                logfile=args.logfile,
+                typescript=args.typescript,
+                logfile_mode=args.logfile_mode,
+                typescript_mode=args.typescript_mode,
+            )
+        )
+        except KeyboardInterrupt:
+            pass
+        except OSError as err:
+            print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
         return
 
     has_host = any(not arg.startswith("-") for arg in sys.argv[1:])

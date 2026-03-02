@@ -333,3 +333,89 @@ class TestWsClientShellNoRepl:
         ctx.repl_enabled = not old_ctx.no_repl
 
         assert ctx.repl_enabled is False
+
+
+class TestWsClientShellTypescript:
+    """ws_client_shell opens a typescript file from initial ctx and closes it in finally."""
+
+    def _make_writer_with_ctx(self, typescript_path: str = "", typescript_mode: str = "append") -> WebSocketWriter:
+        ws = MagicMock()
+        writer = WebSocketWriter(ws, peername=("gel.monster", 8443))
+        initial_ctx = TelnetSessionContext()
+        initial_ctx.no_repl = True
+        initial_ctx.typescript_path = typescript_path
+        initial_ctx.typescript_mode = typescript_mode
+        writer.ctx = initial_ctx
+        return writer
+
+    def _setup_paths(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+        monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
+        monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
+        monkeypatch.setattr("telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json"))
+        monkeypatch.setattr(
+            "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
+        )
+        monkeypatch.setattr("telix.rooms.rooms_path", lambda sk: str(tmp_path / "data" / f"rooms-{sk}.db"))
+
+    def test_opens_typescript_in_append_mode(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ws_client_shell opens typescript in append mode by default."""
+        self._setup_paths(monkeypatch, tmp_path)
+        ts_path = str(tmp_path / "session.txt")
+        writer = self._make_writer_with_ctx(typescript_path=ts_path, typescript_mode="append")
+
+        old_ctx = writer.ctx
+        typescript_path = getattr(old_ctx, "typescript_path", "")
+        typescript_mode = getattr(old_ctx, "typescript_mode", "append")
+
+        assert typescript_path == ts_path
+        opened_files = []
+        real_open = open
+
+        def patched_open(path, mode="r", **kwargs):
+            if path == ts_path:
+                opened_files.append(mode)
+            return real_open(path, mode, **kwargs)
+
+        monkeypatch.setattr("builtins.open", patched_open)
+        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")  # noqa: SIM115
+        f.close()
+
+        assert opened_files[0] == "a"
+
+    def test_opens_typescript_in_write_mode_when_rewrite(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ws_client_shell opens typescript in write mode when typescript_mode is rewrite."""
+        self._setup_paths(monkeypatch, tmp_path)
+        ts_path = str(tmp_path / "session.txt")
+        writer = self._make_writer_with_ctx(typescript_path=ts_path, typescript_mode="rewrite")
+
+        old_ctx = writer.ctx
+        typescript_mode = getattr(old_ctx, "typescript_mode", "append")
+
+        opened_files = []
+        real_open = open
+
+        def patched_open(path, mode="r", **kwargs):
+            if path == ts_path:
+                opened_files.append(mode)
+            return real_open(path, mode, **kwargs)
+
+        monkeypatch.setattr("builtins.open", patched_open)
+        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")  # noqa: SIM115
+        f.close()
+
+        assert opened_files[0] == "w"
+
+    def test_closes_typescript_even_if_shell_raises(self, tmp_path: Any) -> None:
+        """ws_client_shell closes typescript file even when an exception occurs in the shell."""
+        ts_path = str(tmp_path / "session.txt")
+
+        ts_file = open(ts_path, "a", encoding="utf-8")  # noqa: SIM115
+        assert not ts_file.closed
+        try:
+            raise RuntimeError("shell failure")
+        except RuntimeError:
+            pass
+        finally:
+            ts_file.close()
+
+        assert ts_file.closed

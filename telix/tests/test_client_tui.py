@@ -246,7 +246,7 @@ def test_build_command_websocket_with_ssl() -> None:
     cmd = build_command(cfg)
     assert "wss://example.com" in cmd
     assert cmd[0] == sys.executable
-    assert "ws_client" in cmd[2]
+    assert "telix.main" in cmd[2]
 
 
 def test_build_command_websocket_without_ssl() -> None:
@@ -297,6 +297,39 @@ def test_build_command_websocket_repl_default_omitted() -> None:
     cfg = SessionConfig(host="example.com", port=443, protocol="websocket", ssl=True, no_repl=False)
     cmd = build_command(cfg)
     assert "--no-repl" not in cmd
+
+
+def test_build_command_websocket_typescript_forwarded() -> None:
+    cfg = SessionConfig(host="example.com", port=443, protocol="websocket", ssl=True, typescript="/tmp/ts.txt")
+    cmd = build_command(cfg)
+    assert "--typescript" in cmd
+    assert "/tmp/ts.txt" in cmd
+
+
+def test_build_command_websocket_typescript_mode_rewrite() -> None:
+    cfg = SessionConfig(
+        host="example.com", port=443, protocol="websocket", ssl=True,
+        typescript="/tmp/ts.txt", typescript_mode="rewrite",
+    )
+    cmd = build_command(cfg)
+    assert "--typescript-mode" in cmd
+    assert "rewrite" in cmd
+
+
+def test_build_command_websocket_typescript_mode_append_omitted() -> None:
+    cfg = SessionConfig(
+        host="example.com", port=443, protocol="websocket", ssl=True,
+        typescript="/tmp/ts.txt", typescript_mode="append",
+    )
+    cmd = build_command(cfg)
+    assert "--typescript-mode" not in cmd
+
+
+def test_build_command_telnet_logfile_mode_rewrite() -> None:
+    cfg = SessionConfig(host="example.com", port=23, logfile="/tmp/session.log", logfile_mode="rewrite")
+    cmd = build_command(cfg)
+    assert "--logfile-mode" in cmd
+    assert "rewrite" in cmd
 
 
 def test_macro_screen_loads_empty(tmp_path) -> None:

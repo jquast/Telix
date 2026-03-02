@@ -131,6 +131,7 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
 from .client_repl_commands import expand_commands as expand_commands
 from .client_repl_commands import expand_commands_ex as expand_commands_ex
 from .client_repl_commands import execute_macro_commands as execute_macro_commands
+from .session_context import CommandQueue
 
 # pylint: enable=unused-import,useless-import-alias
 
@@ -139,11 +140,11 @@ if TYPE_CHECKING:
 
     from . import client_shell
     from .macros import Macro
-    from .session_context import CommandQueue, SessionContext
+    from .session_context import SessionContext
 
 EDIT_THEME_RE = re.compile(r"^`edit\s+theme`$", re.IGNORECASE)
 
-PASSWORD_CHAR = "\u2593"
+PASSWORD_CHAR = "\u273b"
 
 log = logging.getLogger(__name__)
 
@@ -1506,7 +1507,7 @@ if sys.platform != "win32":
                     self.toolbar.flash_active = True
                     self.toolbar.schedule_flash(self.loop, self.autoreply_engine, self.editor, bt)
                 self.show_cursor_or_light(scroll.input_row, cursor_col)
-                if self.telnet_writer.mode == "kludge":
+                if self.telnet_writer.mode != "local":
                     self.mode_switched = True
                     self.server_done = True
                     return

@@ -42,6 +42,21 @@ def directory_to_sessions() -> dict[str, typing.Any]:
         enc = entry.get("encoding")
         if enc:
             cfg.encoding = enc
+        # Apply type-specific presets matching the session manager radio buttons.
+        entry_type = entry.get("type", "")
+        if entry_type == "bbs":
+            cfg.colormatch = "vga"
+            cfg.ice_colors = True
+            cfg.mode = "raw"
+            cfg.no_repl = True
+            cfg.compression = None  # passive
+        elif entry_type == "mud":
+            cfg.colormatch = "none"
+            cfg.ice_colors = False
+            cfg.mode = "line"
+            cfg.no_repl = False
+            cfg.compression = True
+
         sessions[key] = cfg
 
     if "1984.ws:23" in sessions:

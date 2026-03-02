@@ -7,6 +7,7 @@ This is a traditional "Dialing Directory" of host/port combinations and their se
 which may be set accordingly to preference of the remote system (BBS or MUD):
 
 - Encoding (eg. utf-8, cp437, latin-1, gbk)
+- Protocol: Telnet or WebSocket (``ws://`` / ``wss://``)
 - SSL/TLS
 - ICE colors (BBS)
 - vga color matching (BBS)
