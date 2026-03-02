@@ -1681,6 +1681,11 @@ class ToolbarRenderer:
             _write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg)
             if self.ctx.cx_dot is not None:
                 self.ctx.cx_dot.trigger()
+            cursor_col = editor_cursor_col(editor)
+            self.restore_cursor(bt, self.scroll.input_row, cursor_col, is_ar_bg)
+            if not self.flash_active:
+                self.flash_active = True
+                self.schedule_flash(loop, autoreply_engine, editor, bt)
             loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)
 
         loop.call_later(self._PROGRESS_REFRESH_INTERVAL, _progress_tick)
