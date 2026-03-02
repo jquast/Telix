@@ -868,6 +868,7 @@ if sys.platform != "win32":
                 history=self.history,
                 password=bool(self.telnet_writer.will_echo),
                 max_width=term_cols,
+                limit=1024,
                 keymap={},
                 **editor_style,
             )
