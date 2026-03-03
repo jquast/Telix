@@ -380,12 +380,15 @@ async def telix_client_shell(
         def check_want_repl() -> bool:
             return want_repl(ctx, telnet_writer)
 
-        # In auto mode, wait briefly for negotiation to settle before
-        # deciding to enter the REPL.  Servers that negotiate ECHO+SGA
-        # (kludge mode) often send those options shortly after the
-        # critical negotiation completes, and entering the REPL only
-        # to immediately exit causes scroll region corruption.
-        if ctx.raw_mode is None and tty_shell._istty:
+        # Wait briefly for negotiation to settle before deciding to
+        # enter the REPL or evaluating will_echo for local_echo.
+        # Servers that negotiate ECHO+SGA (kludge mode) often send
+        # those options shortly after connection, and entering the
+        # REPL only to immediately exit causes scroll region
+        # corruption.  In forced raw mode, skipping this wait causes
+        # local_echo to be set before the server negotiates WILL ECHO,
+        # resulting in double echo (local + server).
+        if ctx.raw_mode is not False and tty_shell._istty:
             try:
                 await asyncio.wait_for(
                     telnet_writer.wait_for_condition(

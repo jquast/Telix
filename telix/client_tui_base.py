@@ -537,6 +537,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         textual.binding.Binding("q", "quit_app", "Quit"),
         textual.binding.Binding("n", "new_session", "New"),
         textual.binding.Binding("e", "edit_session", "Edit"),
+        textual.binding.Binding("c", "copy_session", "Copy"),
         textual.binding.Binding("b", "toggle_bookmark", "Bookmark"),
         textual.binding.Binding("d", "delete_session", "Delete"),
         textual.binding.Binding("enter", "connect", "Connect"),
@@ -586,11 +587,13 @@ class SessionListScreen(textual.screen.Screen[None]):
         """Build the session list layout."""
         with textual.containers.Vertical(id="session-panel"):
             yield textual.widgets.Input(placeholder="Search sessions\u2026", id="session-search")
+            yield textual.widgets.Static(" ")
             with textual.containers.Horizontal(id="session-body"):
                 with textual.containers.Vertical(id="button-col"):
                     yield textual.widgets.Button("Connect", variant="primary", id="connect-btn")
                     yield textual.widgets.Button("New", variant="success", id="add-btn")
-                    yield textual.widgets.Button("Bookmark", variant="default", id="bookmark-btn")
+                    yield textual.widgets.Button("Copy", variant="success", id="copy-btn")
+                    yield textual.widgets.Button("Bookmark", variant="warning", id="bookmark-btn")
                     yield textual.widgets.Button("Delete", variant="error", id="delete-btn")
                     yield textual.widgets.Button("Edit", variant="warning", id="edit-btn")
                 yield textual.widgets.DataTable(id="session-table")
@@ -716,6 +719,11 @@ class SessionListScreen(textual.screen.Screen[None]):
                 search_input.focus()
                 event.prevent_default()
                 return
+            buttons = list(self.query("#button-col Button"))
+            if event.key == "up" and buttons and self.focused is buttons[0]:
+                search_input.focus()
+                event.prevent_default()
+                return
 
         if event.key in ("home", "end"):
             if self.focused is table and table.row_count > 0:
@@ -730,6 +738,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         handlers = {
             "connect-btn": self.action_connect,
             "add-btn": self.action_new_session,
+            "copy-btn": self.action_copy_session,
             "bookmark-btn": self.action_toggle_bookmark,
             "edit-btn": self.action_edit_session,
             "delete-btn": self.action_delete_session,
@@ -814,6 +823,28 @@ class SessionListScreen(textual.screen.Screen[None]):
         self.save()
         self.refresh_table()
         self.select_row(key)
+
+    def action_copy_session(self) -> None:
+        """Duplicate the selected session with a unique name."""
+        key = self.require_selected()
+        if key is None:
+            return
+        cfg = self.sessions[key]
+        new_cfg = SessionConfig(**dataclasses.asdict(cfg))
+        new_cfg.last_connected = ""
+        base = cfg.name or cfg.host
+        n = 1
+        while True:
+            candidate = f"{base} ({n})"
+            if candidate not in self.sessions:
+                break
+            n += 1
+        new_cfg.name = candidate
+        self.sessions[candidate] = new_cfg
+        self.save()
+        self.refresh_table()
+        self.select_row(candidate)
+        self.notify(f"Copied as '{candidate}'")
 
     def action_show_help(self) -> None:
         """Open the session manager help screen."""
