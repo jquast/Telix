@@ -344,10 +344,10 @@ def restore_after_subprocess(replay_buf: "OutputRingBuffer | None", reserve: int
     DECSTBM scroll region, replays the output ring buffer, and clears
     the reserved input rows.
 
-    The cursor is left hidden and output is **not** flushed -- the
-    caller's post-action render (input editor + toolbar) will show the
-    cursor and flush once, avoiding the visible blink that separate
-    flush cycles produce.
+    The cursor is left hidden and output is flushed once at the end
+    to ensure the DECSC save reaches the terminal before the asyncio
+    StreamWriter writes the post-action render. The cursor is hidden
+    at this point, so no visible blink occurs.
 
     :param replay_buf: Ring buffer to replay, or ``None`` to skip replay.
     :param reserve: Number of bottom rows reserved for the input area.
@@ -356,6 +356,7 @@ def restore_after_subprocess(replay_buf: "OutputRingBuffer | None", reserve: int
     subprocess_needs_rearm = True
     try:
         os.set_blocking(sys.stdin.fileno(), True)
+        os.set_blocking(sys.stdout.fileno(), True)
     except OSError:
         pass
     blessed_term = get_term()
@@ -380,6 +381,7 @@ def restore_after_subprocess(replay_buf: "OutputRingBuffer | None", reserve: int
         sys.stdout.write(blessed_term.move_yx(dmz, 0) + blessed_term.clear_eol + dmz_line(tsize.columns))
     for r in range(input_row, tsize.lines):
         sys.stdout.write(blessed_term.move_yx(r, 0) + blessed_term.clear_eol)
+    sys.stdout.flush()  # ensure DECSC save reached the terminal
     # NOTE: in-band window resize (DEC mode 2048) is NOT re-enabled here.
     # Re-enabling it immediately causes the terminal to send a resize
     # notification that arrives before the main event loop is ready to
