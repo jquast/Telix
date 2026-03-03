@@ -7,6 +7,7 @@ import asyncio
 import logging
 import colorsys
 import collections
+import dataclasses
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
@@ -23,10 +24,21 @@ from .repl_theme import hex_to_rgb, get_repl_palette
 
 log = logging.getLogger(__name__)
 
-WARM_UP = 0.025  # 25 ms ramp from idle to peak
-HOLD = 0.025  # 25 ms hold at peak
-GLOW_DOWN = 0.250  # 250 ms ramp from peak back to idle
-DURATION = WARM_UP + HOLD + GLOW_DOWN  # 300 ms total
+@dataclasses.dataclass(frozen=True)
+class ActivityTiming:
+    """Activity-dot animation timing constants."""
+
+    WARM_UP: float = 0.025
+    HOLD: float = 0.025
+    GLOW_DOWN: float = 0.250
+
+    @property
+    def DURATION(self) -> float:  # noqa: N802
+        """Total animation duration (warm_up + hold + glow_down)."""
+        return self.WARM_UP + self.HOLD + self.GLOW_DOWN
+
+
+ACTIVITY = ActivityTiming()
 
 # Session key injected by the REPL to scope palette lookups.
 session_key: str = ""
@@ -105,8 +117,22 @@ SEXTANT_BITS = (
 #: "2 on, 1 off" phase rotation -- which pair of lights is active.
 PHASES = ((0, 1), (1, 2), (0, 2))
 
-#: Width of the stoplight indicator in terminal columns.
-STOPLIGHT_WIDTH = 1
+
+
+@dataclasses.dataclass(frozen=True)
+class DisplayChars:
+    """Display element constants: widths and decoration characters."""
+
+    BAR_WIDTH: int = 20
+    SEPARATOR_WIDTH: int = 3
+    STOPLIGHT_WIDTH: int = 1
+    BAR_CAP_LEFT: str = "\U0001fb38"
+    BAR_CAP_RIGHT: str = "\U0001fb1b"
+    DMZ_CHAR: str = "\u2581"
+    ELLIPSIS: str = "\u2026"
+
+
+DISPLAY = DisplayChars()
 
 
 CANCEL_SUFFIX = "  [return to cancel]"
@@ -141,7 +167,7 @@ def activity_hint(engine: Any, cols: int = 0) -> str:
         region = max(suffix_w + 16, cols // 3)
         status_budget = region - suffix_w
         if len(status) > status_budget > 0:
-            status = status[: status_budget - 1] + ELLIPSIS
+            status = status[: status_budget - 1] + DISPLAY.ELLIPSIS
         return status.ljust(region - suffix_w) + CANCEL_SUFFIX
     return status + CANCEL_SUFFIX
 
@@ -221,22 +247,22 @@ class ActivityDot:
         """Signal that activity occurred (bytes sent/received, etc.)."""
         now = time.monotonic()
         elapsed = now - self.trigger_time + self.phase_offset
-        if WARM_UP <= elapsed < DURATION:
+        if ACTIVITY.WARM_UP <= elapsed < ACTIVITY.DURATION:
             intensity = self.intensity_at(elapsed)
-            self.phase_offset = intensity * WARM_UP
+            self.phase_offset = intensity * ACTIVITY.WARM_UP
         else:
             self.phase_offset = 0.0
         self.trigger_time = now
 
     def intensity_at(self, elapsed: float) -> float:
         """Return 0.0 (idle) to 1.0 (peak) for the given elapsed time."""
-        if elapsed < 0.0 or elapsed >= DURATION:
+        if elapsed < 0.0 or elapsed >= ACTIVITY.DURATION:
             return 0.0
-        if elapsed < WARM_UP:
-            return elapsed / WARM_UP
-        if elapsed < WARM_UP + HOLD:
+        if elapsed < ACTIVITY.WARM_UP:
+            return elapsed / ACTIVITY.WARM_UP
+        if elapsed < ACTIVITY.WARM_UP + ACTIVITY.HOLD:
             return 1.0
-        return (DURATION - elapsed) / GLOW_DOWN
+        return (ACTIVITY.DURATION - elapsed) / ACTIVITY.GLOW_DOWN
 
     def intensity(self) -> float:
         """Return current intensity 0.0..1.0."""
@@ -246,7 +272,7 @@ class ActivityDot:
     def is_animating(self) -> bool:
         """Return ``True`` if the dot is still in an animation phase."""
         elapsed = time.monotonic() - self.trigger_time + self.phase_offset
-        return 0.0 < elapsed < DURATION
+        return 0.0 < elapsed < ACTIVITY.DURATION
 
     def color(self, autoreply_bg: bool = False) -> tuple[int, int, int]:
         """Return interpolated ``(r, g, b)`` for the current frame."""
@@ -337,29 +363,38 @@ def get_term() -> "blessed.Terminal":
     return client_repl.get_term()
 
 
-# DECTCEM cursor visibility.
-CURSOR_HIDE: str = "\x1b[?25l"
-CURSOR_SHOW: str = "\x1b[?25h"
-
 # DECSCUSR cursor shape escapes (xterm extension, no terminfo equivalent).
-CURSOR_BLINKING_BLOCK: str = "\x1b[1 q"  # DECSCUSR 1
-CURSOR_STEADY_BLOCK: str = "\x1b[2 q"  # DECSCUSR 2
-CURSOR_BLINKING_UNDERLINE: str = "\x1b[3 q"  # DECSCUSR 3
-CURSOR_STEADY_UNDERLINE: str = "\x1b[4 q"  # DECSCUSR 4
-CURSOR_BLINKING_BAR: str = "\x1b[5 q"  # DECSCUSR 5
-CURSOR_STEADY_BAR: str = "\x1b[6 q"  # DECSCUSR 6
-CURSOR_DEFAULT: str = "\x1b[0 q"  # DECSCUSR 0 -- terminal default
-CURSOR_STYLES: dict[str, str] = {
-    "blinking_bar": CURSOR_BLINKING_BAR,
-    "steady_bar": CURSOR_STEADY_BAR,
-    "blinking_block": CURSOR_BLINKING_BLOCK,
-    "steady_block": CURSOR_STEADY_BLOCK,
-    "blinking_underline": CURSOR_BLINKING_UNDERLINE,
-    "steady_underline": CURSOR_STEADY_UNDERLINE,
-}
-DEFAULT_CURSOR_STYLE = "steady_block"
+# CURSOR_HIDE / CURSOR_SHOW removed -- use blessed term.hide_cursor / term.normal_cursor.
 
-CURSOR_COLOR_RESET_OSC: str = "\x1b]112\x07"  # OSC 112 -- reset to default
+
+@dataclasses.dataclass(frozen=True)
+class CursorSeq:
+    """DECSCUSR shape escapes and OSC cursor-color reset."""
+
+    BLINKING_BLOCK: str = "\x1b[1 q"
+    STEADY_BLOCK: str = "\x1b[2 q"
+    BLINKING_UNDERLINE: str = "\x1b[3 q"
+    STEADY_UNDERLINE: str = "\x1b[4 q"
+    BLINKING_BAR: str = "\x1b[5 q"
+    STEADY_BAR: str = "\x1b[6 q"
+    DEFAULT: str = "\x1b[0 q"
+    COLOR_RESET_OSC: str = "\x1b]112\x07"
+    DEFAULT_STYLE: str = "steady_block"
+
+    @property
+    def STYLES(self) -> dict[str, str]:  # noqa: N802
+        """Map style name to DECSCUSR escape sequence."""
+        return {
+            "blinking_bar": self.BLINKING_BAR,
+            "steady_bar": self.STEADY_BAR,
+            "blinking_block": self.BLINKING_BLOCK,
+            "steady_block": self.STEADY_BLOCK,
+            "blinking_underline": self.BLINKING_UNDERLINE,
+            "steady_underline": self.STEADY_UNDERLINE,
+        }
+
+
+CURSOR = CursorSeq()
 
 
 def cursor_color_rgb() -> tuple[int, int, int]:
@@ -384,8 +419,6 @@ def cursor_ar_osc() -> str:
     return f"\x1b]12;rgb:{r:02x}/{g:02x}/{b:02x}\x07"
 
 
-# Default ellipsis for overflow indicator (used as fallback).
-ELLIPSIS = "\u2026"
 
 # SGR style dicts keyed to LineEditor constructor / attribute names.
 # Built lazily via make_styles() so blessed color_rgb auto-downgrades
@@ -454,14 +487,23 @@ def lerp_hsv(
     return (h, s1 + t * (s2 - s1), v1 + t * (v2 - v1))
 
 
-# Width of the inner progress bar (between the sextant caps).
-BAR_WIDTH = 20
 
-FLASH_RAMP_UP = 0.100  # 100ms linear ramp original -> inverse
-FLASH_HOLD = 0.200  # 200ms freeze at inverse
-FLASH_RAMP_DOWN = 0.350  # 350ms linear ramp inverse -> original
-FLASH_DURATION = 0.650  # total: ramp_up + hold + ramp_down = 650ms
-FLASH_INTERVAL = 0.033  # ~33ms between frames (~30fps)
+@dataclasses.dataclass(frozen=True)
+class FlashTiming:
+    """Vital-bar flash animation timing constants."""
+
+    RAMP_UP: float = 0.100
+    HOLD: float = 0.200
+    RAMP_DOWN: float = 0.350
+    INTERVAL: float = 0.033
+
+    @property
+    def DURATION(self) -> float:  # noqa: N802
+        """Total flash duration (ramp_up + hold + ramp_down)."""
+        return self.RAMP_UP + self.HOLD + self.RAMP_DOWN
+
+
+FLASH = FlashTiming()
 
 
 def flash_color(base_hex: str, elapsed: float) -> str:
@@ -472,7 +514,7 @@ def flash_color(base_hex: str, elapsed: float) -> str:
     :param elapsed: Seconds since flash started; negative means no flash.
     :returns: Interpolated ``#rrggbb`` hex color.
     """
-    if elapsed < 0.0 or elapsed >= FLASH_DURATION:
+    if elapsed < 0.0 or elapsed >= FLASH.DURATION:
         return base_hex
     r = int(base_hex[1:3], 16)
     g = int(base_hex[3:5], 16)
@@ -481,12 +523,12 @@ def flash_color(base_hex: str, elapsed: float) -> str:
     # Flash toward white (same hue, zero saturation, full brightness)
     # to avoid hue-interpolation artifacts (e.g. green→magenta goes through cyan).
     hsv_inv = (hsv_orig[0], 0.0, 1.0)
-    if elapsed < FLASH_RAMP_UP:
-        t = elapsed / FLASH_RAMP_UP
-    elif elapsed < FLASH_RAMP_UP + FLASH_HOLD:
+    if elapsed < FLASH.RAMP_UP:
+        t = elapsed / FLASH.RAMP_UP
+    elif elapsed < FLASH.RAMP_UP + FLASH.HOLD:
         t = 1.0
     else:
-        t = (FLASH_DURATION - elapsed) / FLASH_RAMP_DOWN
+        t = (FLASH.DURATION - elapsed) / FLASH.RAMP_DOWN
     h, s, v = lerp_hsv(hsv_orig, hsv_inv, t)
     cr, cg, cb = hsv_to_rgb(h, s, v)
     return f"#{cr:02x}{cg:02x}{cb:02x}"
@@ -549,12 +591,7 @@ def wcswidth(text: str) -> int:
     return w if w >= 0 else len(text)
 
 
-MODEM_WIDTH = STOPLIGHT_WIDTH
-
-
-BAR_CAP_LEFT = "\U0001fb38"  # 🬸 Block Sextant-2345
-BAR_CAP_RIGHT = "\U0001fb1b"  # 🬛 Block Sextant-1345
-DMZ_CHAR = "\u2581"  # ▁ Lower One Eighth Block
+MODEM_WIDTH = DISPLAY.STOPLIGHT_WIDTH
 
 
 def dmz_line(cols: int, active: bool = False) -> str:
@@ -567,7 +604,7 @@ def dmz_line(cols: int, active: bool = False) -> str:
     blessed_term = get_term()
     rgb = hex_to_rgb(pal("dmz_active") if active else pal("dmz_inactive"))
     color = blessed_term.color_rgb(*rgb)
-    return str(color) + (DMZ_CHAR * cols) + str(blessed_term.normal)
+    return str(color) + (DISPLAY.DMZ_CHAR * cols) + str(blessed_term.normal)
 
 
 def segmented(text: str) -> str:
@@ -631,7 +668,7 @@ def vital_bar(
     fg_fill = text_fill_color or pal("bar_text_fill")
     fg_empty = text_empty_color or pal("bar_text_empty")
     empty_bg_hex = pal("bar_empty_bg")
-    if 0.0 <= flash_elapsed < FLASH_DURATION:
+    if 0.0 <= flash_elapsed < FLASH.DURATION:
         fill_bg = flash_color(bar_color, flash_elapsed)
         empty_bg = flash_color(empty_bg_hex, flash_elapsed)
         filled_sgr = sgr_fg(fg_fill) + sgr_bg(fill_bg)
@@ -672,10 +709,10 @@ def vital_bar(
     right_color = fill_bg if filled >= width else empty_bg
 
     return [
-        (sgr_fg(left_color), BAR_CAP_LEFT),
+        (sgr_fg(left_color), DISPLAY.BAR_CAP_LEFT),
         (filled_sgr, filled_text),
         (empty_sgr, empty_text),
-        (sgr_fg(right_color), BAR_CAP_RIGHT),
+        (sgr_fg(right_color), DISPLAY.BAR_CAP_RIGHT),
     ]
 
 
@@ -712,7 +749,6 @@ class ToolbarSlot(NamedTuple):
     grow_params: tuple[Any, ...] | None = None
 
 
-SEPARATOR_WIDTH = 3
 BAR_GAP_WIDTH = 1
 
 
@@ -730,7 +766,8 @@ def layout_toolbar(slots: list["ToolbarSlot"], cols: int) -> tuple[list["Toolbar
     has_right = False
 
     for slot in sorted(slots, key=lambda s: s.priority):
-        sep = SEPARATOR_WIDTH if ((slot.side == "left" and has_left) or (slot.side == "right" and has_right)) else 0
+        has_neighbor = (slot.side == "left" and has_left) or (slot.side == "right" and has_right)
+        sep = DISPLAY.SEPARATOR_WIDTH if has_neighbor else 0
         need = slot.width + sep
         avail = cols - left_used - right_used - 1  # 1 char min pad
 
@@ -769,14 +806,14 @@ def left_sep_widths(left: list["ToolbarSlot"]) -> list[int]:
     Return per-gap separator widths for left slots.
 
     Adjacent growable (vital-bar) slots use ``BAR_GAP_WIDTH``; all other
-    gaps use ``SEPARATOR_WIDTH``.
+    gaps use ``DISPLAY.SEPARATOR_WIDTH``.
     """
     gaps: list[int] = []
     for i in range(1, len(left)):
         if left[i - 1].growable and left[i].growable:
             gaps.append(BAR_GAP_WIDTH)
         else:
-            gaps.append(SEPARATOR_WIDTH)
+            gaps.append(DISPLAY.SEPARATOR_WIDTH)
     return gaps
 
 
@@ -791,22 +828,22 @@ def fill_toolbar(
     left_gaps = left_sep_widths(left)
     n_right_seps = max(0, len(right) - 1)
     used = sum(s.width for s in left) + sum(s.width for s in right)
-    used += sum(left_gaps) + n_right_seps * SEPARATOR_WIDTH
+    used += sum(left_gaps) + n_right_seps * DISPLAY.SEPARATOR_WIDTH
     min_pad = 1 if left and right else 0
     extra = cols - used - min_pad
 
     growable = [s for s in left + right if s.growable and s.grow_params is not None]
     if not growable or extra <= 0:
-        return (left, right, SEPARATOR_WIDTH)
+        return (left, right, DISPLAY.SEPARATOR_WIDTH)
 
     n_expandable_seps = n_right_seps
     if n_expandable_seps > 0:
         sep_bonus = extra // 4
         per_sep = sep_bonus // n_expandable_seps
-        sep_width = SEPARATOR_WIDTH + per_sep
+        sep_width = DISPLAY.SEPARATOR_WIDTH + per_sep
         remaining = extra - per_sep * n_expandable_seps
     else:
-        sep_width = SEPARATOR_WIDTH
+        sep_width = DISPLAY.SEPARATOR_WIDTH
         remaining = extra
 
     per_bar = remaining // len(growable)
@@ -881,7 +918,7 @@ class VitalTracker:
             self.flash_time = now
         self.last_value = val
         elapsed = now - self.flash_time
-        return elapsed if elapsed < FLASH_DURATION else -1.0
+        return elapsed if elapsed < FLASH.DURATION else -1.0
 
 
 class XPTracker(VitalTracker):
@@ -914,7 +951,7 @@ class XPTracker(VitalTracker):
             self.history.popleft()
 
         elapsed = now - self.flash_time
-        return elapsed if elapsed < FLASH_DURATION else -1.0
+        return elapsed if elapsed < FLASH.DURATION else -1.0
 
     def eta_fragments(self, maxxp: Any, now: float) -> list[tuple[str, str]] | None:
         """
@@ -997,7 +1034,7 @@ class ToolbarRenderer:
             self.cursor_show_handle.cancel()
             self.cursor_show_handle = None
         if not self.cursor_hidden:
-            self.out.write(CURSOR_HIDE.encode())
+            self.out.write(get_term().hide_cursor.encode())
             self.cursor_hidden = True
 
     def show_cursor(self) -> None:
@@ -1006,7 +1043,7 @@ class ToolbarRenderer:
             self.cursor_show_handle.cancel()
             self.cursor_show_handle = None
         self.cursor_hidden = False
-        self.out.write(CURSOR_SHOW.encode())
+        self.out.write(get_term().normal_cursor.encode())
 
     def schedule_cursor_show(self, loop: asyncio.AbstractEventLoop) -> None:
         """
@@ -1023,7 +1060,7 @@ class ToolbarRenderer:
             if self.stoplight is not None and self.stoplight.is_animating():
                 return
             self.cursor_hidden = False
-            self.out.write(CURSOR_SHOW.encode())
+            self.out.write(get_term().normal_cursor.encode())
 
         self.cursor_show_handle = loop.call_later(self.CURSOR_SHOW_DELAY, do_show)
 
@@ -1125,21 +1162,21 @@ class ToolbarRenderer:
             hp = vitals.get("hp", vitals.get("HP"))
             maxhp = vitals.get("maxhp", vitals.get("maxHP", vitals.get("max_hp")))
             if hp is not None:
-                if self.vital_slot(self.hp, hp, maxhp, BAR_WIDTH, "hp", 1, 2, now, slots):
+                if self.vital_slot(self.hp, hp, maxhp, DISPLAY.BAR_WIDTH, "hp", 1, 2, now, slots):
                     needs_reflash = True
             mp = vitals.get("mp", vitals.get("MP", vitals.get("mana", vitals.get("sp", vitals.get("SP")))))
             maxmp = vitals.get(
                 "maxmp", vitals.get("maxMP", vitals.get("max_mp", vitals.get("maxsp", vitals.get("maxSP"))))
             )
             if mp is not None:
-                if self.vital_slot(self.mp, mp, maxmp, BAR_WIDTH, "mp", 4, 3, now, slots):
+                if self.vital_slot(self.mp, mp, maxmp, DISPLAY.BAR_WIDTH, "mp", 4, 3, now, slots):
                     needs_reflash = True
         status = gmcp_data.get("Char.Status")
         if isinstance(status, dict):
             xp_raw = status.get("xp", status.get("XP", status.get("experience")))
             maxxp = status.get("maxxp", status.get("maxXP", status.get("max_xp", status.get("maxexp"))))
             if xp_raw is not None:
-                if self.vital_slot(self.xp, xp_raw, maxxp, BAR_WIDTH, "xp", 5, 4, now, slots):
+                if self.vital_slot(self.xp, xp_raw, maxxp, DISPLAY.BAR_WIDTH, "xp", 5, 4, now, slots):
                     needs_reflash = True
                 self.xp_eta_slot(maxxp, now, slots)
         return needs_reflash
@@ -1185,7 +1222,7 @@ class ToolbarRenderer:
                 tracker,
                 raw,
                 maxval,
-                BAR_WIDTH,
+                DISPLAY.BAR_WIDTH,
                 kind,
                 priority,
                 order,
@@ -1531,7 +1568,7 @@ class ToolbarRenderer:
             cq = self.ctx.command_queue
             ac = self.ctx.active_command
             ac_elapsed = time.monotonic() - self.ctx.active_command_time
-            show_cmd = cq is not None or (ac is not None and ac_elapsed < FLASH_DURATION)
+            show_cmd = cq is not None or (ac is not None and ac_elapsed < FLASH.DURATION)
             if show_cmd:
                 from . import client_repl_commands  # noqa: PLC0415  # circular
 
@@ -1562,7 +1599,7 @@ class ToolbarRenderer:
                     )
                 if prog is not None:
                     still = True
-                if ac_elapsed < FLASH_DURATION:
+                if ac_elapsed < FLASH.DURATION:
                     still = True
                 drew = self.cursor_light(bt, input_row, cursor_col, is_ar_bg)
                 if not drew:
@@ -1597,12 +1634,12 @@ class ToolbarRenderer:
                     self.restore_cursor(bt, input_row, cursor_col, is_ar_bg)
 
             if still:
-                loop.call_later(FLASH_INTERVAL, tick)
+                loop.call_later(FLASH.INTERVAL, tick)
             else:
                 self.flash_active = False
                 self.last_hint_split = None
 
-        loop.call_later(FLASH_INTERVAL, tick)
+        loop.call_later(FLASH.INTERVAL, tick)
 
     ETA_REFRESH_INTERVAL = 1.0
 

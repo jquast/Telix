@@ -14,7 +14,7 @@ from collections.abc import Callable, Awaitable
 from .repl_theme import hex_to_rgb, get_repl_palette
 
 # local
-from .client_repl_render import ELLIPSIS, get_term, wcswidth, write_hint, session_key
+from .client_repl_render import DISPLAY, get_term, wcswidth, write_hint, session_key
 
 if TYPE_CHECKING:
     from .session_context import CommandQueue, SessionContext
@@ -493,7 +493,7 @@ def render_command_queue(
     for idx, (sgr, text) in enumerate(frags):
         w = wcswidth(text) + (1 if idx > 0 else 0)
         if total_w + w > avail - 1 and built:
-            built.append((pending_sgr, ELLIPSIS))
+            built.append((pending_sgr, DISPLAY.ELLIPSIS))
             total_w += 1
             break
         if idx > 0:

@@ -132,43 +132,17 @@ Run individual linters::
 Style and static analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Do not use ``getattr(obj, "attr", default)`` as defensive noise when the attribute is always
-  present.  If the call site owns the invariant, access it directly as ``obj.attr``.
-- Do not use single-underscore prefixes on names (functions, classes, constants, methods, or
-  attributes).  This project has no public Python API -- all names are internal.  Exceptions:
-  - Unused variables in unpacking (e.g. ``for _s, _e, name in spans:``)
-  - Property backing attributes (e.g. ``self._enabled`` behind ``@property enabled``)
-  - External library private attributes (e.g. ``widget._label``, ``parser._actions``)
-  - Dunder methods (``__init__``, ``__enter__``, etc.)
-- Import style: ``import module`` everywhere, access via ``module.name``.  Internal imports use
-  ``from . import module``.  Never ``from X import Y`` except ``from typing import TYPE_CHECKING``
-  and inside ``if TYPE_CHECKING:`` blocks.
-- Type annotations are used in source code but prefer omitting them over using ambiguous types or
-  adding ``# type: ignore`` comments.  Tests must not use type annotations; tests are excluded from
-  type checking.
-- Do not write Unicode em-dash, arrows, or similar characters in code or documentation.
-- Use tox to run tests, linters, and formatters.
-- Max line length: 120 characters.
-- Sphinx-style reStructuredText docstrings.
-- Average test coverage expected (~50%); layout, design, and TUI interaction is not tested.
-- Write tests first when fixing bugs (TDD).
-- Do not use section dividers or markers in code.
-- Never use ``assert x == y, "message"`` -- pytest output is sufficient.
-- Test docstrings should be brief, factual statements of what is tested, not why or how.
-- Tests should be self-documenting; avoid comments explaining why tests exist.
-- Do not write defensive ``try``/``except`` blocks that swallow errors.  Let exceptions propagate
-  unless there is a specific reason to handle them.  Never catch broad ``Exception`` or ``OSError``
-  just to log and return ``None``.  Acceptable uses: ``except ImportError`` for optional
-  dependencies, cleanup in ``finally`` blocks, and boundary code that must not crash (e.g. top-level
-  CLI).
+.. include:: ../.claude/CLAUDE.md
+   :parser: myst
+   :start-after: ## Style and static analysis
+   :end-before: ## Development workflow
 
 Development workflow
 ~~~~~~~~~~~~~~~~~~~~
 
-- Review whether tests can be simplified: join related tests, use parametrized testing, and reduce
-  line count while keeping the same coverage.
-- After larger changes, review for unnecessary complexity: reduce duplication, use walrus operators
-  or context managers, and lower McCabe complexity.
+.. include:: ../.claude/CLAUDE.md
+   :parser: myst
+   :start-after: ## Development workflow
 
 Integration boundaries
 ----------------------

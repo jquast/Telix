@@ -35,6 +35,8 @@ import textual.containers
 # local
 from . import util, paths, rooms
 
+log = logging.getLogger(__name__)
+
 # Reset SGR, cursor, alt-screen, mouse, and bracketed paste,
 # then move cursor home and clear the screen so tracebacks start clean.
 TERMINAL_CLEANUP = "\x1b[m\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[H\x1b[2J"
@@ -332,6 +334,9 @@ class SessionConfig:
     typescript_mode: str = "append"
     no_repl: bool = False
 
+    # Developer
+    coverage: bool = False
+
     # Bookmarked sessions sort to top of the list
     bookmarked: bool = False
 
@@ -421,7 +426,13 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
     are parsed before telnetlib3 sees the remaining arguments.
     Only emits flags that differ from the CLI defaults.
     """
-    cmd = [sys.executable, "-c", "from telix.main import main; main()", config.host, str(config.port)]
+    if config.coverage:
+        cmd = [sys.executable, "-m", "coverage", "run",
+               "--source=telix", "--branch", "--parallel-mode",
+               "-m", "telix.main", config.host, str(config.port)]
+    else:
+        cmd = [sys.executable, "-c", "from telix.main import main; main()",
+               config.host, str(config.port)]
 
     if config.no_repl:
         cmd.append("--no-repl")
@@ -485,7 +496,12 @@ def build_ws_command(config: SessionConfig) -> list[str]:
     if ws_path and not ws_path.startswith("/"):
         ws_path = "/" + ws_path
     url = f"{scheme}://{host_part}{ws_path}"
-    cmd = [sys.executable, "-c", "from telix.main import main; main()", url]
+    if config.coverage:
+        cmd = [sys.executable, "-m", "coverage", "run",
+               "--source=telix", "--branch", "--parallel-mode",
+               "-m", "telix.main", url]
+    else:
+        cmd = [sys.executable, "-c", "from telix.main import main; main()", url]
     if config.no_repl or config.mode == "raw":
         cmd.append("--no-repl")
     for field, flag, default in [
@@ -556,16 +572,6 @@ class SessionListScreen(textual.screen.Screen[None]):
         width: 100%;
         min-width: 0;
         margin-bottom: 0;
-    }
-    #bookmark-btn {
-        background: $accent;
-        color: $text;
-        text-style: none;
-    }
-    #bookmark-btn:hover {
-        background: $accent-lighten-1;
-        color: $text;
-        text-style: none;
     }
     """
 
@@ -840,8 +846,21 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # output to sys.__stderr__.  A piped stderr would send
                 # that output into the pipe instead of the terminal,
                 # hanging the editor.
-                proc = subprocess.Popen(cmd)
+                env = None
+                if cfg.coverage:
+                    cov_rc = os.path.join(
+                        os.path.dirname(os.path.dirname(__file__)), "tox.ini"
+                    )
+                    env = {**os.environ, "COVERAGE_PROCESS_START": cov_rc}
+                    log.debug("coverage enabled, COVERAGE_PROCESS_START=%s", cov_rc)
+                log.debug("launch cmd: %s", cmd)
+                proc = subprocess.Popen(cmd, env=env)
                 proc.wait()
+                if cfg.coverage:
+                    subprocess.run(
+                        [sys.executable, "-m", "coverage", "combine"],
+                        check=False,
+                    )
             except KeyboardInterrupt:
                 if proc is not None:
                     proc.terminate()
@@ -1024,6 +1043,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
     #conn-timeout-label {
         width: 20;
         padding-top: 1;
+    }
+    #coverage-label {
+        padding-top: 1;
+        padding-left: 2;
+        width: auto;
     }
     #mode-repl-row {
         height: auto;
@@ -1288,6 +1312,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         yield textual.containers.Horizontal(
             textual.widgets.Label("Connection Timeout", id="conn-timeout-label", classes="field-label"),
             textual.widgets.Input(value=str(cfg.connect_timeout), id="connect-timeout", classes="field-input"),
+            textual.widgets.Label("Coverage", id="coverage-label"),
+            textual.widgets.Switch(value=cfg.coverage, id="coverage"),
             classes="field-row",
         )
 
@@ -1351,11 +1377,16 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             self.query_one("#repl-label", textual.widgets.Label).set_class(is_raw, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
-        """Select a radio button by deselecting all siblings first."""
+        """Select a radio button by setting its value within an enabled RadioSet.
+
+        Temporarily enables the RadioSet so that the RadioButton.Changed
+        message propagates and RadioSet updates its internal pressed state.
+        """
         radio_set = self.query_one(f"#{radio_set_id}", textual.widgets.RadioSet)
-        for btn in radio_set.query(textual.widgets.RadioButton):
-            btn.value = False
+        was_disabled = radio_set.disabled
+        radio_set.disabled = False
         self.query_one(f"#{button_id}", textual.widgets.RadioButton).value = True
+        radio_set.disabled = was_disabled
 
     def apply_server_type(self, button_id: str) -> None:
         """Apply preset field values for BBS or MUD server type."""
@@ -1622,6 +1653,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
 
         timeout_input = self.query_one("#connect-timeout", textual.widgets.Input)
         cfg.connect_timeout = float_val(timeout_input.value, 10.0)
+        cfg.coverage = self.query_one("#coverage", textual.widgets.Switch).value
 
         if self.query_one("#compress-yes", textual.widgets.RadioButton).value:
             cfg.compression = True

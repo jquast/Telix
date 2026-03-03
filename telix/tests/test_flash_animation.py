@@ -6,16 +6,7 @@ import pytest
 pytest.importorskip("blessed")
 
 # local
-from telix.client_repl import (
-    FLASH_HOLD,
-    FLASH_RAMP_UP,
-    FLASH_DURATION,
-    lerp_hsv,
-    vital_bar,
-    hsv_to_rgb,
-    rgb_to_hsv,
-    flash_color,
-)
+from telix.client_repl import FLASH, lerp_hsv, vital_bar, hsv_to_rgb, rgb_to_hsv, flash_color
 
 
 class TestRgbHsvRoundTrip:
@@ -63,16 +54,16 @@ class TestFlashColor:
         assert flash_color("#ff0000", -1.0) == "#ff0000"
 
     def test_no_flash_past_duration(self):
-        assert flash_color("#ff0000", FLASH_DURATION + 0.1) == "#ff0000"
+        assert flash_color("#ff0000", FLASH.DURATION + 0.1) == "#ff0000"
 
     def test_at_zero_returns_original(self):
         assert flash_color("#ff0000", 0.0) == "#ff0000"
 
     def test_at_exact_duration_returns_original(self):
-        assert flash_color("#ff0000", FLASH_DURATION) == "#ff0000"
+        assert flash_color("#ff0000", FLASH.DURATION) == "#ff0000"
 
     def test_at_hold_midpoint_returns_white(self):
-        mid = FLASH_RAMP_UP + FLASH_HOLD / 2.0
+        mid = FLASH.RAMP_UP + FLASH.HOLD / 2.0
         result = flash_color("#ff0000", mid)
         r = int(result[1:3], 16)
         g = int(result[3:5], 16)
@@ -82,9 +73,9 @@ class TestFlashColor:
         assert b > 240
 
     def test_ramp_symmetry(self):
-        t_up = FLASH_RAMP_UP * 0.5
-        ramp_down_start = FLASH_RAMP_UP + FLASH_HOLD
-        t_down = ramp_down_start + (FLASH_DURATION - ramp_down_start) * 0.5
+        t_up = FLASH.RAMP_UP * 0.5
+        ramp_down_start = FLASH.RAMP_UP + FLASH.HOLD
+        t_down = ramp_down_start + (FLASH.DURATION - ramp_down_start) * 0.5
         color_up = flash_color("#66aa44", t_up)
         color_down = flash_color("#66aa44", t_down)
         r_up = int(color_up[1:3], 16)
@@ -109,7 +100,7 @@ class TestVitalBarFlash:
 
     def test_flash_elapsed_at_hold_differs_from_normal(self):
         frags_normal = vital_bar(50, 100, 20, "hp", flash_elapsed=-1.0)
-        mid = FLASH_RAMP_UP + FLASH_HOLD / 2.0
+        mid = FLASH.RAMP_UP + FLASH.HOLD / 2.0
         frags_flash = vital_bar(50, 100, 20, "hp", flash_elapsed=mid)
         assert frags_normal[1][0] != frags_flash[1][0]
 

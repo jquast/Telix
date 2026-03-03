@@ -7,8 +7,8 @@ pytest.importorskip("blessed")
 
 # local
 from telix.client_repl_render import (
+    DISPLAY,
     BAR_GAP_WIDTH,
-    SEPARATOR_WIDTH,
     ToolbarSlot,
     wcswidth,
     vital_bar,
@@ -54,14 +54,14 @@ class TestFillToolbarNoGrowable:
         s1 = text_slot("Lv.5", order=0)
         s2 = text_slot("$100", order=1)
         left, right, sep = fill_toolbar([s1, s2], [], 80)
-        assert sep == SEPARATOR_WIDTH
+        assert sep == DISPLAY.SEPARATOR_WIDTH
         assert [s.fragments for s in left] == [s1.fragments, s2.fragments]
         assert right == []
 
     def test_no_extra_space_returns_unchanged(self):
         s = bar_slot(50, 100, 20, "hp")
         left, right, sep = fill_toolbar([s], [], s.width)
-        assert sep == SEPARATOR_WIDTH
+        assert sep == DISPLAY.SEPARATOR_WIDTH
         assert len(left) == 1
         assert left[0].width == s.width
 
@@ -94,7 +94,7 @@ class TestFillToolbarGrows:
         mp = bar_slot(30, 80, 20, "mp", priority=2, order=1)
         hp_w = hp.width
         mp_w = mp.width
-        total_min = hp_w + mp_w + SEPARATOR_WIDTH
+        total_min = hp_w + mp_w + DISPLAY.SEPARATOR_WIDTH
         left, right, sep = fill_toolbar([hp, mp], [], total_min + 30)
         assert left[0].width > hp_w
         assert left[1].width > mp_w
@@ -102,28 +102,28 @@ class TestFillToolbarGrows:
     def test_separator_grows(self):
         hp = bar_slot(50, 100, 20, "hp", priority=1, order=0)
         fixed = text_slot("Lv.5", order=1)
-        total_min = hp.width + fixed.width + SEPARATOR_WIDTH
+        total_min = hp.width + fixed.width + DISPLAY.SEPARATOR_WIDTH
         _, _, sep = fill_toolbar([hp, fixed], [], total_min + 40)
-        assert sep >= SEPARATOR_WIDTH
+        assert sep >= DISPLAY.SEPARATOR_WIDTH
 
 
 class TestFillToolbarEdgeCases:
     def test_single_slot_no_separators(self):
         s = bar_slot(50, 100, 20, "hp")
         left, right, sep = fill_toolbar([s], [], s.width + 20)
-        assert sep == SEPARATOR_WIDTH
+        assert sep == DISPLAY.SEPARATOR_WIDTH
         assert left[0].width > s.width
 
     def test_zero_cols_returns_unchanged(self):
         s = bar_slot(50, 100, 20, "hp")
         left, right, sep = fill_toolbar([s], [], 0)
-        assert sep == SEPARATOR_WIDTH
+        assert sep == DISPLAY.SEPARATOR_WIDTH
         assert left[0].width == s.width
 
     def test_negative_extra_returns_unchanged(self):
         s = bar_slot(50, 100, 20, "hp")
         left, right, sep = fill_toolbar([s], [], 5)
-        assert sep == SEPARATOR_WIDTH
+        assert sep == DISPLAY.SEPARATOR_WIDTH
 
 
 class TestBarGapWidth:
@@ -137,7 +137,7 @@ class TestBarGapWidth:
         fixed = text_slot("Lv.5", order=0)
         hp = bar_slot(50, 100, 20, "hp", order=1)
         gaps = left_sep_widths([fixed, hp])
-        assert gaps == [SEPARATOR_WIDTH]
+        assert gaps == [DISPLAY.SEPARATOR_WIDTH]
 
     def test_three_bars_all_tight(self):
         hp = bar_slot(50, 100, 20, "hp", order=0)
@@ -152,7 +152,7 @@ class TestBarGapWidth:
         mp = bar_slot(30, 80, 20, "mp", order=2)
         eta = text_slot("ETA 2h", order=3)
         gaps = left_sep_widths([fixed, hp, mp, eta])
-        assert gaps == [SEPARATOR_WIDTH, BAR_GAP_WIDTH, SEPARATOR_WIDTH]
+        assert gaps == [DISPLAY.SEPARATOR_WIDTH, BAR_GAP_WIDTH, DISPLAY.SEPARATOR_WIDTH]
 
 
 class TestLayoutToolbarReturnsSlots:

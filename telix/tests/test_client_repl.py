@@ -186,6 +186,7 @@ def test_scroll_region_restore_cursor() -> None:
 def test_scramble_password_per_char_replacement() -> None:
     """Per-character replacement preserves length and non-password chars."""
     import random
+
     from ..client_repl_render import SEXTANT_VISIBLE
 
     raw = "\x1b[45;1H" + PASSWORD_CHAR * 5 + " " * 10
@@ -1154,17 +1155,7 @@ def test_render_command_queue_highlight_active() -> None:
 
 
 # local
-from telix.client_repl_render import (
-    HOLD,
-    WARM_UP,
-    DURATION,
-    ELLIPSIS,
-    ActivityDot,
-    lerp_rgb,
-    peak_red,
-    peak_yellow,
-    activity_hint,
-)
+from telix.client_repl_render import DISPLAY, ACTIVITY, ActivityDot, lerp_rgb, peak_red, peak_yellow, activity_hint
 
 
 class FakeEngine:
@@ -1181,18 +1172,18 @@ class TestActivityHint:
         e = FakeEngine(status="until /very long pattern here/", idx=3)
         hint = activity_hint(e, cols=0)
         assert "[return to cancel]" in hint
-        assert ELLIPSIS not in hint
+        assert DISPLAY.ELLIPSIS not in hint
 
     def test_truncation_preserves_cancel_suffix(self):
         e = FakeEngine(status="until /a]very{long}pattern/", idx=5)
         hint = activity_hint(e, cols=30)
         assert "[return to cancel]" in hint
-        assert ELLIPSIS in hint
+        assert DISPLAY.ELLIPSIS in hint
 
     def test_short_hint_not_truncated(self):
         e = FakeEngine(status="delay 1", idx=1)
         hint = activity_hint(e, cols=200)
-        assert ELLIPSIS not in hint
+        assert DISPLAY.ELLIPSIS not in hint
         assert "[return to cancel]" in hint
 
     def test_hint_fixed_width_with_cols(self):
@@ -1216,7 +1207,7 @@ def test_modem_dot_peak_after_trigger(monkeypatch):
 
     dot = ActivityDot()
     dot.trigger()
-    now[0] += WARM_UP + 0.001
+    now[0] += ACTIVITY.WARM_UP + 0.001
     assert dot.intensity() == pytest.approx(1.0, abs=0.05)
     assert dot.is_animating()
     r, g, b = dot.color()
@@ -1230,7 +1221,7 @@ def test_modem_dot_idle_after_duration(monkeypatch):
 
     dot = ActivityDot()
     dot.trigger()
-    now[0] += DURATION + 0.001
+    now[0] += ACTIVITY.DURATION + 0.001
     assert dot.intensity() == 0.0
     assert not dot.is_animating()
     assert dot.color() == idle_rgb()
@@ -1247,12 +1238,12 @@ def test_modem_dot_retrigger_during_glowdown(monkeypatch):
 
     dot = ActivityDot()
     dot.trigger()
-    now[0] += WARM_UP + HOLD + 0.050
+    now[0] += ACTIVITY.WARM_UP + ACTIVITY.HOLD + 0.050
     mid_intensity = dot.intensity()
     assert 0.0 < mid_intensity < 1.0
 
     dot.trigger()
-    now[0] += WARM_UP * 0.5
+    now[0] += ACTIVITY.WARM_UP * 0.5
     assert dot.intensity() > mid_intensity
 
 

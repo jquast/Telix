@@ -30,70 +30,50 @@ from .highlighter import HighlightEngine
 # in tests and other modules continues to work without changes.
 # pylint: disable=unused-import,useless-import-alias
 from .client_repl_render import (  # noqa: F401
-    HOLD,
+    ACTIVITY,
+    CURSOR,
+    DISPLAY,
+    FLASH,
     PHASES,
     SEXTANT,
-    SEXTANT_VISIBLE,
-    WARM_UP,
-    DMZ_CHAR,
-    DURATION,
-    ELLIPSIS,
-    BAR_WIDTH,
-    GLOW_DOWN,
-    FLASH_HOLD,
-    CURSOR_HIDE,
-    CURSOR_SHOW,
-    BAR_CAP_LEFT,
     SEXTANT_BITS,
-    STYLE_NORMAL,
-    BAR_CAP_RIGHT,
-    CURSOR_STYLES,
-    FLASH_RAMP_UP,
-    CURSOR_DEFAULT,
-    FLASH_DURATION,
-    FLASH_INTERVAL,
-    FLASH_RAMP_DOWN,
-    SEPARATOR_WIDTH,
-    STOPLIGHT_WIDTH,
+    SEXTANT_VISIBLE,
     STYLE_AUTOREPLY,
-    CURSOR_STEADY_BAR,
-    CURSOR_BLINKING_BAR,
-    CURSOR_STEADY_BLOCK,
-    DEFAULT_CURSOR_STYLE,
-    CURSOR_BLINKING_BLOCK,
-    CURSOR_COLOR_RESET_OSC,
-    CURSOR_STEADY_UNDERLINE,
-    CURSOR_BLINKING_UNDERLINE,
-    Stoplight,
+    STYLE_NORMAL,
     ActivityDot,
-    ToolbarSlot,
+    ActivityTiming,
+    CursorSeq,
+    DisplayChars,
+    FlashTiming,
+    Stoplight,
     ToolbarRenderer,
-    sgr_bg,
-    sgr_fg,
+    ToolbarSlot,
+    activity_hint,
+    center_truncate,
+    cursor_ar_osc,
+    cursor_osc,
     dmz_line,
+    editor_cursor_col,
+    flash_color,
+    fmt_value,
+    hsv_to_rgb,
+    idle_ar_rgb,
     idle_rgb,
+    layout_toolbar,
     lerp_hsv,
     lerp_rgb,
-    wcswidth,
-    fmt_value,
-    segmented,
-    vital_bar,
-    cursor_osc,
-    hsv_to_rgb,
-    rgb_to_hsv,
-    write_hint,
-    flash_color,
-    idle_ar_rgb,
     make_styles,
-    vital_color,
-    activity_hint,
-    cursor_ar_osc,
-    layout_toolbar,
-    until_progress,
-    center_truncate,
-    set_session_key,
-    editor_cursor_col,
+    rgb_to_hsv,
     scramble_password,
+    segmented,
+    set_session_key,
+    sgr_bg,
+    sgr_fg,
+    until_progress,
+    vital_bar,
+    vital_color,
+    wcswidth,
+    write_hint,
 )
 from .client_repl_travel import (  # noqa: F401
     DEFAULT_WALK_LIMIT,
@@ -104,14 +84,14 @@ from .client_repl_travel import (  # noqa: F401
 )
 from .client_repl_dialogs import (  # noqa: F401
     show_help,
-    editor_active,
-    editor_buffer,
     reload_macros,
     confirm_dialog,
+    subprocess_buffer,
     launch_tui_editor,
     randomwalk_dialog,
     launch_chat_viewer,
     reload_autoreplies,
+    subprocess_is_active,
     autodiscover_dialog,
     launch_room_browser,
     reload_progressbars,
@@ -243,7 +223,7 @@ def terminal_cleanup() -> str:
         + "\x1b[?2004l"  # xterm -- disable bracketed paste
         + "\x1b[?2048l"  # xterm -- disable in-band resize
         + "\x1b[r"  # DECSTBM -- reset scroll region to default
-        + CURSOR_COLOR_RESET_OSC  # OSC 112 -- reset cursor color
+        + CURSOR.COLOR_RESET_OSC  # OSC 112 -- reset cursor color
         + "\x1b[<u"  # kitty -- disable kitty keyboard protocol
     )
 
@@ -362,7 +342,7 @@ def restore_after_subprocess(replay_buf: "OutputRingBuffer | None", reserve: int
     except OSError:
         pass
     blessed_term = get_term()
-    sys.stdout.write(CURSOR_HIDE)
+    sys.stdout.write(blessed_term.hide_cursor)
     sys.stdout.write(terminal_cleanup())
     try:
         tsize = os.get_terminal_size()
@@ -416,7 +396,7 @@ def repaint_screen(
     try:
         blessed_term = get_term()
         scroll_bottom = max(0, tsize.lines - reserve - 2)
-        sys.stdout.write(CURSOR_HIDE)
+        sys.stdout.write(blessed_term.hide_cursor)
         sys.stdout.write(blessed_term.clear + blessed_term.home)
         sys.stdout.write(blessed_term.change_scroll_region(0, scroll_bottom))
         sys.stdout.write(blessed_term.move_yx(0, 0))
@@ -432,7 +412,7 @@ def repaint_screen(
         for r in range(input_row, tsize.lines):
             sys.stdout.write(blessed_term.move_yx(r, 0) + blessed_term.clear_eol)
         sys.stdout.write(blessed_term.move_yx(input_row, 0))
-        sys.stdout.write(CURSOR_SHOW)
+        sys.stdout.write(blessed_term.normal_cursor)
         sys.stdout.flush()
     finally:
         os.set_blocking(fd, was_blocking)
@@ -1157,7 +1137,7 @@ if sys.platform != "win32":
                     )
                 ac_age = time.monotonic() - self.ctx.active_command_time
                 cmd_visible = self.ctx.command_queue is not None or (
-                    self.ctx.active_command is not None and ac_age < FLASH_DURATION
+                    self.ctx.active_command is not None and ac_age < FLASH.DURATION
                 )
                 if not cmd_visible:
                     self.stdout.write(
@@ -1292,10 +1272,10 @@ if sys.platform != "win32":
                 dmz = sr.scroll_bottom + 1
                 if dmz < sr.input_row:
                     self.stdout.write((bt.move_yx(dmz, 0) + dmz_line(cols, ar_bg)).encode())
-            cs = self.ctx.cursor_style or DEFAULT_CURSOR_STYLE
+            cs = self.ctx.cursor_style or CURSOR.DEFAULT_STYLE
             style = STYLE_AUTOREPLY if ar_bg else STYLE_NORMAL
             osc = cursor_ar_osc() if ar_bg else cursor_osc()
-            self.stdout.write(CURSOR_STYLES.get(cs, CURSOR_STEADY_BLOCK).encode())
+            self.stdout.write(CURSOR.STYLES.get(cs, CURSOR.STEADY_BLOCK).encode())
             self.stdout.write(osc.encode())
             self.stdout.write(style["cursor_sgr"].encode())
             self.toolbar.schedule_cursor_show(self.loop)
@@ -1455,8 +1435,8 @@ if sys.platform != "win32":
                 self.refresh_autoreply_engine()
                 self.refresh_highlight_engine()
                 is_prompt = self.prompt_pending
-                if self.dialogs_mod.editor_active:
-                    self.dialogs_mod.editor_buffer.append(out.encode())
+                if self.dialogs_mod.subprocess_is_active:
+                    self.dialogs_mod.subprocess_buffer.append(out.encode())
                     continue
                 emit_now, held_back = self.line_hold.add(out)
                 if held_back and is_prompt:
@@ -1466,17 +1446,17 @@ if sys.platform != "win32":
                     self.prompt_pending = False
                 if held_back:
                     self.schedule_line_hold_flush()
-                if not emit_now and not self.dialogs_mod.editor_buffer:
+                if not emit_now and not self.dialogs_mod.subprocess_buffer:
                     continue
                 if emit_now and not held_back:
                     self.cancel_line_hold_timer()
                 self.toolbar.hide_cursor()
                 self.stdout.write(bt.restore.encode())
-                if self.dialogs_mod.editor_buffer:
-                    for chunk in self.dialogs_mod.editor_buffer:
+                if self.dialogs_mod.subprocess_buffer:
+                    for chunk in self.dialogs_mod.subprocess_buffer:
                         self.stdout.write(chunk)
                         self.replay_buf.append(chunk)
-                    self.dialogs_mod.editor_buffer.clear()
+                    self.dialogs_mod.subprocess_buffer.clear()
                 encoded = esc_hold + emit_now.encode()
                 encoded, esc_hold = split_incomplete_esc(encoded)
                 if encoded:
@@ -1506,7 +1486,7 @@ if sys.platform != "win32":
                         base_bg_sgr=bg,
                         autoreply=ar,
                     )
-                elif ac_s is not None and ac_elapsed < FLASH_DURATION:
+                elif ac_s is not None and ac_elapsed < FLASH.DURATION:
                     cursor_col = render_active_command(
                         ac_s,
                         scroll,
@@ -1710,8 +1690,8 @@ if sys.platform != "win32":
                 self.toolbar.cursor_show_handle.cancel()
                 self.toolbar.cursor_show_handle = None
             self.toolbar.cursor_hidden = False
-            self.stdout.write(CURSOR_DEFAULT.encode())
-            self.stdout.write(CURSOR_COLOR_RESET_OSC.encode())
+            self.stdout.write(CURSOR.DEFAULT.encode())
+            self.stdout.write(CURSOR.COLOR_RESET_OSC.encode())
             if self.mode_switched:
                 assert self.scroll is not None
                 dmz_row = self.scroll.scroll_bottom + 1
@@ -1750,8 +1730,8 @@ if sys.platform != "win32":
                         self.stdout.write(f"{bl}\r\n".encode())
 
                 self.stdout.write(self.blessed_term.save.encode())
-                cs = self.ctx.cursor_style or DEFAULT_CURSOR_STYLE
-                self.stdout.write(CURSOR_STYLES.get(cs, CURSOR_STEADY_BLOCK).encode())
+                cs = self.ctx.cursor_style or CURSOR.DEFAULT_STYLE
+                self.stdout.write(CURSOR.STYLES.get(cs, CURSOR.STEADY_BLOCK).encode())
 
                 self.register_callbacks()
 
