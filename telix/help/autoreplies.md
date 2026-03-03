@@ -27,7 +27,7 @@ the first match wins unless a rule is marked **Always**.
   the default case-insensitive matching.
 - **W (When)** -- a vital-percentage condition gate is set on this rule.
 - **(off)** -- the rule is disabled and won't match.  Toggle via the
-  Enabled switch in the form, or use Shift+F9 in-session to disable
+  Enabled switch in the form, or use Alt+Shift+A in-session to disable
   all autoreplies globally.
 
 ### Form Fields

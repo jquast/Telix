@@ -1085,13 +1085,13 @@ def chat_viewer_main(
 
 # Tab definitions: (label, tab_id)
 EDITOR_TABS: list[tuple[str, str]] = [
-    ("F6 Highlights", "highlights"),
-    ("F7 Rooms", "rooms"),
-    ("F8 Macros", "macros"),
-    ("F9 Autoreplies", "autoreplies"),
-    ("F10 Caps & Chats", "captures"),
-    ("F11 Bars", "bars"),
-    ("F12 Theme", "theme"),
+    ("Highlights", "highlights"),
+    ("Rooms", "rooms"),
+    ("Macros", "macros"),
+    ("Autoreplies", "autoreplies"),
+    ("Caps & Chats", "captures"),
+    ("Bars", "bars"),
+    ("Theme", "theme"),
 ]
 
 

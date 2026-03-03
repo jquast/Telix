@@ -674,10 +674,10 @@ if sys.platform != "win32":
             """Replace all macro bindings from a macro definition list."""
             macro_handlers = build_macro_dispatch(macros, ctx, logger)
             for key_name, handler in macro_handlers.items():
-                if len(key_name) == 1:
-                    self.by_seq[key_name] = handler
-                else:
+                if key_name.startswith("KEY_"):
                     self.by_name[key_name] = handler
+                else:
+                    self.by_seq[key_name] = handler
 
         def lookup(self, key: "blessed.keyboard.Keystroke") -> Callable[..., typing.Any] | None:
             """Look up a handler for a blessed Keystroke, or ``None``."""
@@ -1293,6 +1293,17 @@ if sys.platform != "win32":
             self.stdout.write(style["cursor_sgr"].encode())
             self.toolbar.schedule_cursor_show(self.loop)
 
+        def _repaint(self) -> None:
+            """Full screen repaint including toolbar and input line."""
+            assert self.scroll is not None
+            repaint_screen(self.replay_buf, scroll=self.scroll, active=self.is_autoreply_bg)
+            self.update_input_style()
+            bt = get_term()
+            self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
+            self.toolbar.render(self.autoreply_engine)
+            cursor_col = self.editor_cursor()
+            self.show_cursor_or_light(self.scroll.input_row, cursor_col)
+
         def fire_resize(self) -> None:
             """Handle resize: update scroll region, NAWS, re-render UI."""
             assert self.scroll is not None
@@ -1330,9 +1341,7 @@ if sys.platform != "win32":
                 "toggle_highlights": self.toggle_highlights,
                 "toggle_autoreplies": self.toggle_autoreplies,
                 "disconnect": self.reg_close,
-                "repaint": lambda: repaint_screen(
-                    self.replay_buf, scroll=scroll, active=self.is_autoreply_bg,
-                ),
+                "repaint": self._repaint,
                 "randomwalk_dialog": self.randomwalk_mode,
                 "autodiscover_dialog": self.discover_mode,
                 "resume_walk": self.resume_last_walk,

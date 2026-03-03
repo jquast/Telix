@@ -14,9 +14,9 @@ The room graph supports:
 - Blocked exits to prevent travel through dangerous areas
 - ID rotation detection for rooms that change hash each visit
 
-### Room Browser (F7)
+### Room Browser (Alt+R)
 
-Press **F7** to open the room browser.  Rooms can be filtered by area,
+Press **Alt+R** to open the room browser.  Rooms can be filtered by area,
 sorted by name/ID/distance/last-visited, and traveled to directly.
 
 Room markers:

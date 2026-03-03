@@ -1103,7 +1103,7 @@ class ToolbarRenderer:
                 self.rprompt_text = room_name
 
         if self.ctx.chat_unread > 0:
-            badge = f"F10-Chat:{self.ctx.chat_unread}"
+            badge = f"Chat:{self.ctx.chat_unread}"
             slots.append(
                 ToolbarSlot(
                     priority=3,

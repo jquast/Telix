@@ -1,17 +1,21 @@
 ## Keybindings
 
+All default key bindings are builtin macros and can be rebound in the
+macro editor (Alt+M).
+
 ### Session Keys
 
 | Key | Action |
 |-----|--------|
 | **F1** | This help screen |
-| **F6** | Edit highlights (TUI editor) |
-| **Shift+F6** | Toggle highlights on/off |
-| **F8** | Edit macros (TUI editor) |
-| **F9** | Edit autoreplies (TUI editor) |
-| **Shift+F9** | Toggle autoreplies on/off |
-| **F10** | Chat viewer / captures |
-| **F11** | Edit progress bars (TUI editor) |
+| **Alt+H** | Edit highlights (TUI editor) |
+| **Alt+Shift+H** | Toggle highlights on/off |
+| **Alt+M** | Edit macros (TUI editor) |
+| **Alt+A** | Edit autoreplies (TUI editor) |
+| **Alt+Shift+A** | Toggle autoreplies on/off |
+| **Alt+C** | Chat viewer / captures |
+| **Alt+B** | Edit progress bars (TUI editor) |
+| **Alt+T** | Edit theme |
 | **Ctrl+L** | Repaint screen |
 | **Ctrl+]** | Disconnect |
 
@@ -22,7 +26,7 @@
 | **F3** | Random walk (explore random exits) |
 | **F4** | Autodiscover (explore unvisited exits) |
 | **F5** | Resume last walk |
-| **F7** | Browse rooms / travel |
+| **Alt+R** | Browse rooms / travel |
 
 ### Line Editing
 

@@ -107,7 +107,7 @@ Travel back to the room where the current macro started executing.
 ### Home
 
 Fast travel to the home room of your current area.  Set a home room
-in the room browser (F7) using the Home button.
+in the room browser (Alt+R) using the Home button.
 
 | Example | Effect |
 |---------|--------|

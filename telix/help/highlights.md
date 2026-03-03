@@ -89,7 +89,7 @@ Single-line rules continue to work unchanged.
 ### Captures
 
 When **Captured** is enabled on a highlight rule, the full matched line
-is logged to a capture channel visible in the **Capture Window** (F10).
+is logged to a capture channel visible in the **Capture Window** (Alt+C).
 
 **Capture Name** sets the channel.  It can be a fixed name like `tells`
 or a group reference like `\1` that resolves dynamically per match.
@@ -110,9 +110,9 @@ captures `Adrenaline=\1` and `MaxAdrenaline=\2` lets you write
 | `(\w+) tells you:` | `\1` | *(none)* | Log tells per speaker name |
 | `^You receive (\d+) xp` | `xp` | XP=`\1` | Track XP gains |
 
-### Capture Window (F10)
+### Capture Window (Alt+C)
 
-Press **F10** to open the Capture Window.  It shows both GMCP chat
+Press **Alt+C** to open the Capture Window.  It shows both GMCP chat
 messages and highlight capture logs in a unified tabbed view.  Use
 **Tab** / **Shift+Tab** to cycle channels.
 

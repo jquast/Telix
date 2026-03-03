@@ -211,7 +211,7 @@ Telix's ``SessionContext`` also provides ``captures`` (a flat
 ``dict[str, int]`` of captured variables) and ``capture_log`` (a
 ``dict[str, list[dict]]`` of per-channel capture history), populated
 by the highlight engine and consumed by the ``when`` condition checker
-and the Capture Window (F10).
+and the Capture Window (Alt+C).
 
 ``TelnetSessionContext`` (defined in ``telnetlib3/session_context.py``)
 provides the attributes that ``telnetlib3.client_shell`` uses:
@@ -256,7 +256,7 @@ Room state lives in two parallel systems:
    ``ctx.room_graph`` (a ``RoomStore`` backed by a SQLite database
    at ``ctx.rooms_file``).
 
-2. **File-based** (for TUI subprocesses like the F7 room browser):
+2. **File-based** (for TUI subprocesses like the Alt+R room browser):
    ``ctx.current_room_file`` contains the current room number as
    plain text, read by ``rooms.read_current_room()``.  The rooms
    SQLite DB is shared between both systems.
@@ -270,7 +270,7 @@ see the change.
 TUI editor subprocesses
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Pressing F-keys (F5-F11) launches Textual-based editor screens in a
+Pressing editor keys (Alt+H, Alt+M, Alt+A, etc.) launches Textual-based editor screens in a
 **child subprocess** via ``launch_tui_editor()`` in
 ``client_repl_dialogs.py``.  Key constraints:
 

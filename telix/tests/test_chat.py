@@ -102,7 +102,7 @@ class TestChatBadge:
     def test_badge_present_when_unread(self) -> None:
         ctx = SessionContext(session_key="test:4000")
         ctx.chat_unread = 5
-        badge = f"F10-Chat:{ctx.chat_unread}"
+        badge = f"Chat:{ctx.chat_unread}"
         slot = ToolbarSlot(
             priority=3,
             display_order=8,
@@ -112,7 +112,7 @@ class TestChatBadge:
             min_width=0,
             label="",
         )
-        assert "F10-Chat:5" in slot.fragments[0][1]
+        assert "Chat:5" in slot.fragments[0][1]
 
     def test_badge_absent_when_zero(self) -> None:
         ctx = SessionContext(session_key="test:4000")
