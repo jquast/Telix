@@ -32,6 +32,13 @@ WHEN_RE = re.compile(r"^`when\s+(\w+%?)\s*(>=|<=|>|<|=)\s*(\d+)`$", re.IGNORECAS
 UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 
+REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint)`$", re.IGNORECASE)
+EDIT_RE = re.compile(r"^`edit\s+(\w+)`$", re.IGNORECASE)
+TOGGLE_RE = re.compile(r"^`toggle\s+(\w+)`$", re.IGNORECASE)
+WALK_DIALOG_RE = re.compile(
+    r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE,
+)
+
 
 class StepResult(enum.Enum):
     """Outcome of a single :func:`dispatch_one` call."""
@@ -694,6 +701,59 @@ def macro_send(ctx: "SessionContext", log: logging.Logger, cmd: str) -> None:
     ctx.writer.write(cmd + "\r\n")  # type: ignore[arg-type]
 
 
+def _dispatch_repl_action(cmd: str, ctx: "SessionContext", log: logging.Logger) -> bool:
+    """
+    Dispatch a REPL action backtick command via ``ctx.repl_actions``.
+
+    Returns ``True`` if the command was recognized and handled (or
+    silently ignored because the action is unavailable), ``False``
+    if the command is not a REPL action.
+    """
+    am = REPL_ACTION_RE.match(cmd)
+    if am:
+        name = am.group(1).lower()
+        action = ctx.repl_actions.get(name)
+        if action is not None:
+            action()
+        else:
+            log.debug("repl action %r not available", name)
+        return True
+
+    em = EDIT_RE.match(cmd)
+    if em:
+        tab = em.group(1).lower()
+        action = ctx.repl_actions.get("edit")
+        if action is not None:
+            action(tab)
+        else:
+            log.debug("repl action 'edit' not available")
+        return True
+
+    tm = TOGGLE_RE.match(cmd)
+    if tm:
+        name = tm.group(1).lower()
+        action = ctx.repl_actions.get(f"toggle_{name}")
+        if action is not None:
+            action()
+        else:
+            log.debug("repl action 'toggle_%s' not available", name)
+        return True
+
+    wdm = WALK_DIALOG_RE.match(cmd)
+    if wdm:
+        name = wdm.group(1).lower()
+        action = ctx.repl_actions.get(f"{name}_dialog")
+        if action is None:
+            action = ctx.repl_actions.get(f"{name}_walk")
+        if action is not None:
+            action()
+        else:
+            log.debug("repl action '%s_dialog' not available", name)
+        return True
+
+    return False
+
+
 async def execute_macro_commands(text: str, ctx: "SessionContext", log: logging.Logger) -> None:
     """
     Execute a macro text string, handling travel, delay, when, and until commands.
@@ -732,6 +792,10 @@ async def execute_macro_commands(text: str, ctx: "SessionContext", log: logging.
     idx = 0
     while idx < len(parts):
         cmd = parts[idx]
+
+        if _dispatch_repl_action(cmd, ctx, log):
+            idx += 1
+            continue
 
         if TRAVEL_RE.match(cmd):
             remainder = await handle_travel_commands(parts[idx:], ctx, log)

@@ -106,6 +106,17 @@ def load_configs(ctx: session_context.SessionContext) -> None:
     ctx.macros_file = macros_path
     if os.path.isfile(macros_path):
         ctx.macro_defs = macros.load_macros(macros_path, session_key)
+    ctx.macro_defs = macros.ensure_builtin_macros(ctx.macro_defs)
+
+    # resolve dynamic keyboard escape from disconnect builtin
+    disconnect = next(
+        (m for m in ctx.macro_defs if m.builtin_name == "disconnect" and m.enabled),
+        None,
+    )
+    if disconnect is not None:
+        seq = macros.key_name_to_seq(disconnect.key)
+        if seq is not None:
+            ctx.keyboard_escape = seq
 
     # autoreplies
     autoreplies_path = os.path.join(config_dir, "autoreplies.json")
@@ -163,6 +174,8 @@ def want_repl(
     writer: (telnetlib3.stream_writer.TelnetWriter | telnetlib3.stream_writer.TelnetWriterUnicode),
 ) -> bool:
     """Return True when the REPL should be active."""
+    if ctx.raw_mode is True:
+        return False
     return ctx.repl_enabled and getattr(writer, "mode", "local") == "local"
 
 
@@ -174,16 +187,14 @@ def _setup_color_filter(
     ),
 ) -> None:
     """
-    Create and attach a color filter from CLI args and terminal detection.
+    Create and attach a color filter from telix CLI args and terminal detection.
 
-    Parses ``--colormatch``, ``--color-brightness``, ``--color-contrast``,
-    ``--background-color``, ``--ice-colors`` from ``sys.argv`` and creates
-    the appropriate filter.  For retro encodings (PETSCII, ATASCII), uses
-    the encoding-specific filter instead of ColorFilter.
+    Reads color options from :data:`telix.main._color_args` (set by
+    :func:`~telix.main.main` before the shell starts) and encoding from
+    the telnetlib3 writer context.  For retro encodings (PETSCII, ATASCII),
+    uses the encoding-specific filter instead of ColorFilter.
     """
-    import io
-    import contextlib
-
+    from . import main as _main_mod
     from .color_filter import (
         PALETTES,
         ColorConfig,
@@ -192,18 +203,17 @@ def _setup_color_filter(
         AtasciiControlFilter,
     )
 
-    _stderr_buf = io.StringIO()
-    try:
-        with contextlib.redirect_stderr(_stderr_buf):
-            args = telnetlib3.client._get_argument_parser().parse_known_args(sys.argv[1:])[0]
-    except (SystemExit, Exception):
+    args = _main_mod._color_args
+    if args is None:
         return
 
-    colormatch: str = getattr(args, "colormatch", "vga") or "vga"
+    colormatch: str = args.colormatch or "vga"
     if colormatch.lower() == "none":
         return
 
-    encoding_name: str = getattr(args, "encoding", "") or ""
+    encoding_name: str = getattr(writer.ctx, "encoding", "") or ""
+    if not encoding_name:
+        encoding_name = getattr(writer, "default_encoding", "") or ""
     is_petscii = encoding_name.lower() in ("petscii", "cbm", "commodore", "c64", "c128")
     is_atascii = encoding_name.lower() in ("atascii", "atari8bit", "atari_8bit")
     if colormatch == "petscii":
@@ -216,30 +226,30 @@ def _setup_color_filter(
         return
 
     if is_petscii or colormatch == "c64":
-        brightness = getattr(args, "color_brightness", 1.0)
-        contrast = getattr(args, "color_contrast", 1.0)
-        ctx.color_filter = PetsciiColorFilter(brightness=brightness, contrast=contrast)
+        ctx.color_filter = PetsciiColorFilter(
+            brightness=args.color_brightness, contrast=args.color_contrast
+        )
         return
 
     if is_atascii:
         ctx.color_filter = AtasciiControlFilter()
         return
 
-    bg_color: tuple[int, int, int] = getattr(args, "background_color", (0, 0, 0))
+    bg_color: tuple[int, int, int] = (0, 0, 0)
+    bg_str = args.background_color
+    if isinstance(bg_str, str) and bg_str.startswith("#") and len(bg_str) == 7:
+        bg_color = (int(bg_str[1:3], 16), int(bg_str[3:5], 16), int(bg_str[5:7], 16))
+    elif isinstance(bg_str, tuple):
+        bg_color = bg_str
     fg_color: tuple[int, int, int] | None = None
 
-    # Terminal color detection (best-effort)
-    try:
-        import blessed  # noqa: PLC0415
-        term = blessed.Terminal()
-        detected_bg = term.get_bgcolor(timeout=0.5, bits=8)
-        detected_fg = term.get_fgcolor(timeout=0.5, bits=8)
-        if detected_bg != (-1, -1, -1):
-            bg_color = detected_bg
-        if detected_fg != (-1, -1, -1):
-            fg_color = detected_fg
-    except Exception:
-        pass
+    # Use terminal colors cached by main() before frameworks took stdin.
+    _main_mod = sys.modules.get("telix.main")
+    if _main_mod is not None:
+        if _main_mod._detected_bg is not None:
+            bg_color = _main_mod._detected_bg
+        if _main_mod._detected_fg is not None:
+            fg_color = _main_mod._detected_fg
 
     force_black_bg = getattr(args, "force_black_bg", False)
     if force_black_bg:
@@ -249,10 +259,10 @@ def _setup_color_filter(
 
     color_config = ColorConfig(
         palette_name=colormatch,
-        brightness=getattr(args, "color_brightness", 1.0),
-        contrast=getattr(args, "color_contrast", 1.0),
+        brightness=args.color_brightness,
+        contrast=args.color_contrast,
         background_color=bg_color,
-        ice_colors=getattr(args, "ice_colors", True),
+        ice_colors=not args.no_ice_colors,
         foreground_color=fg_color,
         force_black_bg=force_black_bg,
     )
@@ -312,7 +322,7 @@ async def telix_client_shell(
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.GMCP, on_gmcp)
 
-    keyboard_escape = "\x1d"
+    keyboard_escape = ctx.keyboard_escape
 
     with telnetlib3.client_shell.Terminal(telnet_writer=telnet_writer) as tty_shell:
         linesep = "\n"
@@ -368,6 +378,22 @@ async def telix_client_shell(
 
         def check_want_repl() -> bool:
             return want_repl(ctx, telnet_writer)
+
+        # In auto mode, wait briefly for negotiation to settle before
+        # deciding to enter the REPL.  Servers that negotiate ECHO+SGA
+        # (kludge mode) often send those options shortly after the
+        # critical negotiation completes, and entering the REPL only
+        # to immediately exit causes scroll region corruption.
+        if ctx.raw_mode is None and tty_shell._istty:
+            try:
+                await asyncio.wait_for(
+                    telnet_writer.wait_for_condition(
+                        lambda w: w.mode != "local"
+                    ),
+                    timeout=0.5,
+                )
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
 
         # Outer loop: alternate between REPL and raw modes.
         while True:
@@ -469,7 +495,7 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
 
         writer.set_ext_callback(ws_transport.GMCP, on_gmcp)
 
-        keyboard_escape = "\x1d"
+        keyboard_escape = ctx.keyboard_escape
 
         # Terminal / repl_event_loop / _flush_color_filter are typed for
         # TelnetWriter but accept any duck-compatible writer at runtime.
@@ -482,7 +508,15 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
             banner_sep = "\r\n" if tty_shell._istty else linesep
             stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
-            # WebSocket is always line-mode: run REPL once (no raw loop).
+            def handle_close(msg: str) -> None:
+                cf = ctx.color_filter
+                if cf is not None:
+                    flush = cf.flush()
+                    if flush:
+                        stdout.write(flush.encode())
+                stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
+                tty_shell.cleanup_winch()
+
             if tty_shell._istty and ctx.repl_enabled:
                 await client_repl.repl_event_loop(
                     reader,  # type: ignore[arg-type]
@@ -491,14 +525,35 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
                     stdout,
                     history_file=ctx.history_file,
                 )
-
-            cf = ctx.color_filter
-            if cf is not None:
-                flush = cf.flush()
-                if flush:
-                    stdout.write(flush.encode())
-            stdout.write(f"\033[m{linesep}Connection closed.{linesep}".encode())
-            tty_shell.cleanup_winch()
+                handle_close("Connection closed.")
+            elif tty_shell._istty:
+                # Raw mode: byte-at-a-time I/O for BBS connections.
+                if tty_shell._save_mode is not None:
+                    tty_shell.set_mode(
+                        tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True)
+                    )
+                linesep = "\r\n"
+                stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
+                state = telnetlib3.client_shell._RawLoopState(
+                    switched_to_raw=True,
+                    last_will_echo=False,
+                    local_echo=True,
+                    linesep=linesep,
+                )
+                await telnetlib3.client_shell._raw_event_loop(
+                    reader,  # type: ignore[arg-type]
+                    writer,  # type: ignore[arg-type]
+                    tty_shell,
+                    stdin,
+                    stdout,
+                    keyboard_escape,
+                    state,
+                    handle_close,
+                    lambda: False,  # never switch back to REPL
+                )
+                tty_shell.disconnect_stdin(stdin)  # pylint: disable=no-member
+            else:
+                handle_close("Connection closed.")
 
         ctx.close()
     finally:

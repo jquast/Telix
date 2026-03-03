@@ -12,7 +12,14 @@ from unittest.mock import patch
 # 3rd party
 import pytest
 
-from telix.macros import Macro, load_macros, save_macros, build_macro_dispatch
+from telix.macros import (
+    Macro, load_macros, save_macros, build_macro_dispatch,
+    ensure_builtin_macros, key_name_to_seq, BUILTIN_MACROS,
+)
+from telix.client_repl_commands import (
+    REPL_ACTION_RE, EDIT_RE, TOGGLE_RE, WALK_DIALOG_RE,
+    _dispatch_repl_action,
+)
 
 # local
 from telix.client_repl import expand_commands
@@ -98,7 +105,7 @@ def test_build_dispatch_skips_editor_keymap_conflicts(caplog):
     with caplog.at_level(logging.WARNING):
         result = build_macro_dispatch(macros, writer, writer.log)
     assert "KEY_LEFT" not in result
-    assert "KEY_ALT_E" in result
+    assert "\x1be" in result
     assert "conflicts with editor keymap" in caplog.text
 
 
@@ -162,3 +169,197 @@ def test_expand_commands():
 def test_expand_commands_no_semicolon():
     cmds = expand_commands("partial text")
     assert cmds == ["partial text"]
+
+
+def test_macro_builtin_field_default_false():
+    m = Macro(key="KEY_F5", text="look")
+    assert m.builtin is False
+    assert m.builtin_name == ""
+
+
+def test_builtin_macro_roundtrip(tmp_path):
+    fp = tmp_path / "macros.json"
+    original = [
+        Macro(key="KEY_F1", text="`help`", builtin=True, builtin_name="help"),
+        Macro(key="KEY_ALT_M", text="`edit macros`", builtin=True, builtin_name="edit_macros"),
+        Macro(key="KEY_F5", text="look;"),
+    ]
+    save_macros(str(fp), original, SK)
+    loaded = load_macros(str(fp), SK)
+    assert loaded[0].builtin is True
+    assert loaded[0].builtin_name == "help"
+    assert loaded[1].builtin is True
+    assert loaded[1].builtin_name == "edit_macros"
+    assert loaded[2].builtin is False
+    assert loaded[2].builtin_name == ""
+
+
+def test_ensure_builtin_macros_injects_into_empty():
+    result = ensure_builtin_macros([])
+    names = {m.builtin_name for m in result if m.builtin}
+    assert "help" in names
+    assert "edit_macros" in names
+    assert "edit_highlights" in names
+    assert "disconnect" in names
+    assert "repaint" in names
+    assert len(result) == len(BUILTIN_MACROS)
+
+
+def test_ensure_builtin_macros_preserves_user_key_override():
+    user = [Macro(key="KEY_F2", text="`help`", builtin=True, builtin_name="help")]
+    result = ensure_builtin_macros(user)
+    help_macros = [m for m in result if m.builtin_name == "help"]
+    assert len(help_macros) == 1
+    assert help_macros[0].key == "KEY_F2"
+
+
+def test_ensure_builtin_macros_preserves_user_macros():
+    user = [Macro(key="KEY_ALT_E", text="equip all;")]
+    result = ensure_builtin_macros(user)
+    user_kept = [m for m in result if not m.builtin]
+    assert len(user_kept) == 1
+    assert user_kept[0].key == "KEY_ALT_E"
+    assert user_kept[0].text == "equip all;"
+
+
+@pytest.mark.parametrize("key_name, expected", [
+    ("KEY_CTRL_L", "\x0c"),
+    ("KEY_CTRL_CLOSE_BRACKET", "\x1d"),
+    ("KEY_CTRL_A", "\x01"),
+    ("KEY_ALT_H", "\x1bh"),
+    ("KEY_ALT_M", "\x1bm"),
+    ("KEY_ALT_SHIFT_H", "\x1bH"),
+    ("KEY_ALT_SHIFT_A", "\x1bA"),
+    ("KEY_F1", None),
+    ("KEY_F3", None),
+])
+def test_key_name_to_seq(key_name, expected):
+    assert key_name_to_seq(key_name) == expected
+
+
+def test_build_dispatch_routes_alt_to_seq():
+    pytest.importorskip("blessed")
+
+    ctx = types.SimpleNamespace()
+    macro = Macro(key="KEY_ALT_H", text="`edit highlights`")
+    log = logging.getLogger("test")
+    result = build_macro_dispatch([macro], ctx, log)
+    assert "\x1bh" in result
+    assert "KEY_ALT_H" not in result
+
+
+def test_build_dispatch_routes_alt_shift_to_seq():
+    pytest.importorskip("blessed")
+
+    ctx = types.SimpleNamespace()
+    macro = Macro(key="KEY_ALT_SHIFT_H", text="`toggle highlights`")
+    log = logging.getLogger("test")
+    result = build_macro_dispatch([macro], ctx, log)
+    assert "\x1bH" in result
+    assert "KEY_ALT_SHIFT_H" not in result
+
+
+def test_build_dispatch_routes_ctrl_to_seq():
+    pytest.importorskip("blessed")
+
+    ctx = types.SimpleNamespace()
+    macro = Macro(key="KEY_CTRL_L", text="`repaint`")
+    log = logging.getLogger("test")
+    result = build_macro_dispatch([macro], ctx, log)
+    assert "\x0c" in result
+    assert "KEY_CTRL_L" not in result
+
+
+def test_builtin_macros_constant():
+    assert len(BUILTIN_MACROS) == 15
+    names = [m.builtin_name for m in BUILTIN_MACROS]
+    assert len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("cmd, expected", [
+    ("`help`", True),
+    ("`disconnect`", True),
+    ("`repaint`", True),
+    ("`HELP`", True),
+    ("`look`", False),
+    ("help", False),
+])
+def test_repl_action_re(cmd, expected):
+    assert bool(REPL_ACTION_RE.match(cmd)) is expected
+
+
+@pytest.mark.parametrize("cmd, expected_tab", [
+    ("`edit macros`", "macros"),
+    ("`edit highlights`", "highlights"),
+    ("`edit autoreplies`", "autoreplies"),
+    ("`edit rooms`", "rooms"),
+    ("`edit captures`", "captures"),
+    ("`edit bars`", "bars"),
+    ("`edit theme`", "theme"),
+    ("`Edit Macros`", "macros"),
+])
+def test_edit_re(cmd, expected_tab):
+    m = EDIT_RE.match(cmd)
+    assert m is not None
+    assert m.group(1).lower() == expected_tab
+
+
+@pytest.mark.parametrize("cmd, expected_name", [
+    ("`toggle highlights`", "highlights"),
+    ("`toggle autoreplies`", "autoreplies"),
+    ("`Toggle Highlights`", "highlights"),
+])
+def test_toggle_re(cmd, expected_name):
+    m = TOGGLE_RE.match(cmd)
+    assert m is not None
+    assert m.group(1).lower() == expected_name
+
+
+@pytest.mark.parametrize("cmd, expected_action", [
+    ("`randomwalk dialog`", "randomwalk"),
+    ("`autodiscover dialog`", "autodiscover"),
+    ("`resume walk`", "resume"),
+    ("`Randomwalk Dialog`", "randomwalk"),
+])
+def test_walk_dialog_re(cmd, expected_action):
+    m = WALK_DIALOG_RE.match(cmd)
+    assert m is not None
+    assert m.group(1).lower() == expected_action
+
+
+def test_dispatch_repl_action_calls_help():
+    called = []
+    ctx = types.SimpleNamespace(repl_actions={"help": lambda: called.append("help")})
+    log = logging.getLogger("test")
+    assert _dispatch_repl_action("`help`", ctx, log) is True
+    assert called == ["help"]
+
+
+def test_dispatch_repl_action_calls_edit():
+    called = []
+    ctx = types.SimpleNamespace(repl_actions={"edit": lambda tab: called.append(tab)})
+    log = logging.getLogger("test")
+    assert _dispatch_repl_action("`edit macros`", ctx, log) is True
+    assert called == ["macros"]
+
+
+def test_dispatch_repl_action_calls_toggle():
+    called = []
+    ctx = types.SimpleNamespace(
+        repl_actions={"toggle_highlights": lambda: called.append("th")}
+    )
+    log = logging.getLogger("test")
+    assert _dispatch_repl_action("`toggle highlights`", ctx, log) is True
+    assert called == ["th"]
+
+
+def test_dispatch_repl_action_returns_false_for_plain():
+    ctx = types.SimpleNamespace(repl_actions={})
+    log = logging.getLogger("test")
+    assert _dispatch_repl_action("look", ctx, log) is False
+
+
+def test_dispatch_repl_action_noop_when_missing():
+    ctx = types.SimpleNamespace(repl_actions={})
+    log = logging.getLogger("test")
+    assert _dispatch_repl_action("`help`", ctx, log) is True

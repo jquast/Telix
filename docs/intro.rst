@@ -50,6 +50,12 @@ Connect directly via WebSocket::
     telix ws://mud.example.com:9119
     telix wss://mud.example.com/ws
 
+Use ``--bbs`` or ``--mud`` to apply server type presets (see
+:doc:`session-manager` for details)::
+
+    telix --bbs bbs.example.com
+    telix --mud mud.example.com 4000
+
 Run ``telix --help`` for the full list of options.
 
 Documentation

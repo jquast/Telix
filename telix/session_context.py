@@ -144,6 +144,8 @@ class SessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.key_dispatch: typing.Any | None = None
         self.cursor_style: str = ""
         self.send_line: Callable[[str], None] | None = None
+        self.repl_actions: dict[str, Callable[..., typing.Any]] = {}
+        self.keyboard_escape: str = "\x1d"
         # autoreply_wait_fn inherited from TelnetSessionContext
         self.send_naws: Callable[[], None] | None = None
 

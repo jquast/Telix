@@ -88,7 +88,7 @@ class MacroEditPane(client_tui_base.EditListPane):
         self.session_key = session_key
         self.rooms_path = rooms_file
         self.current_room_path = current_room_file
-        self.macros: list[tuple[str, str, bool, str, bool, str]] = []
+        self.macros: list[tuple[str, str, bool, str, bool, str, bool, str]] = []
         self.capturing: bool = False
         self.sort_mode: str = ""
         self.capture_escape_pending: bool = False
@@ -170,17 +170,21 @@ class MacroEditPane(client_tui_base.EditListPane):
         self.query_one("#macro-form").display = False
 
     def load_from_file(self) -> None:
-        if not os.path.exists(self.path):
-            return
-        try:
-            loaded = macros.load_macros(self.path, self.session_key)
-            self.macros = [(m.key, m.text, m.enabled, m.last_used, m.toggle, m.toggle_text) for m in loaded]
-        except (ValueError, FileNotFoundError):
-            pass
+        loaded: list[macros.Macro] = []
+        if os.path.exists(self.path):
+            try:
+                loaded = macros.load_macros(self.path, self.session_key)
+            except (ValueError, FileNotFoundError):
+                pass
+        loaded = macros.ensure_builtin_macros(loaded)
+        self.macros = [
+            (m.key, m.text, m.enabled, m.last_used, m.toggle, m.toggle_text, m.builtin, m.builtin_name)
+            for m in loaded
+        ]
 
     def matches_search(self, idx: int, query: str) -> bool:
         """Match macro key, text, or toggle_text against search query."""
-        key, text, _enabled, lu, toggle, toggle_text = self.macros[idx]
+        key, text, _enabled, _lu, _toggle, toggle_text, _builtin, _bname = self.macros[idx]
         q = query.lower()
         return q in key.lower() or q in text.lower() or q in toggle_text.lower()
 
@@ -193,12 +197,14 @@ class MacroEditPane(client_tui_base.EditListPane):
         if self.sort_mode == "last_used":
             order.sort(key=lambda i: invert_ts(self.macros[i][3]))
         for i in order:
-            key, text, enabled, last_used, toggle, toggle_text = self.macros[i]
+            key, text, enabled, last_used, toggle, toggle_text, builtin, bname = self.macros[i]
             if q and not self.matches_search(i, q):
                 continue
             status = "" if enabled else " (off)"
             if toggle:
                 status += " (toggle)"
+            if builtin:
+                status += " (builtin)"
             lu = client_tui_base.relative_time(last_used) if last_used else ""
             self.filtered_indices.append(i)
             table.add_row(key, text + status, lu, key=str(len(self.filtered_indices) - 1))
@@ -217,6 +223,8 @@ class MacroEditPane(client_tui_base.EditListPane):
         last_used: str = "",
         toggle: bool = False,
         toggle_text: str = "",
+        builtin: bool = False,
+        builtin_name: str = "",
     ) -> None:
         self.captured_key = key_val
         self.capturing = False
@@ -226,10 +234,16 @@ class MacroEditPane(client_tui_base.EditListPane):
         label.update(display)
         label.remove_class("capturing")
         self.query_one("#macro-capture-status", textual.widgets.Static).update("")
-        self.query_one("#macro-text", textual.widgets.Input).value = text_val
+        text_input = self.query_one("#macro-text", textual.widgets.Input)
+        text_input.value = text_val
+        text_input.disabled = builtin
         self.query_one("#macro-enabled", textual.widgets.Switch).value = enabled
-        self.query_one("#macro-toggle", textual.widgets.Switch).value = toggle
-        self.query_one("#macro-toggle-text", textual.widgets.Input).value = toggle_text
+        toggle_switch = self.query_one("#macro-toggle", textual.widgets.Switch)
+        toggle_switch.value = toggle
+        toggle_switch.disabled = builtin
+        toggle_text_input = self.query_one("#macro-toggle-text", textual.widgets.Input)
+        toggle_text_input.value = toggle_text
+        toggle_text_input.disabled = builtin
         text_label = self.query_one("#macro-text-label", textual.widgets.Label)
         text_label.update("On command" if toggle else "Text")
         self.query_one("#macro-toggle-text-row").display = toggle
@@ -237,12 +251,23 @@ class MacroEditPane(client_tui_base.EditListPane):
         self.query_one("#macro-table").display = False
         self.query_one("#macro-form").display = True
         self.set_action_buttons_disabled(True)
-        self.query_one("#macro-text", textual.widgets.Input).focus()
+        if builtin:
+            self.query_one("#macro-capture", textual.widgets.Button).focus()
+        else:
+            text_input.focus()
 
     def hide_form(self) -> None:
         self.capturing = False
         self.capture_escape_pending = False
         super()._hide_form()
+
+    def action_delete(self) -> None:
+        """Block deletion of builtin macros."""
+        idx = self.selected_idx()
+        if idx is not None and idx < len(self.macros) and self.macros[idx][6]:
+            self.notify("Cannot delete a builtin macro.")
+            return
+        super().action_delete()
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
         """Show/hide toggle text row when the toggle switch changes."""
@@ -260,24 +285,12 @@ class MacroEditPane(client_tui_base.EditListPane):
         toggle = self.query_one("#macro-toggle", textual.widgets.Switch).value
         toggle_text = self.query_one("#macro-toggle-text", textual.widgets.Input).value
         lu = self.macros[self.editing_idx][3] if self.editing_idx is not None else ""
-        self.finalize_edit((key_val, text_val, enabled, lu, toggle, toggle_text), bool(key_val))
-
-    REPL_RESERVED_KEYS: ClassVar[frozenset[str]] = frozenset(
-        {
-            "KEY_F1",
-            "KEY_F3",
-            "KEY_F4",
-            "KEY_F5",
-            "KEY_F6",
-            "KEY_F7",
-            "KEY_F8",
-            "KEY_F9",
-            "KEY_F10",
-            "KEY_F11",
-            "KEY_F18",
-            "KEY_F21",
-        }
-    )
+        builtin = self.macros[self.editing_idx][6] if self.editing_idx is not None else False
+        bname = self.macros[self.editing_idx][7] if self.editing_idx is not None else ""
+        self.finalize_edit(
+            (key_val, text_val, enabled, lu, toggle, toggle_text, builtin, bname),
+            bool(key_val),
+        )
 
     @staticmethod
     def blessed_display(blessed_name: str) -> str:
@@ -290,9 +303,6 @@ class MacroEditPane(client_tui_base.EditListPane):
         """Accept a captured key and update the form."""
         if blessed_key in blessed.line_editor.DEFAULT_KEYMAP:
             self.reject_capture(f"Rejected: {display} -- reserved by line editor")
-            return
-        if blessed_key in self.REPL_RESERVED_KEYS:
-            self.reject_capture(f"Rejected: {display} -- reserved by REPL")
             return
         self.capturing = False
         self.capture_escape_pending = False
@@ -319,8 +329,12 @@ class MacroEditPane(client_tui_base.EditListPane):
                     blessed_key = "KEY_ESCAPE"
                     self.finish_capture(blessed_key, "ESCAPE")
                 elif len(key) == 1 and key.isalpha():
-                    blessed_key = "KEY_ALT_" + key.upper()
-                    self.finish_capture(blessed_key, "ALT_" + key.upper())
+                    if key.isupper():
+                        blessed_key = "KEY_ALT_SHIFT_" + key.upper()
+                        self.finish_capture(blessed_key, "ALT_SHIFT_" + key.upper())
+                    else:
+                        blessed_key = "KEY_ALT_" + key.upper()
+                        self.finish_capture(blessed_key, "ALT_" + key.upper())
                 else:
                     self.reject_capture(f"Rejected: escape+{key} -- use Esc then a letter")
                 return
@@ -338,17 +352,37 @@ class MacroEditPane(client_tui_base.EditListPane):
                 return
 
             if key.startswith("ctrl+"):
-                letter = key[5:]
+                suffix = key[5:]
+                if len(suffix) == 1 and suffix.isalpha():
+                    blessed_key = "KEY_CTRL_" + suffix.upper()
+                    self.finish_capture(blessed_key, "CTRL_" + suffix.upper())
+                    return
+                ctrl_special = {
+                    "close_bracket": "CLOSE_BRACKET",
+                    "open_bracket": "OPEN_BRACKET",
+                    "backslash": "BACKSLASH",
+                }
+                if suffix in ctrl_special:
+                    blessed_key = "KEY_CTRL_" + ctrl_special[suffix]
+                    self.finish_capture(blessed_key, "CTRL_" + ctrl_special[suffix])
+                    return
+
+            if key.startswith("alt+shift+"):
+                letter = key[10:]
                 if len(letter) == 1 and letter.isalpha():
-                    blessed_key = "KEY_CTRL_" + letter.upper()
-                    self.finish_capture(blessed_key, "CTRL_" + letter.upper())
+                    blessed_key = "KEY_ALT_SHIFT_" + letter.upper()
+                    self.finish_capture(blessed_key, "ALT_SHIFT_" + letter.upper())
                     return
 
             if key.startswith("alt+"):
                 letter = key[4:]
                 if len(letter) == 1 and letter.isalpha():
-                    blessed_key = "KEY_ALT_" + letter.upper()
-                    self.finish_capture(blessed_key, "ALT_" + letter.upper())
+                    if letter.isupper():
+                        blessed_key = "KEY_ALT_SHIFT_" + letter.upper()
+                        self.finish_capture(blessed_key, "ALT_SHIFT_" + letter.upper())
+                    else:
+                        blessed_key = "KEY_ALT_" + letter.upper()
+                        self.finish_capture(blessed_key, "ALT_" + letter.upper())
                     return
 
             self.reject_capture(f"Rejected: {key} -- use F-keys, Ctrl+key, or Alt+key")
@@ -379,8 +413,11 @@ class MacroEditPane(client_tui_base.EditListPane):
     def save_to_file(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         macro_list = [
-            macros.Macro(key=k, text=t, enabled=ena, last_used=lu, toggle=tog, toggle_text=tt)
-            for k, t, ena, lu, tog, tt in self.macros
+            macros.Macro(
+                key=k, text=t, enabled=ena, last_used=lu,
+                toggle=tog, toggle_text=tt, builtin=bi, builtin_name=bn,
+            )
+            for k, t, ena, lu, tog, tt, bi, bn in self.macros
         ]
         macros.save_macros(self.path, macro_list, self.session_key)
 

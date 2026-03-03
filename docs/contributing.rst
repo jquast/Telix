@@ -189,6 +189,12 @@ positional argument and routes to one of three paths:
   shell is a drop-in replacement for
   ``telnetlib3.client_shell.telnet_client_shell``.
 
+Before routing, ``main()`` checks for ``--bbs`` or ``--mud`` and removes
+the flag from ``sys.argv``.  The flag injects preset arguments
+(``BBS_TELNET_FLAGS`` / ``MUD_TELNET_FLAGS``) that mirror the TUI session
+editor presets.  For BBS, the telix shell is not injected (REPL disabled);
+for WebSocket connections, ``--bbs`` sets ``no_repl=True``.
+
 The TUI launches connection subprocesses via ``subprocess.Popen``.  Both
 transports use the same ``python -c "from telix.main import main; main()"``
 invocation -- the URL or host argument in the subprocess command determines

@@ -170,6 +170,17 @@ class WebSocketWriter:
         """
         self._send_queue.put_nowait(text.encode("utf-8") if isinstance(text, str) else text)
 
+    def _write(self, buf: bytes, escape_iac: bool = True) -> None:
+        """
+        Write raw bytes for sending (telnetlib3 raw event loop compatibility).
+
+        IAC escaping is ignored -- WebSocket framing does not use IAC.
+
+        :param buf: Bytes to send.
+        :param escape_iac: Ignored (present for API compatibility).
+        """
+        self._send_queue.put_nowait(buf)
+
     def _send_naws(self) -> None:
         """No-op stub for telnetlib3 NAWS negotiation."""
 

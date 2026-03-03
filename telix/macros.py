@@ -23,7 +23,10 @@ import blessed.line_editor
 
 from . import paths
 
-__all__ = ("Macro", "build_macro_dispatch", "load_macros", "save_macros")
+__all__ = (
+    "Macro", "build_macro_dispatch", "load_macros", "save_macros",
+    "ensure_builtin_macros", "key_name_to_seq", "BUILTIN_MACROS",
+)
 
 
 @dataclasses.dataclass
@@ -33,6 +36,10 @@ class Macro:
 
     :param key: Blessed key name (e.g. ``KEY_F5``, ``KEY_ALT_E``).
     :param text: Text to insert/send, with ``;`` as command separators.
+    :param builtin: When true, the macro is a system default that cannot
+        be deleted in the editor.
+    :param builtin_name: Stable identifier for builtin macros (e.g.
+        ``"help"``, ``"edit_macros"``).  Empty for user-defined macros.
     """
 
     key: str
@@ -42,6 +49,8 @@ class Macro:
     toggle: bool = False
     toggle_text: str = ""
     toggle_state: bool = False
+    builtin: bool = False
+    builtin_name: str = ""
 
 
 def parse_entries(entries: list[dict[str, str]]) -> list[Macro]:
@@ -56,8 +65,14 @@ def parse_entries(entries: list[dict[str, str]]) -> list[Macro]:
         last_used = str(entry.get("last_used", ""))
         toggle = bool(entry.get("toggle", False))
         toggle_text = str(entry.get("toggle_text", ""))
+        builtin = bool(entry.get("builtin", False))
+        builtin_name = str(entry.get("builtin_name", ""))
         macros.append(
-            Macro(key=key, text=text, enabled=enabled, last_used=last_used, toggle=toggle, toggle_text=toggle_text)
+            Macro(
+                key=key, text=text, enabled=enabled, last_used=last_used,
+                toggle=toggle, toggle_text=toggle_text,
+                builtin=builtin, builtin_name=builtin_name,
+            )
         )
     return macros
 
@@ -106,6 +121,7 @@ def save_macros(path: str, macros: list[Macro], session_key: str) -> None:
                 **({"enabled": False} if not m.enabled else {}),
                 **({"last_used": m.last_used} if m.last_used else {}),
                 **({"toggle": True, "toggle_text": m.toggle_text} if m.toggle else {}),
+                **({"builtin": True, "builtin_name": m.builtin_name} if m.builtin else {}),
             }
             for m in macros
         ]
@@ -113,6 +129,101 @@ def save_macros(path: str, macros: list[Macro], session_key: str) -> None:
 
     content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
     paths.atomic_write(path, content)
+
+
+# Ctrl key name to ASCII control character offset.
+_CTRL_CHAR_MAP: dict[str, str] = {
+    "KEY_CTRL_A": "\x01", "KEY_CTRL_B": "\x02", "KEY_CTRL_C": "\x03",
+    "KEY_CTRL_D": "\x04", "KEY_CTRL_E": "\x05", "KEY_CTRL_F": "\x06",
+    "KEY_CTRL_G": "\x07", "KEY_CTRL_H": "\x08", "KEY_CTRL_I": "\x09",
+    "KEY_CTRL_J": "\x0a", "KEY_CTRL_K": "\x0b", "KEY_CTRL_L": "\x0c",
+    "KEY_CTRL_M": "\x0d", "KEY_CTRL_N": "\x0e", "KEY_CTRL_O": "\x0f",
+    "KEY_CTRL_P": "\x10", "KEY_CTRL_Q": "\x11", "KEY_CTRL_R": "\x12",
+    "KEY_CTRL_S": "\x13", "KEY_CTRL_T": "\x14", "KEY_CTRL_U": "\x15",
+    "KEY_CTRL_V": "\x16", "KEY_CTRL_W": "\x17", "KEY_CTRL_X": "\x18",
+    "KEY_CTRL_Y": "\x19", "KEY_CTRL_Z": "\x1a",
+    "KEY_CTRL_OPEN_BRACKET": "\x1b",
+    "KEY_CTRL_BACKSLASH": "\x1c",
+    "KEY_CTRL_CLOSE_BRACKET": "\x1d",
+    "KEY_CTRL_CARET": "\x1e",
+    "KEY_CTRL_UNDERSCORE": "\x1f",
+}
+
+
+def key_name_to_seq(name: str) -> str | None:
+    """
+    Convert a blessed key name to a raw character sequence.
+
+    Returns ``None`` for key names that have no single-sequence
+    representation (e.g. F-keys, which are multi-byte terminal
+    escape sequences handled by blessed's keyboard database).
+
+    :param name: Blessed key name (e.g. ``KEY_CTRL_L``, ``KEY_ALT_H``).
+    :returns: Raw character sequence, or ``None``.
+    """
+    if name in _CTRL_CHAR_MAP:
+        return _CTRL_CHAR_MAP[name]
+    if name.startswith("KEY_ALT_SHIFT_"):
+        letter = name[len("KEY_ALT_SHIFT_"):]
+        if len(letter) == 1 and letter.isalpha():
+            return "\x1b" + letter.upper()
+    if name.startswith("KEY_ALT_"):
+        letter = name[len("KEY_ALT_"):]
+        if len(letter) == 1 and letter.isalpha():
+            return "\x1b" + letter.lower()
+    return None
+
+
+BUILTIN_MACROS: list[Macro] = [
+    Macro(key="KEY_F1", text="`help`",
+          builtin=True, builtin_name="help"),
+    Macro(key="KEY_F3", text="`randomwalk dialog`",
+          builtin=True, builtin_name="randomwalk_dialog"),
+    Macro(key="KEY_F4", text="`autodiscover dialog`",
+          builtin=True, builtin_name="autodiscover_dialog"),
+    Macro(key="KEY_F5", text="`resume walk`",
+          builtin=True, builtin_name="resume_walk"),
+    Macro(key="KEY_ALT_H", text="`edit highlights`",
+          builtin=True, builtin_name="edit_highlights"),
+    Macro(key="KEY_ALT_M", text="`edit macros`",
+          builtin=True, builtin_name="edit_macros"),
+    Macro(key="KEY_ALT_A", text="`edit autoreplies`",
+          builtin=True, builtin_name="edit_autoreplies"),
+    Macro(key="KEY_ALT_R", text="`edit rooms`",
+          builtin=True, builtin_name="edit_rooms"),
+    Macro(key="KEY_ALT_C", text="`edit captures`",
+          builtin=True, builtin_name="edit_captures"),
+    Macro(key="KEY_ALT_B", text="`edit bars`",
+          builtin=True, builtin_name="edit_bars"),
+    Macro(key="KEY_ALT_T", text="`edit theme`",
+          builtin=True, builtin_name="edit_theme"),
+    Macro(key="KEY_ALT_SHIFT_H", text="`toggle highlights`",
+          builtin=True, builtin_name="toggle_highlights"),
+    Macro(key="KEY_ALT_SHIFT_A", text="`toggle autoreplies`",
+          builtin=True, builtin_name="toggle_autoreplies"),
+    Macro(key="KEY_CTRL_L", text="`repaint`",
+          builtin=True, builtin_name="repaint"),
+    Macro(key="KEY_CTRL_CLOSE_BRACKET", text="`disconnect`",
+          builtin=True, builtin_name="disconnect"),
+]
+
+
+def ensure_builtin_macros(macros: list[Macro]) -> list[Macro]:
+    """
+    Ensure all builtin macros are present in a macro list.
+
+    Missing builtins are appended.  Existing builtins (matched by
+    ``builtin_name``) are preserved, keeping any user key overrides.
+
+    :param macros: Existing macro list (may be empty).
+    :returns: New list with all builtins guaranteed present.
+    """
+    existing_names = {m.builtin_name for m in macros if m.builtin_name}
+    result = list(macros)
+    for builtin in BUILTIN_MACROS:
+        if builtin.builtin_name not in existing_names:
+            result.append(dataclasses.replace(builtin))
+    return result
 
 
 def build_macro_dispatch(macros: list[Macro], ctx: typing.Any, log: logging.Logger) -> dict[str, typing.Any]:
@@ -158,5 +269,6 @@ def build_macro_dispatch(macros: list[Macro], ctx: typing.Any, log: logging.Logg
 
             task.add_done_callback(on_done)
 
-        result[macro.key] = handler
+        seq = key_name_to_seq(macro.key)
+        result[seq if seq is not None else macro.key] = handler
     return result

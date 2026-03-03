@@ -71,7 +71,8 @@ class TestLoadConfigs:
         assert ctx.highlights_file.endswith("highlights.json")
         assert ctx.history_file is not None
         assert ctx.rooms_file.endswith(".db")
-        assert ctx.macro_defs == []
+        assert all(m.builtin for m in ctx.macro_defs)
+        assert len(ctx.macro_defs) == 15
         assert ctx.autoreply_rules == []
         assert ctx.highlight_rules == []
 
@@ -96,7 +97,7 @@ class TestLoadConfigs:
 
         ctx = SessionContext(session_key="host:1234")
         load_configs(ctx)
-        assert ctx.macro_defs is sentinel
+        assert ctx.macro_defs[0] is sentinel[0]
 
     def test_creates_dirs(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         cfg = tmp_path / "new_cfg"
@@ -135,6 +136,14 @@ class TestWantRepl:
         ctx.repl_enabled = True
         writer = MagicMock()
         writer.mode = "kludge"
+        assert want_repl(ctx, writer) is False
+
+    def test_raw_mode_forced(self) -> None:
+        ctx = SessionContext()
+        ctx.repl_enabled = True
+        ctx.raw_mode = True
+        writer = MagicMock()
+        writer.mode = "local"
         assert want_repl(ctx, writer) is False
 
     def test_no_mode_attr(self) -> None:

@@ -69,10 +69,7 @@ def validate_highlight(term: blessed.Terminal, name: str) -> bool:
     :param term: Blessed terminal instance.
     :param name: Compoundable attribute name, e.g. ``"bold_red_on_white"``.
     """
-    try:
-        attr = getattr(term, name)
-    except Exception:
-        return False
+    attr = getattr(term, name)
     return callable(attr)
 
 
@@ -273,11 +270,7 @@ class HighlightEngine:
     def get_highlight_seq(self, name: str) -> str:
         """Return the SGR sequence string for a blessed compoundable name."""
         if name not in self.highlight_cache:
-            try:
-                attr = getattr(self.term, name)
-                self.highlight_cache[name] = str(attr)
-            except Exception:
-                self.highlight_cache[name] = ""
+            self.highlight_cache[name] = str(getattr(self.term, name))
         return self.highlight_cache[name]
 
     def process_line(self, line: str) -> tuple[str, bool]:

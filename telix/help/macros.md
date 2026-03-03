@@ -4,6 +4,33 @@ Macros bind a **keystroke** to a **command sequence**.  When the key is
 pressed during a telnet session, the command text is expanded and executed
 exactly as if you had typed it at the input line.
 
+### Builtin Macros
+
+Telix ships with builtin macros for all default key bindings (help,
+editors, toggles, walk modes, repaint, disconnect).  Builtins are
+marked **(builtin)** in the table.  You can rebind the key or
+disable a builtin, but you cannot delete it.
+
+### Default Key Bindings
+
+| Key | Action |
+|-----|--------|
+| F1 | Help |
+| F3 | Random walk dialog |
+| F4 | Autodiscover dialog |
+| F5 | Resume last walk |
+| Alt+H | Edit highlights |
+| Alt+M | Edit macros |
+| Alt+A | Edit autoreplies |
+| Alt+R | Edit rooms |
+| Alt+C | Edit captures |
+| Alt+B | Edit bars |
+| Alt+T | Edit theme |
+| Alt+Shift+H | Toggle highlights |
+| Alt+Shift+A | Toggle autoreplies |
+| Ctrl+L | Repaint screen |
+| Ctrl+] | Disconnect |
+
 ### Table Columns
 
 | Column | Meaning |
@@ -19,7 +46,7 @@ exactly as if you had typed it at the input line.
 | **Add** | Create a new macro |
 | **Edit** | Edit the selected macro |
 | **Copy** | Duplicate the selected macro |
-| **Delete** | Delete the selected macro (with confirmation) |
+| **Delete** | Delete the selected macro (builtins cannot be deleted) |
 | **Save** | Save all changes to disk and close |
 | **Cancel** | Discard changes and close |
 
@@ -28,7 +55,7 @@ exactly as if you had typed it at the input line.
 - **Enabled** -- toggle the macro on/off without deleting it
 - **Key** -- click "Capture" then press the desired keystroke
 - **Text** -- the command sequence (use `;` and `|` separators, backtick
-  commands)
+  commands); read-only for builtin macros
 
 ### Keyboard Shortcuts
 
@@ -57,14 +84,14 @@ the **Toggle** switch in the form to turn a macro into a toggle.
 Toggle macros always start in the "on" state when the session begins.
 The current toggle state is not saved to disk.
 
-### Example Macros
+### Example User Macros
 
 | Key | Text | Notes |
 |-----|------|-------|
 | Alt+E | `get boots;get jacket;take crysknife;wield crysknife;equip boots;equip cloak` | Equip gear after respawn |
-| Alt+H | `` `travel 8bd9a5e5`;5order splint;5order bandage;`return` `` | Buy supplies and return |
+| Alt+S | `` `travel 8bd9a5e5`;5order splint;5order bandage;`return` `` | Buy supplies and return |
 | F2 | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
-| F4 | `3n;2e;look` | Navigate and look |
+| F6 | `3n;2e;look` | Navigate and look |
 | Ctrl+R | `` `return` `` | Return to macro start room |
-| F3 | `` `autodiscover 50` `` | Explore 50 unvisited exits |
-| F5 | `survey on` / `survey off` | Toggle macro -- alternates each press |
+| Alt+D | `` `autodiscover 50` `` | Explore 50 unvisited exits |
+| F7 | `survey on` / `survey off` | Toggle macro -- alternates each press |

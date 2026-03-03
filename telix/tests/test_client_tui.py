@@ -112,6 +112,7 @@ def test_build_command_minimal() -> None:
     cmd = build_command(cfg)
     assert cmd[0] == sys.executable
     assert cmd[1] == "-c"
+    assert "telix.main" in cmd[2]
     assert "example.com" in cmd
     assert "23" in cmd
     assert "--ssl" not in cmd
@@ -137,7 +138,6 @@ def test_build_command_auto_mode_no_flag() -> None:
     [
         ({"ssl": True, "ssl_no_verify": True, "port": 992}, ["--ssl", "--ssl-no-verify"]),
         ({"colormatch": "cga", "background_color": "#101010"}, ["--colormatch", "--background-color"]),
-        ({"no_repl": True}, ["--no-repl"]),
         ({"connect_timeout": 5.0}, ["--connect-timeout"]),
         ({"ansi_keys": True, "ascii_eol": True}, ["--ansi-keys", "--ascii-eol"]),
     ],
@@ -150,6 +150,12 @@ def test_build_command_flags(
     cmd = build_command(cfg)
     for flag in expected_flags:
         assert flag in cmd
+
+
+def test_build_command_no_repl_emits_flag() -> None:
+    cfg = SessionConfig(host="h", port=23, no_repl=True)
+    cmd = build_command(cfg)
+    assert "--no-repl" in cmd
 
 
 def test_build_command_ssl_cafile() -> None:
@@ -283,7 +289,7 @@ def test_build_command_websocket_ws_path_empty() -> None:
 def test_build_command_telnet_default_protocol() -> None:
     cfg = SessionConfig(host="example.com", port=23)
     cmd = build_command(cfg)
-    assert "telnetlib3" in cmd[2]
+    assert "telix.main" in cmd[2]
     assert "ws_client" not in cmd[2]
 
 
@@ -345,15 +351,19 @@ def test_macro_screen_loads_file(tmp_path) -> None:
     fp.write_text(json.dumps({sk: {"macros": [{"key": "KEY_F5", "text": "look;"}]}}))
     screen = MacroEditScreen(path=str(fp), session_key=sk)
     screen.pane.load_from_file()
-    assert len(screen.pane.macros) == 1
-    assert screen.pane.macros[0] == ("KEY_F5", "look;", True, "", False, "")
+    user_macros = [m for m in screen.pane.macros if not m[6]]
+    assert len(user_macros) == 1
+    assert user_macros[0][:6] == ("KEY_F5", "look;", True, "", False, "")
 
 
 def test_macro_screen_save(tmp_path) -> None:
     sk = "test.host:23"
     fp = tmp_path / "macros.json"
     screen = MacroEditScreen(path=str(fp), session_key=sk)
-    screen.pane.macros = [("KEY_F5", "look;", True, "", False, ""), ("KEY_ALT_N", "north;", True, "", False, "")]
+    screen.pane.macros = [
+        ("KEY_F5", "look;", True, "", False, "", False, ""),
+        ("KEY_ALT_N", "north;", True, "", False, "", False, ""),
+    ]
     screen.pane.save_to_file()
 
     loaded = load_macros(str(fp), sk)

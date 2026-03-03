@@ -7,6 +7,7 @@ editor app infrastructure.  No imports from other ``client_tui_*`` files.
 """
 
 # std imports
+import io
 import os
 import abc
 import sys
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from textual.widget import Widget
 
 # 3rd party
+import rich.console
 import textual.app
 import textual.events
 import textual.screen
@@ -95,10 +97,6 @@ def render_exit_renderables(app: "EditorApp") -> str:
     :param app: The Textual editor app that has exited.
     :returns: Rendered text of exit renderables.
     """
-    import io  # noqa: PLC0415
-
-    import rich.console  # noqa: PLC0415
-
     buf = io.StringIO()
     console = rich.console.Console(file=buf, width=120, force_terminal=False)
     for renderable in app._exit_renderables:
@@ -371,10 +369,6 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
     ("encoding", "--encoding", "utf8"),
     ("speed", "--speed", 38400),
     ("encoding_errors", "--encoding-errors", "replace"),
-    ("colormatch", "--colormatch", "vga"),
-    ("color_brightness", "--color-brightness", 1.0),
-    ("color_contrast", "--color-contrast", 1.0),
-    ("background_color", "--background-color", "#000000"),
     ("connect_minwait", "--connect-minwait", 0.0),
     ("connect_maxwait", "--connect-maxwait", 4.0),
     ("send_environ", "--send-environ", "TERM,LANG,COLUMNS,LINES,COLORTERM"),
@@ -389,12 +383,23 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
 CMD_BOOL_FLAGS: list[tuple[str, str, bool]] = [
     ("ssl", "--ssl", False),
     ("ssl_no_verify", "--ssl-no-verify", False),
-    ("no_repl", "--no-repl", False),
     ("ansi_keys", "--ansi-keys", False),
     ("ascii_eol", "--ascii-eol", False),
 ]
 
-CMD_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
+CMD_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = []
+
+# Telix-specific flags parsed by telix.main, not telnetlib3.
+TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
+    ("colormatch", "--colormatch", "vga"),
+    ("color_brightness", "--color-brightness", 1.0),
+    ("color_contrast", "--color-contrast", 1.0),
+    ("background_color", "--background-color", "#000000"),
+]
+
+TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [
+    ("ice_colors", "--no-ice-colors", True),
+]
 
 
 def build_command(config: SessionConfig) -> list[str]:
@@ -410,14 +415,25 @@ def build_command(config: SessionConfig) -> list[str]:
 
 def build_telnet_command(config: SessionConfig) -> list[str]:
     """
-    Build ``telnetlib3-client`` CLI arguments from *config*.
+    Build ``telix`` CLI arguments from *config*.
 
+    Uses telix's own entry point so telix-specific flags (color, REPL)
+    are parsed before telnetlib3 sees the remaining arguments.
     Only emits flags that differ from the CLI defaults.
     """
-    cmd = [sys.executable, "-c", "from telnetlib3.client import main; main()", config.host, str(config.port)]
+    cmd = [sys.executable, "-c", "from telix.main import main; main()", config.host, str(config.port)]
 
-    if not config.no_repl:
-        cmd.extend(["--shell", "telix.client_shell.telix_client_shell"])
+    if config.no_repl:
+        cmd.append("--no-repl")
+
+    for attr, flag, default in TELIX_STR_FLAGS:
+        val = getattr(config, attr)
+        if val != default:
+            cmd.extend([flag, str(val)])
+
+    for attr, flag, default in TELIX_NEG_BOOL_FLAGS:
+        if getattr(config, attr) != default:
+            cmd.append(flag)
 
     for attr, flag, default in CMD_STR_FLAGS:
         val = getattr(config, attr)
@@ -470,9 +486,10 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         ws_path = "/" + ws_path
     url = f"{scheme}://{host_part}{ws_path}"
     cmd = [sys.executable, "-c", "from telix.main import main; main()", url]
-    if config.no_repl:
+    if config.no_repl or config.mode == "raw":
         cmd.append("--no-repl")
     for field, flag, default in [
+        ("loglevel", "--loglevel", "warn"),
         ("logfile", "--logfile", ""),
         ("typescript", "--typescript", ""),
         ("logfile_mode", "--logfile-mode", "append"),
@@ -1037,7 +1054,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         max-width: 14;
     }
     .field-input-short {
-        max-width: 8;
+        max-width: 10;
     }
     #palette-preview {
         width: 1fr;
@@ -1061,6 +1078,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         self.config = config
         self.is_defaults = is_defaults
         self.is_new = is_new
+        from telix import main as _main_mod
+        self.detected_bg = _main_mod._detected_bg
 
     TAB_IDS: typing.ClassVar[list[tuple[str, str]]] = [
         ("Connection", "tab-connection"),
@@ -1190,36 +1209,55 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             textual.widgets.Input(value=str(int(cfg.color_contrast * 100)), id="color-contrast", classes="field-input-short"),
             classes="field-row",
         )
-        with textual.containers.Horizontal(classes="switch-row"):
-            yield textual.widgets.Label("iCE Colors", classes="field-label")
-            yield textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
-        with textual.containers.Horizontal(classes="switch-row"):
-            yield textual.widgets.Label("Force Black BG", classes="field-label")
-            yield textual.widgets.Switch(value=cfg.force_black_bg, id="force-black-bg")
+        has_detected = self.detected_bg is not None
+        force_val = True if not has_detected else cfg.force_black_bg
+        with textual.containers.Horizontal():
+            with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label("iCE Colors", classes="field-label")
+                yield textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
+            with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label(
+                    "Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}"
+                )
+                switch = textual.widgets.Switch(
+                    value=force_val, id="force-black-bg", disabled=not has_detected
+                )
+                if not has_detected:
+                    switch.tooltip = "Could not detect background color of your terminal"
+                yield switch
+        if has_detected:
+            r, g, b = self.detected_bg
+            hex_color = f"#{r:02x}{g:02x}{b:02x}"
+            yield textual.containers.Horizontal(
+                textual.widgets.Label("Detected Background", classes="field-label"),
+                textual.widgets.Static(
+                    f"[on rgb({r},{g},{b})]  [/] {hex_color}", id="detected-bg-color"
+                ),
+                classes="field-row",
+            )
 
     def compose_advanced_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Advanced tab pane."""
-        yield textual.containers.Horizontal(
-            textual.widgets.Label("Connection Timeout", id="conn-timeout-label"),
-            textual.widgets.Input(value=str(cfg.connect_timeout), id="connect-timeout"),
-            classes="field-row",
-        )
         yield self.field_row(
             "Send Environ", textual.widgets.Input(value=cfg.send_environ, id="send-environ", classes="field-input")
         )
         yield textual.containers.Horizontal(
             textual.widgets.Label("LogFile", classes="field-label"),
             textual.widgets.Input(value=cfg.logfile, placeholder="path", id="logfile", classes="field-input"),
-            textual.widgets.Label("Level", classes="field-label-short"),
-            textual.widgets.Select(
-                [(v, v) for v in ("trace", "debug", "info", "warn", "error", "critical")],
-                value=cfg.loglevel,
-                id="loglevel",
-            ),
             textual.widgets.RadioSet(
                 textual.widgets.RadioButton("Append", value=cfg.logfile_mode == "append"),
                 textual.widgets.RadioButton("Rewrite", value=cfg.logfile_mode == "rewrite"),
                 id="logfile-mode",
+            ),
+            classes="field-row",
+        )
+        yield textual.containers.Horizontal(
+            textual.widgets.Label("Level", classes="field-label"),
+            textual.widgets.Select(
+                [(v, v) for v in ("trace", "debug", "info", "warn", "error", "critical")],
+                value=cfg.loglevel,
+                id="loglevel",
+                classes="field-input",
             ),
             classes="field-row",
         )
@@ -1231,6 +1269,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 textual.widgets.RadioButton("Rewrite", value=cfg.typescript_mode == "rewrite"),
                 id="typescript-mode",
             ),
+            classes="field-row",
+        )
+        yield textual.containers.Horizontal(
+            textual.widgets.Label("Connection Timeout", id="conn-timeout-label", classes="field-label"),
+            textual.widgets.Input(value=str(cfg.connect_timeout), id="connect-timeout", classes="field-input"),
             classes="field-row",
         )
 
@@ -1286,6 +1329,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             is_raw = event.pressed.id == "mode-raw"
             repl_switch = self.query_one("#use-repl", textual.widgets.Switch)
             repl_switch.disabled = is_raw
+            if is_raw:
+                repl_switch.value = False
+            else:
+                repl_switch.value = True
             self.query_one("#repl-label", textual.widgets.Label).set_class(is_raw, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
@@ -1349,8 +1396,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             self.update_palette_preview()
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
-        """Update palette preview when ice_colors changes."""
-        if event.switch.id == "ice-colors":
+        """Update palette preview when ice_colors or force_black_bg changes."""
+        if event.switch.id in ("ice-colors", "force-black-bg"):
             self.update_palette_preview()
 
     def update_palette_preview(self) -> None:
@@ -1364,9 +1411,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             return
         brightness = self._parse_pct("#color-brightness", 100) / 100.0
         contrast = self._parse_pct("#color-contrast", 100) / 100.0
-        palette = tuple(
+        palette = list(
             _adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES[palette_name]
         )
+        force_black = self.query_one("#force-black-bg", textual.widgets.Switch).value
+        if not force_black and self.detected_bg is not None:
+            palette[0] = self.detected_bg
         ice = self.query_one("#ice-colors", textual.widgets.Switch).value
         block = "\u2588"
         fg_blocks = "".join(f"[rgb({r},{g},{b})]{block}[/]" for r, g, b in palette)
@@ -1512,9 +1562,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         cfg.colormatch = self.query_one("#colormatch", textual.widgets.Select).value
         cfg.color_brightness = self._parse_pct("#color-brightness", 100) / 100.0
         cfg.color_contrast = self._parse_pct("#color-contrast", 100) / 100.0
-        cfg.background_color = "#000000"
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
         cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
+        if not cfg.force_black_bg and self.detected_bg is not None:
+            r, g, b = self.detected_bg
+            cfg.background_color = f"#{r:02x}{g:02x}{b:02x}"
+        else:
+            cfg.background_color = "#000000"
 
         timeout_input = self.query_one("#connect-timeout", textual.widgets.Input)
         cfg.connect_timeout = float_val(timeout_input.value, 10.0)
@@ -1545,6 +1599,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             else "append"
         )
         cfg.no_repl = not self.query_one("#use-repl", textual.widgets.Switch).value
+        if cfg.mode == "raw":
+            cfg.no_repl = True
 
         return cfg
 

@@ -66,64 +66,58 @@ def get_theme_colors() -> dict[str, str]:
     Uses the running Textual app's theme when available, otherwise
     falls back to ``textual-dark`` defaults.
     """
-    try:
-        app = textual.app.App.current
-        if app is not None:
-            cs = app.current_theme
-            if cs is not None:
-                return {
-                    k: v
-                    for k, v in sorted(cs.generate().items())
-                    if not any(
-                        x in k
-                        for x in (
-                            "cursor",
-                            "button",
-                            "footer",
-                            "style",
-                            "hover",
-                            "disabled",
-                            "scrollbar",
-                            "input",
-                            "link",
-                            "text-",
-                            "markdown",
-                            "tooltip",
-                        )
+    app = getattr(textual.app.App, "current", None)
+    if app is not None:
+        cs = app.current_theme
+        if cs is not None:
+            return {
+                k: v
+                for k, v in sorted(cs.generate().items())
+                if not any(
+                    x in k
+                    for x in (
+                        "cursor",
+                        "button",
+                        "footer",
+                        "style",
+                        "hover",
+                        "disabled",
+                        "scrollbar",
+                        "input",
+                        "link",
+                        "text-",
+                        "markdown",
+                        "tooltip",
                     )
-                    and len(v) in (7, 9)
-                    and v.startswith("#")
-                }
-    except Exception:
-        pass
-    # Fallback when no app is running.
-    try:
-        cs = textual.theme.BUILTIN_THEMES["textual-dark"].to_color_system()
-        return {
-            k: v
-            for k, v in sorted(cs.generate().items())
-            if not any(
-                x in k
-                for x in (
-                    "cursor",
-                    "button",
-                    "footer",
-                    "style",
-                    "hover",
-                    "disabled",
-                    "scrollbar",
-                    "input",
-                    "link",
-                    "text-",
-                    "markdown",
-                    "tooltip",
                 )
+                and len(v) in (7, 9)
+                and v.startswith("#")
+            }
+    # Fallback when no app is running.
+    cs = textual.theme.BUILTIN_THEMES["textual-dark"].to_color_system()
+    return {
+        k: v
+        for k, v in sorted(cs.generate().items())
+        if not any(
+            x in k
+            for x in (
+                "cursor",
+                "button",
+                "footer",
+                "style",
+                "hover",
+                "disabled",
+                "scrollbar",
+                "input",
+                "link",
+                "text-",
+                "markdown",
+                "tooltip",
             )
-            and len(v) in (7, 9)
-            and v.startswith("#")
-        }
-    except Exception:
-        return {}
+        )
+        and len(v) in (7, 9)
+        and v.startswith("#")
+    }
 
 
 # Standard HP/MP/XP field aliases from Char.Vitals and Char.Status.

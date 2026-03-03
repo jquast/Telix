@@ -865,8 +865,8 @@ if sys.platform != "win32":
             self.ctx.rx_dot = self.stoplight.rx
 
             self.dispatch = KeyDispatch()
-            self.macro_defs = self.ctx.macro_defs or None
-            if self.macro_defs is not None:
+            self.macro_defs = self.ctx.macro_defs
+            if self.macro_defs:
                 self.dispatch.set_macros(self.macro_defs, self.ctx, self.telnet_writer.log)
             self.ctx.key_dispatch = self.dispatch
 
@@ -1120,18 +1120,11 @@ if sys.platform != "win32":
             task.add_done_callback(self.on_walk_done)
             self.ctx.randomwalk_task = task
 
-        def register_gmcp_keys(self) -> None:
-            """Register GMCP-dependent hotkeys (F3-F7) once."""
+        def on_gmcp_ready(self) -> None:
+            """Handle GMCP becoming available -- schedule toolbar refresh."""
             if self.gmcp_keys_registered:
                 return
             self.gmcp_keys_registered = True
-            self.dispatch.register("KEY_F3", self.randomwalk_mode)
-            self.dispatch.register("KEY_F4", self.discover_mode)
-            self.dispatch.register("KEY_F5", self.resume_last_walk)
-            self.dispatch.register("KEY_F7", lambda: launch_unified_editor("rooms", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F10", lambda: launch_unified_editor("captures", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F11", lambda: launch_unified_editor("bars", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F12", lambda: launch_unified_editor("theme", self.ctx, self.replay_buf))
             self.toolbar.schedule_eta_refresh(self.loop, self.autoreply_engine, self.editor, self.blessed_term)
 
         def update_input_style(self) -> None:
@@ -1329,22 +1322,23 @@ if sys.platform != "win32":
             self.refresh_autoreply_engine()
             self.refresh_highlight_engine()
 
-            self.dispatch.register_seq("\x1d", self.reg_close)  # Ctrl+]
             assert self.scroll is not None
             scroll = self.scroll
-            replay_buf = self.replay_buf
-            self.dispatch.register_seq(
-                "\x0c", lambda: repaint_screen(replay_buf, scroll=scroll, active=self.is_autoreply_bg)
-            )  # Ctrl+L
+            self.ctx.repl_actions = {
+                "help": lambda: show_help(replay_buf=self.replay_buf),
+                "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
+                "toggle_highlights": self.toggle_highlights,
+                "toggle_autoreplies": self.toggle_autoreplies,
+                "disconnect": self.reg_close,
+                "repaint": lambda: repaint_screen(
+                    self.replay_buf, scroll=scroll, active=self.is_autoreply_bg,
+                ),
+                "randomwalk_dialog": self.randomwalk_mode,
+                "autodiscover_dialog": self.discover_mode,
+                "resume_walk": self.resume_last_walk,
+            }
 
-            self.dispatch.register("KEY_F1", lambda: show_help(replay_buf=self.replay_buf))
-            self.dispatch.register("KEY_F6", lambda: launch_unified_editor("highlights", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F8", lambda: launch_unified_editor("macros", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F9", lambda: launch_unified_editor("autoreplies", self.ctx, self.replay_buf))
-            self.dispatch.register("KEY_F21", self.toggle_autoreplies)  # Shift+F9
-            self.dispatch.register("KEY_F18", self.toggle_highlights)  # Shift+F6
-
-            self.ctx.on_gmcp_ready = self.register_gmcp_keys
+            self.ctx.on_gmcp_ready = self.on_gmcp_ready
 
         def submit_command_queue(
             self,

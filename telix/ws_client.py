@@ -30,6 +30,7 @@ async def run_ws_client(
     url: str,
     shell: str = "telix.client_shell.ws_client_shell",
     no_repl: bool = False,
+    loglevel: str = "warn",
     logfile: str = "",
     typescript: str = "",
     logfile_mode: str = "append",
@@ -41,6 +42,7 @@ async def run_ws_client(
     :param url: WebSocket URL (e.g. ``wss://gel.monster:8443``).
     :param shell: Dotted path to the shell coroutine.
     :param no_repl: If ``True``, skip the interactive REPL (raw I/O only).
+    :param loglevel: Logging level name (default ``"warn"``).
     :param logfile: Optional path to write log output.
     :param typescript: Optional path to record session transcript.
     :param logfile_mode: ``"append"`` (default) or ``"rewrite"`` the log file.
@@ -49,7 +51,7 @@ async def run_ws_client(
     if logfile:
         telnetlib3.accessories.make_logger(
             name="telix",
-            loglevel="info",
+            loglevel=loglevel,
             logfile=logfile,
             filemode="w" if logfile_mode == "rewrite" else "a",
         )
@@ -126,6 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="no_repl",
         help="Disable the interactive REPL (raw I/O only).",
+    )
+    parser.add_argument(
+        "--loglevel",
+        default="warn",
+        choices=["trace", "debug", "info", "warn", "error", "critical"],
+        help="Logging level (default: warn).",
     )
     parser.add_argument("--logfile", default="", metavar="FILE", help="Write log to FILE.")
     parser.add_argument(
