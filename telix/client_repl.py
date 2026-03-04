@@ -813,6 +813,7 @@ if sys.platform != "win32":
             self.dialogs_mod: typing.Any = None
             self.line_hold: LineHoldBuffer = LineHoldBuffer(lambda: self.ctx.highlight_engine)
             self.line_hold_timer: asyncio.TimerHandle | None = None
+            self.mslp_index: int | None = None
 
         def init_terminal(self) -> None:
             """Import blessed, create terminal singleton, styles, replay buffer."""
@@ -898,6 +899,26 @@ if sys.platform != "win32":
                 return
             self.toolbar.schedule_until_progress(self.loop, self.autoreply_engine, self.editor, self.blessed_term)
 
+        def mslp_tab(self) -> None:
+            """Cycle forward through available MSLP commands."""
+            n = self.ctx.mslp_collector.count
+            if n == 0:
+                return
+            if self.mslp_index is None:
+                self.mslp_index = 0
+            else:
+                self.mslp_index = (self.mslp_index + 1) % n
+
+        def mslp_shift_tab(self) -> None:
+            """Cycle backward through available MSLP commands."""
+            n = self.ctx.mslp_collector.count
+            if n == 0:
+                return
+            if self.mslp_index is None:
+                self.mslp_index = n - 1
+            else:
+                self.mslp_index = (self.mslp_index - 1) % n
+
         def on_prompt_signal(self, cmd: bytes) -> None:
             """
             Handle GA / EOR prompt signals.
@@ -911,6 +932,8 @@ if sys.platform != "win32":
             self.ga_detected = True
             self.prompt_ready.set()
             self.prompt_pending = True
+            self.ctx.mslp_collector.on_prompt()
+            self.mslp_index = None
             self.telnet_reader._wakeup_waiter()
 
         async def wait_for_prompt(self) -> None:
@@ -1168,6 +1191,10 @@ if sys.platform != "win32":
             """Return the current hint string (activity or help)."""
             ar = self.is_autoreply_bg
             hint = self.activity_hint() if ar else self.HELP_HINT
+            n = self.ctx.mslp_collector.count
+            if n > 0 and not ar:
+                tab_hint = f"TAB to cycle {n} commands"
+                hint = f"{hint} - {tab_hint}" if hint else tab_hint
             return hint if hint else self.HELP_HINT
 
         def input_width(self) -> int:
@@ -1334,6 +1361,9 @@ if sys.platform != "win32":
                 "resume_walk": self.resume_last_walk,
             }
 
+            self.dispatch.register("KEY_TAB", self.mslp_tab)
+            self.dispatch.register("KEY_BTAB", self.mslp_shift_tab)
+
             self.ctx.on_gmcp_ready = self.on_gmcp_ready
 
         def submit_command_queue(
@@ -1425,6 +1455,7 @@ if sys.platform != "win32":
                 cf = self.ctx.color_filter
                 if cf is not None:
                     out = cf.filter(out)
+                out = self.ctx.mslp_collector.filter(out)
                 out = telnetlib3.client_shell._transform_output(out, self.telnet_writer, True)
                 if self.ctx.erase_eol:
                     out = out.replace("\r\n", "\x1b[K\r\n")
@@ -1497,6 +1528,13 @@ if sys.platform != "win32":
                         base_bg_sgr=bg,
                         autoreply=ar,
                     )
+                elif self.mslp_index is not None:
+                    mslp_cmd = self.ctx.mslp_collector.available[self.mslp_index].command
+                    cursor_col = render_active_command(
+                        mslp_cmd, scroll, self.stdout,
+                        hint=self.hint_text(), progress=prog,
+                        base_bg_sgr=bg, autoreply=ar,
+                    )
                 else:
                     self.update_input_style()
                     self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
@@ -1545,12 +1583,48 @@ if sys.platform != "win32":
                             await result
                         self.rearm_after_subprocess()
                         self.toolbar.hide_cursor()
-                        self.update_input_style()
-                        self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
+                        if self.mslp_index is not None:
+                            cmd = self.ctx.mslp_collector.available[self.mslp_index].command
+                            cursor_col = render_active_command(
+                                cmd, scroll, self.stdout,
+                                hint=self.hint_text(),
+                                progress=until_progress(self.autoreply_engine),
+                                base_bg_sgr=self.bg_sgr,
+                                autoreply=self.is_autoreply_bg,
+                            )
+                        else:
+                            self.update_input_style()
+                            self.stdout.write(
+                                self.render_editor(bt, scroll.input_row, self.input_width()).encode()
+                            )
+                            cursor_col = self.editor_cursor()
                         self.toolbar.render(self.autoreply_engine)
-                        cursor_col = self.editor_cursor()
                         self.show_cursor_or_light(scroll.input_row, cursor_col)
                         continue
+
+                    if self.mslp_index is not None:
+                        if key.name == "KEY_ENTER" or key in {"\r", "\n"}:
+                            cmd = self.ctx.mslp_collector.available[self.mslp_index].command
+                            self.mslp_index = None
+                            self.stdout.write(bt.restore.encode())
+                            colored = f"{bt.yellow}{cmd}{bt.normal}\r\n"
+                            self.stdout.write(colored.encode())
+                            self.replay_buf.append(colored.encode())
+                            self.stdout.write(bt.save.encode())
+                            tx_dot.trigger()
+                            self.telnet_writer.write(cmd + "\r\n")
+                            if self.ga_detected:
+                                self.prompt_ready.clear()
+                            self.toolbar.hide_cursor()
+                            self.update_input_style()
+                            self.stdout.write(
+                                self.render_editor(bt, scroll.input_row, self.input_width()).encode()
+                            )
+                            self.toolbar.render(self.autoreply_engine)
+                            cursor_col = self.editor_cursor()
+                            self.show_cursor_or_light(scroll.input_row, cursor_col)
+                            continue
+                        self.mslp_index = None
 
                     result = self.editor.feed_key(key)
 

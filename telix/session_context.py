@@ -7,7 +7,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import macros, autoreply, ws_transport, gmcp_snapshot
+from . import macros, autoreply, ws_transport, gmcp_snapshot, mslp
 
 
 class CommandQueue:
@@ -126,6 +126,9 @@ class SessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.on_chat_text: Callable[[dict[str, typing.Any]], None] | None = None
         self.on_chat_channels: Callable[[list[dict[str, typing.Any]]], None] | None = None
         self.on_autoreply_activity: Callable[[], None] | None = None
+
+        # MSLP link collector
+        self.mslp_collector: mslp.MslpCollector = mslp.MslpCollector()
 
         # rendering / input config
         # (raw_mode, ascii_eol, input_filter, typescript_file
