@@ -10,7 +10,7 @@ Telix
    user-manual
    files
    contributing
-   specifications
+   protocols
 
 
 Indexes
