@@ -387,9 +387,14 @@ def main() -> None:
     telix_args = _strip_telix_args()
     _color_args = telix_args
 
-    # Inject the telix shell so telnetlib3 uses our REPL-enabled shell.
-    # --no-repl or BBS preset disables the REPL, so skip shell injection.
-    if "--shell" not in sys.argv and not telix_args.no_repl and server_type != "bbs":
+    # Inject the telix shell so telnetlib3 uses our REPL-aware shell.
+    # Our shell waits for echo negotiation before entering the raw event loop,
+    # preventing a race where local_echo is set before WILL ECHO arrives and
+    # causes software echo of user input and CPR responses (visible as [r;cR
+    # garbage on screen).  BBS connections also benefit from this fix since
+    # gambatte-style servers negotiate WILL ECHO + SGA (kludge mode) and the
+    # default telnetlib3 shell computes local_echo before negotiation completes.
+    if "--shell" not in sys.argv and not telix_args.no_repl:
         sys.argv.insert(1, "--shell=telix.client_shell.telix_client_shell")
 
     # Install MTTS TTYPE cycling and MNES for MUD connections.

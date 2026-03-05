@@ -82,7 +82,7 @@ class TestMainRouting:
 
 class TestServerTypePresets:
     def test_bbs_telnet_injects_raw_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """--bbs injects --raw-mode and strips telix flags from sys.argv."""
+        """--bbs injects --raw-mode, VGA colormatch, and the telix shell."""
         monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "bbs.example.com"])
         with (
             patch("telix.main.asyncio.run"),
@@ -92,7 +92,7 @@ class TestServerTypePresets:
         assert "--raw-mode" in sys.argv
         assert main_mod._color_args.colormatch == "vga"
         assert "--colormatch" not in sys.argv
-        assert "--shell=telix.client_shell.telix_client_shell" not in sys.argv
+        assert "--shell=telix.client_shell.telix_client_shell" in sys.argv
 
     def test_mud_telnet_injects_line_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--mud injects --line-mode, --compression, and the telix shell."""

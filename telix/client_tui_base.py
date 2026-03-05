@@ -138,6 +138,7 @@ ENCODINGS = (
     "cp1251",
     "koi8-r",
     "big5",
+    "big5bbs",
     "gbk",
     "euc-kr",
     "shift-jis",

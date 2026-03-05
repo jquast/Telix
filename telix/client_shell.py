@@ -394,7 +394,7 @@ async def telix_client_shell(
                     telnet_writer.wait_for_condition(
                         lambda w: w.mode != "local"
                     ),
-                    timeout=0.5,
+                    timeout=0.05,
                 )
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass

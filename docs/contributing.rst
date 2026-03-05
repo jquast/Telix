@@ -25,8 +25,7 @@ Architecture
 ------------
 
 Telix is a TUI Telnet client for MUD and BBS systems, layered on top of telnetlib3_, blessed_,
-textual_, rich_, and wcwidth_, and wcwidth_ is depended on by Telix, telnetlib3_, blessed_, and
-rich_::
+and textual_::
 
     telix
       |--> wcwidth
@@ -47,7 +46,7 @@ rich_::
                 |
                 +--> wcwidth
 
-wcwidth_ must be a very useful library!
+wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.
 
 Telix code file overview::
 
@@ -360,5 +359,6 @@ the telnet reader's internal buffer and consumed by the first
 .. _blessed: https://github.com/jquast/blessed
 .. _wcwidth: https://github.com/jquast/wcwidth
 .. _textual: https://github.com/Textualize/textual
+.. _rich: https://github.com/Textualize/rich
 .. _pytest: https://pytest.org
 .. _ruff: https://docs.astral.sh/ruff/
