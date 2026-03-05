@@ -190,10 +190,7 @@ def test_scramble_password_per_char_replacement() -> None:
     from ..client_repl_render import SEXTANT_VISIBLE
 
     raw = "\x1b[45;1H" + PASSWORD_CHAR * 5 + " " * 10
-    result = "".join(
-        random.choice(SEXTANT_VISIBLE) if ch == PASSWORD_CHAR else ch
-        for ch in raw
-    )
+    result = "".join(random.choice(SEXTANT_VISIBLE) if ch == PASSWORD_CHAR else ch for ch in raw)
     assert len(result) == len(raw)
     assert PASSWORD_CHAR not in result
     assert result.startswith("\x1b[45;1H")

@@ -14,9 +14,9 @@ import argparse
 import urllib.parse
 
 import websockets
+import telnetlib3.telopt
 import websockets.typing
 import websockets.exceptions
-import telnetlib3.telopt
 import telnetlib3.accessories
 import telnetlib3._session_context
 
@@ -26,10 +26,7 @@ log = logging.getLogger(__name__)
 
 GMCP_SUBPROTOCOL = "gmcp.mudstandards.org"
 TELNET_SUBPROTOCOL = "telnet.mudstandards.org"
-WS_SUBPROTOCOLS = [
-    websockets.typing.Subprotocol(GMCP_SUBPROTOCOL),
-    websockets.typing.Subprotocol(TELNET_SUBPROTOCOL),
-]
+WS_SUBPROTOCOLS = [websockets.typing.Subprotocol(GMCP_SUBPROTOCOL), websockets.typing.Subprotocol(TELNET_SUBPROTOCOL)]
 
 
 async def run_ws_client(
@@ -60,35 +57,22 @@ async def run_ws_client(
     """
     if logfile:
         telnetlib3.accessories.make_logger(
-            name="telix",
-            loglevel=loglevel,
-            logfile=logfile,
-            filemode="w" if logfile_mode == "rewrite" else "a",
+            name="telix", loglevel=loglevel, logfile=logfile, filemode="w" if logfile_mode == "rewrite" else "a"
         )
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or "localhost"
     port = parsed.port or (443 if parsed.scheme == "wss" else 80)
 
-    reader = ws_transport.WebSocketReader(
-        encoding=encoding, encoding_errors=encoding_errors
-    )
+    reader = ws_transport.WebSocketReader(encoding=encoding, encoding_errors=encoding_errors)
     writer: ws_transport.WebSocketWriter | None = None
 
     shell_fn = telnetlib3.accessories.function_lookup(shell)
 
-    async with websockets.connect(
-        url, subprotocols=WS_SUBPROTOCOLS, max_size=2**20, open_timeout=10
-    ) as ws:
+    async with websockets.connect(url, subprotocols=WS_SUBPROTOCOLS, max_size=2**20, open_timeout=10) as ws:
         is_telnet_subprotocol = ws.subprotocol == TELNET_SUBPROTOCOL
         if ws.subprotocol not in (GMCP_SUBPROTOCOL, TELNET_SUBPROTOCOL):
-            log.warning(
-                "server did not negotiate a known subprotocol (got %r), "
-                "GMCP may not work",
-                ws.subprotocol,
-            )
-        writer = ws_transport.WebSocketWriter(
-            ws, peername=(host, port), encoding=encoding
-        )
+            log.warning("server did not negotiate a known subprotocol (got %r), GMCP may not work", ws.subprotocol)
+        writer = ws_transport.WebSocketWriter(ws, peername=(host, port), encoding=encoding)
 
         writer.ctx = telnetlib3._session_context.TelnetSessionContext()
         writer.ctx.no_repl = no_repl
@@ -113,9 +97,7 @@ async def run_ws_client(
                 async for message in ws:
                     if isinstance(message, bytes):
                         if is_telnet_subprotocol:
-                            clean, events, iac_remainder = (
-                                ws_transport.extract_iac(message, iac_remainder)
-                            )
+                            clean, events, iac_remainder = ws_transport.extract_iac(message, iac_remainder)
                             if clean:
                                 reader.feed_data(clean)
                             for event in events:
@@ -124,25 +106,17 @@ async def run_ws_client(
                                     option = event[1]
                                     if option == telnetlib3.telopt.ECHO:
                                         writer.will_echo = True
-                                        writer.write_iac(
-                                            telnetlib3.telopt.DO, option
-                                        )
+                                        writer.write_iac(telnetlib3.telopt.DO, option)
                                     else:
-                                        writer.write_iac(
-                                            telnetlib3.telopt.DONT, option
-                                        )
+                                        writer.write_iac(telnetlib3.telopt.DONT, option)
                                 elif kind == "wont":
                                     option = event[1]
                                     if option == telnetlib3.telopt.ECHO:
                                         writer.will_echo = False
-                                    writer.write_iac(
-                                        telnetlib3.telopt.DONT, option
-                                    )
+                                    writer.write_iac(telnetlib3.telopt.DONT, option)
                                 elif kind == "do":
                                     option = event[1]
-                                    writer.write_iac(
-                                        telnetlib3.telopt.WONT, option
-                                    )
+                                    writer.write_iac(telnetlib3.telopt.WONT, option)
                                 elif kind == "cmd":
                                     writer.fire_prompt_signal()
                             if clean or not events:
@@ -185,11 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", help="WebSocket URL (e.g. wss://gel.monster:8443)")
 
     conn = parser.add_argument_group("Connection options")
-    conn.add_argument(
-        "--encoding",
-        default="utf-8",
-        help="encoding name (default: utf-8)",
-    )
+    conn.add_argument("--encoding", default="utf-8", help="encoding name (default: utf-8)")
     conn.add_argument(
         "--encoding-errors",
         default="replace",
@@ -197,9 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["replace", "ignore", "strict"],
         help="handler for encoding errors (default: replace)",
     )
-    conn.add_argument(
-        "--logfile", default="", metavar="FILE", help="write log to FILE"
-    )
+    conn.add_argument("--logfile", default="", metavar="FILE", help="write log to FILE")
     conn.add_argument(
         "--logfile-mode",
         default="append",
@@ -225,9 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="telix.client_shell.ws_client_shell",
         help="dotted path to shell coroutine (default: telix WS shell)",
     )
-    conn.add_argument(
-        "--typescript", default="", metavar="FILE", help="record session to FILE"
-    )
+    conn.add_argument("--typescript", default="", metavar="FILE", help="record session to FILE")
     conn.add_argument(
         "--typescript-mode",
         default="append",

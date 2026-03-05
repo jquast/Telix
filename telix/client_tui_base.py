@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from textual.widget import Widget
 
 # 3rd party
-import rich.console
 import textual.app
+import rich.console
 import textual.events
 import textual.screen
 import textual.binding
@@ -50,7 +50,7 @@ def restore_opost() -> None:
     Textual puts the terminal in raw mode which disables output post-processing.  If the driver fails to fully restore
     termios (or we catch an exception before it gets the chance), newlines render as bare LF producing staircase output.
     """
-    import termios  # noqa: PLC0415
+    import termios
 
     try:
         fd = sys.stdout.fileno()
@@ -83,7 +83,7 @@ def install_crash_hook(crash_path: str) -> None:
 
     :param crash_path: Path to the crash file.
     """
-    import traceback as tb_mod  # noqa: PLC0415
+    import traceback as tb_mod
 
     def hook(exc_type, exc_value, exc_tb):
         text = "".join(tb_mod.format_exception(exc_type, exc_value, exc_tb))
@@ -256,7 +256,7 @@ def build_tooltips() -> dict[str, str]:
     global TOOLTIP_CACHE
     if TOOLTIP_CACHE is not None:
         return TOOLTIP_CACHE
-    from telnetlib3.client import _get_argument_parser  # noqa: PLC0415, ICN003
+    from telnetlib3.client import _get_argument_parser  # noqa: ICN003
 
     parser = _get_argument_parser()
     tips: dict[str, str] = {}
@@ -405,9 +405,7 @@ TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
     ("background_color", "--background-color", "#000000"),
 ]
 
-TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [
-    ("ice_colors", "--no-ice-colors", True),
-]
+TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
 
 
 def build_command(config: SessionConfig) -> list[str]:
@@ -428,8 +426,7 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
     Uses telix's own entry point so telix-specific flags (color, REPL) are parsed before telnetlib3 sees the remaining
     arguments. Only emits flags that differ from the CLI defaults.
     """
-    cmd = [sys.executable, "-c", "from telix.main import main; main()",
-               config.host, str(config.port)]
+    cmd = [sys.executable, "-c", "from telix.main import main; main()", config.host, str(config.port)]
 
     if config.no_repl:
         cmd.append("--no-repl")
@@ -494,9 +491,18 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         ws_path = "/" + ws_path
     url = f"{scheme}://{host_part}{ws_path}"
     if config.coverage:
-        cmd = [sys.executable, "-m", "coverage", "run",
-               "--source=telix", "--branch", "--parallel-mode",
-               "-m", "telix.main", url]
+        cmd = [
+            sys.executable,
+            "-m",
+            "coverage",
+            "run",
+            "--source=telix",
+            "--branch",
+            "--parallel-mode",
+            "-m",
+            "telix.main",
+            url,
+        ]
     else:
         cmd = [sys.executable, "-c", "from telix.main import main; main()", url]
     if config.no_repl or config.mode == "raw":
@@ -638,7 +644,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         """Load sessions and populate the data table."""
         self.sessions = load_sessions()
         if not self.sessions:
-            from .directory import directory_to_sessions  # noqa: PLC0415
+            from .directory import directory_to_sessions
 
             self.sessions = directory_to_sessions()
             save_sessions(self.sessions)
@@ -883,7 +889,7 @@ class SessionListScreen(textual.screen.Screen[None]):
 
     def action_delete_session(self) -> None:
         """Delete the selected session after confirmation."""
-        from .client_tui_dialogs import ConfirmDialogScreen  # noqa: PLC0415
+        from .client_tui_dialogs import ConfirmDialogScreen
 
         key = self.require_selected()
         if key is None:
@@ -966,9 +972,7 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # hanging the editor.
                 env = None
                 if cfg.coverage:
-                    cov_rc = os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)), "tox.ini"
-                    )
+                    cov_rc = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tox.ini")
                     env = {**os.environ, "COVERAGE_PROCESS_START": cov_rc}
                     log.debug("coverage enabled, COVERAGE_PROCESS_START=%s", cov_rc)
                 log.debug("launch: %s", shlex.join(cmd))
@@ -1040,7 +1044,7 @@ class ThemePickerScreen(textual.screen.Screen[str | None]):  # type: ignore[misc
     """Modal screen wrapping ThemeEditPane for standalone theme selection."""
 
     BINDINGS: typing.ClassVar[list[textual.binding.Binding]] = [
-        textual.binding.Binding("escape", "cancel", "Cancel", priority=True),
+        textual.binding.Binding("escape", "cancel", "Cancel", priority=True)
     ]
 
     CSS = """
@@ -1052,7 +1056,7 @@ class ThemePickerScreen(textual.screen.Screen[str | None]):  # type: ignore[misc
 
     def compose(self) -> textual.app.ComposeResult:
         """Compose the theme picker with modal ThemeEditPane."""
-        from . import client_tui_editors  # noqa: PLC0415
+        from . import client_tui_editors
 
         yield client_tui_editors.ThemeEditPane(modal=True)
 
@@ -1066,7 +1070,7 @@ class ThemePickerScreen(textual.screen.Screen[str | None]):  # type: ignore[misc
 
     def action_cancel(self) -> None:
         """Restore original theme and dismiss."""
-        from . import client_tui_editors  # noqa: PLC0415
+        from . import client_tui_editors
 
         try:
             pane = self.query_one(client_tui_editors.ThemeEditPane)
@@ -1289,6 +1293,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         self.is_defaults = is_defaults
         self.is_new = is_new
         from telix import main as _main_mod
+
         self.detected_bg = _main_mod._detected_bg
 
     TAB_IDS: typing.ClassVar[list[tuple[str, str]]] = [
@@ -1313,18 +1318,18 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 textual.widgets.Input(
                     value=cfg.name, placeholder="optional display name", id="name", classes="field-input"
                 ),
-                classes="field-row", id="name-row",
+                classes="field-row",
+                id="name-row",
             )
             yield textual.containers.Horizontal(
                 textual.widgets.Label("Host", classes="conn-label"),
                 textual.widgets.Input(value=cfg.host, placeholder="hostname", id="host", classes="field-input"),
                 textual.widgets.Label("Port", id="port-label"),
                 textual.widgets.Input(
-                    value=str(cfg.port),
-                    placeholder="443" if cfg.protocol == "websocket" else "23",
-                    id="port",
+                    value=str(cfg.port), placeholder="443" if cfg.protocol == "websocket" else "23", id="port"
                 ),
-                classes="field-row", id="host-row",
+                classes="field-row",
+                id="host-row",
             )
             with textual.containers.Horizontal(id="protocol-row"):
                 with textual.containers.Horizontal(id="protocol-col"):
@@ -1340,10 +1345,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                     yield textual.widgets.Label("SSL/TLS", id="ssl-label")
                     yield textual.widgets.Switch(value=cfg.ssl, id="ssl")
                 yield textual.widgets.Input(
-                    value=cfg.ws_path,
-                    placeholder="/ws",
-                    id="ws-path",
-                    tooltip="WebSocket path appended to URL",
+                    value=cfg.ws_path, placeholder="/ws", id="ws-path", tooltip="WebSocket path appended to URL"
                 )
         else:
             with textual.containers.Horizontal(classes="switch-row"):
@@ -1418,16 +1420,18 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
             yield textual.containers.Horizontal(
                 textual.widgets.Label("Detected Background", classes="field-label-wide"),
-                textual.widgets.Static(
-                    f"[on rgb({r},{g},{b})]  [/] {hex_color}", id="detected-bg-color"
-                ),
+                textual.widgets.Static(f"[on rgb({r},{g},{b})]  [/] {hex_color}", id="detected-bg-color"),
                 classes="field-row",
             )
         yield textual.containers.Horizontal(
             textual.widgets.Label("Brightness %", classes="field-label"),
-            textual.widgets.Input(value=str(int(cfg.color_brightness * 100)), id="color-brightness", classes="field-input-short"),
+            textual.widgets.Input(
+                value=str(int(cfg.color_brightness * 100)), id="color-brightness", classes="field-input-short"
+            ),
             textual.widgets.Label("Contrast %", classes="field-label-short"),
-            textual.widgets.Input(value=str(int(cfg.color_contrast * 100)), id="color-contrast", classes="field-input-short"),
+            textual.widgets.Input(
+                value=str(int(cfg.color_contrast * 100)), id="color-contrast", classes="field-input-short"
+            ),
             classes="field-row",
         )
         force_val = True if not has_detected else cfg.force_black_bg
@@ -1436,12 +1440,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 yield textual.widgets.Label("iCE Colors", classes="field-label")
                 yield textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label(
-                    "Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}"
-                )
-                switch = textual.widgets.Switch(
-                    value=force_val, id="force-black-bg", disabled=not has_detected
-                )
+                yield textual.widgets.Label("Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}")
+                switch = textual.widgets.Switch(value=force_val, id="force-black-bg", disabled=not has_detected)
                 if not has_detected:
                     switch.tooltip = "Could not detect background color of your terminal"
                 yield switch
@@ -1581,10 +1581,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 force_bg.value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
-            self.notify(
-                f"BBS: Color Palette vga, iCE Colors on, Raw mode,"
-                f" REPL off, MCCP Compression {compress_label}"
-            )
+            self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, REPL off, MCCP Compression {compress_label}")
         elif button_id == "type-mud":
             if ssl_on:
                 self.select_radio("compression-radio", "compress-no")
@@ -1602,8 +1599,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "yes"
             self.notify(
-                f"MUD: MCCP Compression {compress_label}, Line mode,"
-                f" REPL on, Color Palette none, iCE Colors off"
+                f"MUD: MCCP Compression {compress_label}, Line mode, REPL on, Color Palette none, iCE Colors off"
             )
 
     def apply_ssl_compression(self, ssl_on: bool) -> None:
@@ -1619,9 +1615,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             radio_set.disabled = True
         else:
             radio_set.disabled = False
-            if self.query_one(
-                "#compress-no", textual.widgets.RadioButton
-            ).value:
+            if self.query_one("#compress-no", textual.widgets.RadioButton).value:
                 self.select_radio("compression-radio", "compress-passive")
 
     def apply_protocol_visibility(self, is_ws: bool) -> None:
@@ -1632,9 +1626,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         port_val = int_val(port_input.value, 0)
         if is_ws and port_val == 23:
             port_input.value = "443"
-        elif not is_ws and port_val == 443:
-            port_input.value = "23"
-        elif not is_ws and port_val == 80:
+        elif (not is_ws and port_val == 443) or (not is_ws and port_val == 80):
             port_input.value = "23"
 
     def on_select_changed(self, event: textual.widgets.Select.Changed) -> None:
@@ -1663,7 +1655,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
 
     def update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
-        from telix.color_filter import PALETTES, _adjust_color  # noqa: PLC0415
+        from telix.color_filter import PALETTES, _adjust_color
 
         palette_name = self.query_one("#colormatch", textual.widgets.Select).value
         preview = self.query_one("#palette-preview", textual.widgets.Static)
@@ -1672,9 +1664,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             return
         brightness = self._parse_pct("#color-brightness", 100) / 100.0
         contrast = self._parse_pct("#color-contrast", 100) / 100.0
-        palette = list(
-            _adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES[palette_name]
-        )
+        palette = [_adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES[palette_name]]
         force_black = self.query_one("#force-black-bg", textual.widgets.Switch).value
         if not force_black and self.detected_bg is not None:
             palette[0] = self.detected_bg
@@ -1850,15 +1840,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         cfg.loglevel = self.query_one("#loglevel", textual.widgets.Select).value
         cfg.logfile = self.query_one("#logfile", textual.widgets.Input).value.strip()
         cfg.logfile_mode = (
-            "rewrite"
-            if self.query_one("#logfile-mode", textual.widgets.RadioSet).pressed_index == 1
-            else "append"
+            "rewrite" if self.query_one("#logfile-mode", textual.widgets.RadioSet).pressed_index == 1 else "append"
         )
         cfg.typescript = self.query_one("#typescript", textual.widgets.Input).value.strip()
         cfg.typescript_mode = (
-            "rewrite"
-            if self.query_one("#typescript-mode", textual.widgets.RadioSet).pressed_index == 1
-            else "append"
+            "rewrite" if self.query_one("#typescript-mode", textual.widgets.RadioSet).pressed_index == 1 else "append"
         )
         cfg.no_repl = not self.query_one("#use-repl", textual.widgets.Switch).value
         if cfg.mode == "raw":
@@ -1883,7 +1869,7 @@ def float_val(text: str, default: float) -> float:
 
 def get_help_topic(topic: str) -> str:
     """Load help text for a TUI dialog topic from bundled markdown files."""
-    from telix.help import get_help  # noqa: PLC0415  deferred to avoid import cost
+    from telix.help import get_help
 
     return get_help(topic)
 
@@ -2231,7 +2217,7 @@ class EditListPane(textual.containers.Vertical):
         self.show_form()
 
     def action_delete(self) -> None:
-        from .client_tui_dialogs import ConfirmDialogScreen  # noqa: PLC0415
+        from .client_tui_dialogs import ConfirmDialogScreen
 
         if self.form_visible:
             self.hide_form()
@@ -2312,7 +2298,7 @@ class EditListPane(textual.containers.Vertical):
 
     def pick_room_for_travel(self) -> None:
         """Open room picker and insert a travel command."""
-        from .client_tui_dialogs import RoomPickerScreen  # noqa: PLC0415
+        from .client_tui_dialogs import RoomPickerScreen
 
         rooms_file = self.rooms_path
         if not rooms_file or not os.path.exists(rooms_file):
@@ -2412,7 +2398,7 @@ class EditorApp(textual.app.App[None]):
         """
         if not self._exit_renderables:
             return
-        from rich.console import Console  # noqa: PLC0415
+        from rich.console import Console
 
         console = Console(file=sys.stdout, markup=False, highlight=False)
         for renderable in self._exit_renderables:
@@ -2477,7 +2463,7 @@ def patch_writer_thread_queue() -> None:
     prevents the deadlock.
     """
     try:
-        import textual.drivers.writer_thread as wt  # noqa: PLC0415
+        import textual.drivers.writer_thread as wt
 
         wt.MAX_QUEUED_WRITES = 0
     except (ImportError, AttributeError):
@@ -2558,7 +2544,7 @@ def run_editor_app(app: EditorApp) -> None:
     try:
         app.run()
     except BaseException:
-        import traceback as tb_mod  # noqa: PLC0415
+        import traceback as tb_mod
 
         if crash_path:
             write_crash_file(crash_path, tb_mod.format_exc(), "exception")
@@ -2573,7 +2559,7 @@ def run_editor_app(app: EditorApp) -> None:
         if crash_path:
             text = render_exit_renderables(app)
             if not text.strip() and hasattr(app, "_exception") and app._exception:
-                import traceback as tb_mod2  # noqa: PLC0415
+                import traceback as tb_mod2
 
                 text = "".join(
                     tb_mod2.format_exception(type(app._exception), app._exception, app._exception.__traceback__)
@@ -2590,7 +2576,7 @@ def run_editor_app(app: EditorApp) -> None:
 
 def pause_before_exit() -> None:
     """Prompt user to press RETURN so they can read error output."""
-    import termios  # noqa: PLC0415
+    import termios
 
     sys.stdout.write("\r\nPress RETURN to continue...\r\n")
     sys.stdout.flush()

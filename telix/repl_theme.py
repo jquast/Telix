@@ -137,8 +137,7 @@ def get_repl_palette(session_key: str = "") -> dict[str, str]:
                 alpha = int(value[7:9], 16) / 255.0
                 fg = hex_to_rgb(value[:7])
                 bg = hex_to_rgb(bg_hex)
-                r, g, b = (int(f * alpha + b * (1 - alpha))
-                           for f, b in zip(fg, bg))
+                r, g, b = (int(f * alpha + b * (1 - alpha)) for f, b in zip(fg, bg, strict=False))
                 palette[semantic] = f"#{r:02x}{g:02x}{b:02x}"
             else:
                 palette[semantic] = value[:7]

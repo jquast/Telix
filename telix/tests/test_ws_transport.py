@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 import websockets.exceptions
 
-from telix.ws_transport import WebSocketReader, WebSocketWriter, parse_gmcp_frame, extract_iac
+from telix.ws_transport import WebSocketReader, WebSocketWriter, extract_iac, parse_gmcp_frame
 
 
 class TestWebSocketReader:
@@ -417,66 +417,75 @@ class TestDrain:
         await asyncio.wait_for(writer.drain(), timeout=1.0)
 
 
-
 class TestWsClientParser:
     """ws_client.build_parser() supports --no-repl and new transport flags."""
 
     def test_no_repl_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--no-repl"])
         assert args.no_repl is True
 
     def test_no_repl_defaults_false(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.no_repl is False
 
     def test_typescript_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--typescript", "path/file.txt"])
         assert args.typescript == "path/file.txt"
 
     def test_typescript_defaults_empty(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.typescript == ""
 
     def test_logfile_mode_rewrite(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--logfile-mode", "rewrite"])
         assert args.logfile_mode == "rewrite"
 
     def test_typescript_mode_defaults_append(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.typescript_mode == "append"
 
     def test_encoding_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--encoding", "cp437"])
         assert args.encoding == "cp437"
 
     def test_encoding_defaults_utf8(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.encoding == "utf-8"
 
     def test_encoding_errors_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--encoding-errors", "strict"])
         assert args.encoding_errors == "strict"
 
     def test_encoding_errors_defaults_replace(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com"])
         assert args.encoding_errors == "replace"
@@ -484,18 +493,21 @@ class TestWsClientParser:
     def test_subprotocols_list(self) -> None:
         """WS_SUBPROTOCOLS contains both protocols in correct order."""
         from telix.ws_client import WS_SUBPROTOCOLS
+
         assert len(WS_SUBPROTOCOLS) == 2
         assert WS_SUBPROTOCOLS[0] == "gmcp.mudstandards.org"
         assert WS_SUBPROTOCOLS[1] == "telnet.mudstandards.org"
 
     def test_colormatch_flag_accepted(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--colormatch", "c64"])
         assert args.colormatch == "c64"
 
     def test_no_ice_colors_flag(self) -> None:
         from telix.ws_client import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["wss://example.com", "--no-ice-colors"])
         assert args.no_ice_colors is True
@@ -647,11 +659,11 @@ class TestEchoMode:
         ws = MagicMock()
         writer = WebSocketWriter(ws)
         writer.will_echo = True
-        assert not writer.will_echo is False
+        assert writer.will_echo is not False
 
     def test_will_echo_false_means_local_echo(self):
         """When will_echo is False, local_echo should be True."""
         ws = MagicMock()
         writer = WebSocketWriter(ws)
         writer.will_echo = False
-        assert not writer.will_echo is True
+        assert writer.will_echo is not True

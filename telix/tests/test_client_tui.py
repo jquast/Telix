@@ -314,8 +314,12 @@ def test_build_command_websocket_typescript_forwarded() -> None:
 
 def test_build_command_websocket_typescript_mode_rewrite() -> None:
     cfg = SessionConfig(
-        host="example.com", port=443, protocol="websocket", ssl=True,
-        typescript="/tmp/ts.txt", typescript_mode="rewrite",
+        host="example.com",
+        port=443,
+        protocol="websocket",
+        ssl=True,
+        typescript="/tmp/ts.txt",
+        typescript_mode="rewrite",
     )
     cmd = build_command(cfg)
     assert "--typescript-mode" in cmd
@@ -324,8 +328,7 @@ def test_build_command_websocket_typescript_mode_rewrite() -> None:
 
 def test_build_command_websocket_typescript_mode_append_omitted() -> None:
     cfg = SessionConfig(
-        host="example.com", port=443, protocol="websocket", ssl=True,
-        typescript="/tmp/ts.txt", typescript_mode="append",
+        host="example.com", port=443, protocol="websocket", ssl=True, typescript="/tmp/ts.txt", typescript_mode="append"
     )
     cmd = build_command(cfg)
     assert "--typescript-mode" not in cmd

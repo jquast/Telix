@@ -35,9 +35,7 @@ UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint)`$", re.IGNORECASE)
 EDIT_RE = re.compile(r"^`edit\s+(\w+)`$", re.IGNORECASE)
 TOGGLE_RE = re.compile(r"^`toggle\s+(\w+)`$", re.IGNORECASE)
-WALK_DIALOG_RE = re.compile(
-    r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE,
-)
+WALK_DIALOG_RE = re.compile(r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE)
 
 
 class StepResult(enum.Enum):
@@ -230,7 +228,7 @@ async def dispatch_one(
     :param mask_send: If ``True``, mask plain command text in status.
     :returns: :class:`StepResult` indicating what happened.
     """
-    from .autoreply import check_condition  # noqa: PLC0415 - circular
+    from .autoreply import check_condition
 
     dm = DELAY_RE.match(cmd)
     if dm:
@@ -768,7 +766,7 @@ async def execute_macro_commands(text: str, ctx: "SessionContext", log: logging.
     :param ctx: Session context.
     :param log: Logger.
     """
-    from .client_repl_travel import handle_travel_commands  # noqa: PLC0415 - circular
+    from .client_repl_travel import handle_travel_commands
 
     expanded = expand_commands_ex(text)
     parts = list(expanded.commands)

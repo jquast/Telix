@@ -57,7 +57,7 @@ def _coverage_wrap(cmd: list[str]) -> list[str]:
 
 def _prepare_terminal() -> None:
     """Reset the terminal for a subprocess: clear screen and flush buffers."""
-    from .client_repl import get_term, terminal_cleanup  # noqa: PLC0415
+    from .client_repl import get_term, terminal_cleanup
 
     blessed_term = get_term()
     sys.stdout.write(terminal_cleanup())
@@ -92,7 +92,7 @@ def _run_subprocess(
     :param cleanup_files: Paths to remove after the subprocess exits.
     :returns: Completed process, or ``None`` if the executable was not found.
     """
-    from .client_repl import blocking_fds, restore_after_subprocess  # noqa: PLC0415
+    from .client_repl import blocking_fds, restore_after_subprocess
 
     global subprocess_is_active
     wrapped = _coverage_wrap(cmd)
@@ -137,9 +137,7 @@ def get_logfile_path() -> str:
     return ""
 
 
-def confirm_dialog(
-    title: str, body: str, warning: str = "", replay_buf: Any | None = None,
-) -> bool:
+def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: Any | None = None) -> bool:
     """
     Show a Textual confirmation dialog in a subprocess.
 
@@ -263,21 +261,11 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             return None
         if session_key:
             save_data = load_prefs(session_key)
-            save_data["randomwalk_visit_level"] = int(
-                data.get("visit_level", default_visit_level)
-            )
-            save_data["randomwalk_auto_search"] = bool(
-                data.get("auto_search", default_auto_search)
-            )
-            save_data["randomwalk_auto_evaluate"] = bool(
-                data.get("auto_evaluate", default_auto_evaluate)
-            )
-            save_data["randomwalk_auto_survey"] = bool(
-                data.get("auto_survey", default_auto_survey)
-            )
-            save_data["randomwalk_autoreplies"] = bool(
-                data.get("autoreplies", default_autoreplies)
-            )
+            save_data["randomwalk_visit_level"] = int(data.get("visit_level", default_visit_level))
+            save_data["randomwalk_auto_search"] = bool(data.get("auto_search", default_auto_search))
+            save_data["randomwalk_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
+            save_data["randomwalk_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
+            save_data["randomwalk_autoreplies"] = bool(data.get("autoreplies", default_autoreplies))
             save_prefs(session_key, save_data)
         return str(data.get("command", f"`randomwalk 999 {default_visit_level}`"))
     except (OSError, ValueError):
@@ -289,9 +277,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             pass
 
 
-def autodiscover_dialog(
-    replay_buf: Any | None = None, session_key: str = "",
-) -> str | None:
+def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") -> str | None:
     """
     Show the autodiscover dialog with BFS/DFS strategy selection.
 
@@ -353,21 +339,11 @@ def autodiscover_dialog(
             return None
         if session_key:
             save_data = load_prefs(session_key)
-            save_data["autodiscover_strategy"] = str(
-                data.get("strategy", default_strategy)
-            )
-            save_data["autodiscover_auto_search"] = bool(
-                data.get("auto_search", default_auto_search)
-            )
-            save_data["autodiscover_auto_evaluate"] = bool(
-                data.get("auto_evaluate", default_auto_evaluate)
-            )
-            save_data["autodiscover_auto_survey"] = bool(
-                data.get("auto_survey", default_auto_survey)
-            )
-            save_data["autodiscover_autoreplies"] = bool(
-                data.get("autoreplies", default_autoreplies)
-            )
+            save_data["autodiscover_strategy"] = str(data.get("strategy", default_strategy))
+            save_data["autodiscover_auto_search"] = bool(data.get("auto_search", default_auto_search))
+            save_data["autodiscover_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
+            save_data["autodiscover_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
+            save_data["autodiscover_autoreplies"] = bool(data.get("autoreplies", default_autoreplies))
             save_prefs(session_key, save_data)
         return str(data.get("command", f"`autodiscover {default_strategy}`"))
     except (OSError, ValueError):
@@ -425,9 +401,7 @@ def render_help_md(has_gmcp: bool = False) -> list[str]:
     return lines
 
 
-def show_help(
-    macro_defs: "Any" = None, replay_buf: Any | None = None, has_gmcp: bool = False,
-) -> None:
+def show_help(macro_defs: "Any" = None, replay_buf: Any | None = None, has_gmcp: bool = False) -> None:
     """
     Launch the keybindings help viewer as a Textual TUI subprocess.
 
@@ -466,9 +440,7 @@ def read_crash_file(crash_path: str) -> dict[str, Any] | None:
         return None
 
 
-def format_crash_banner(
-    crash_data: dict[str, Any], cmd: list[str], crash_path: str, exit_code: int,
-) -> str:
+def format_crash_banner(crash_data: dict[str, Any], cmd: list[str], crash_path: str, exit_code: int) -> str:
     r"""
     Format crash data as a display banner with ``\r\n`` line endings.
 
@@ -495,9 +467,7 @@ def format_crash_banner(
     return "\r\n".join(lines)
 
 
-def handle_crash_file(
-    crash_path: str, cmd: list[str], replay_buf: Any | None, result: Any | None,
-) -> None:
+def handle_crash_file(crash_path: str, cmd: list[str], replay_buf: Any | None, result: Any | None) -> None:
     """
     Read crash file and inject a formatted banner into *replay_buf*.
 
@@ -525,9 +495,7 @@ def handle_crash_file(
             replay_buf.append(banner.encode("utf-8"))
 
 
-def launch_unified_editor(
-    initial_tab: str, ctx: "SessionContext", replay_buf: Any | None = None,
-) -> None:
+def launch_unified_editor(initial_tab: str, ctx: "SessionContext", replay_buf: Any | None = None) -> None:
     """
     Launch the unified tabbed TUI editor as a subprocess.
 
@@ -545,9 +513,7 @@ def launch_unified_editor(
     highlights_file = ctx.highlights_file or os.path.join(config_dir, "highlights.json")
     macros_file = ctx.macros_file or os.path.join(config_dir, "macros.json")
     autoreplies_file = ctx.autoreplies_file or os.path.join(config_dir, "autoreplies.json")
-    progressbars_file = (
-        ctx.progressbars_file or os.path.join(config_dir, "progressbars.json")
-    )
+    progressbars_file = ctx.progressbars_file or os.path.join(config_dir, "progressbars.json")
     rooms_file = ctx.rooms_file or rooms_path_fn(session_key)
     current_room_file = ctx.current_room_file or current_room_path_fn(session_key)
     fasttravel_file = fasttravel_path_fn(session_key)
@@ -601,16 +567,14 @@ def launch_unified_editor(
     cmd = [
         sys.executable,
         "-c",
-        "import sys; from telix.client_tui_dialogs import unified_editor_main; "
-        "unified_editor_main()",
+        "import sys; from telix.client_tui_dialogs import unified_editor_main; unified_editor_main()",
         params_json,
     ]
 
     crash_path, env = _make_crash_env()
 
     log.debug(
-        "unified_editor: pre-subprocess initial_tab=%s TERM=%s COLORTERM=%s "
-        "terminal_size=%s",
+        "unified_editor: pre-subprocess initial_tab=%s TERM=%s COLORTERM=%s terminal_size=%s",
         initial_tab,
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
@@ -656,9 +620,7 @@ def launch_unified_editor(
         task.add_done_callback(on_done)
 
 
-def launch_tui_editor(
-    editor_type: str, ctx: "SessionContext", replay_buf: Any | None = None,
-) -> None:
+def launch_tui_editor(editor_type: str, ctx: "SessionContext", replay_buf: Any | None = None) -> None:
     """
     Launch a TUI editor for macros or autoreplies in a subprocess.
 
@@ -761,9 +723,7 @@ def launch_tui_editor(
         reload_autoreplies(ctx, path, session_key, log)
 
 
-def reload_macros(
-    ctx: "SessionContext", path: str, session_key: str, log: logging.Logger,
-) -> None:
+def reload_macros(ctx: "SessionContext", path: str, session_key: str, log: logging.Logger) -> None:
     """Reload macro definitions from disk and update dispatch."""
     if not os.path.exists(path):
         return
@@ -779,9 +739,7 @@ def reload_macros(
         log.warning("failed to reload macros: %s", exc)
 
 
-def reload_autoreplies(
-    ctx: "SessionContext", path: str, session_key: str, log: logging.Logger,
-) -> None:
+def reload_autoreplies(ctx: "SessionContext", path: str, session_key: str, log: logging.Logger) -> None:
     """Reload autoreply rules from disk after editing."""
     if not os.path.exists(path):
         return
@@ -794,9 +752,7 @@ def reload_autoreplies(
         log.warning("failed to reload autoreplies: %s", exc)
 
 
-def reload_progressbars(
-    ctx: "SessionContext", path: str, session_key: str, log: logging.Logger,
-) -> None:
+def reload_progressbars(ctx: "SessionContext", path: str, session_key: str, log: logging.Logger) -> None:
     """Reload progress bar configs from disk after editing."""
     if not os.path.exists(path):
         return
@@ -809,9 +765,7 @@ def reload_progressbars(
         log.warning("failed to reload progress bars from %s", path)
 
 
-def reload_highlights(
-    ctx: "SessionContext", path: str, session_key: str, log: logging.Logger,
-) -> None:
+def reload_highlights(ctx: "SessionContext", path: str, session_key: str, log: logging.Logger) -> None:
     """Reload highlight rules from disk after editing."""
     if not os.path.exists(path):
         return
@@ -824,9 +778,7 @@ def reload_highlights(
         log.warning("failed to reload highlights: %s", exc)
 
 
-def launch_chat_viewer(
-    ctx: "SessionContext", replay_buf: Any | None = None,
-) -> None:
+def launch_chat_viewer(ctx: "SessionContext", replay_buf: Any | None = None) -> None:
     """
     Launch the Capture Window TUI in a subprocess.
 
@@ -888,9 +840,7 @@ def launch_chat_viewer(
     )
 
 
-def launch_room_browser(
-    ctx: "SessionContext", replay_buf: Any | None = None,
-) -> None:
+def launch_room_browser(ctx: "SessionContext", replay_buf: Any | None = None) -> None:
     """
     Launch the room browser TUI in a subprocess.
 

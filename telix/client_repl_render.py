@@ -24,6 +24,7 @@ from .repl_theme import hex_to_rgb, get_repl_palette
 
 log = logging.getLogger(__name__)
 
+
 @dataclasses.dataclass(frozen=True)
 class ActivityTiming:
     """Activity-dot animation timing constants."""
@@ -116,7 +117,6 @@ SEXTANT_BITS = (
 
 #: "2 on, 1 off" phase rotation -- which pair of lights is active.
 PHASES = ((0, 1), (1, 2), (0, 2))
-
 
 
 @dataclasses.dataclass(frozen=True)
@@ -358,7 +358,7 @@ class Stoplight:
 
 def get_term() -> "blessed.Terminal":
     """Return the module-level blessed Terminal singleton."""
-    from . import client_repl  # noqa: PLC0415  # circular
+    from . import client_repl  # circular
 
     return client_repl.get_term()
 
@@ -417,7 +417,6 @@ def cursor_ar_osc() -> str:
     """OSC 12 escape to set cursor color for the autoreply background."""
     r, g, b = cursor_ar_rgb()
     return f"\x1b]12;rgb:{r:02x}/{g:02x}/{b:02x}\x07"
-
 
 
 # SGR style dicts keyed to LineEditor constructor / attribute names.
@@ -485,7 +484,6 @@ def lerp_hsv(
         dh -= 360.0
     h = (h1 + t * dh) % 360.0
     return (h, s1 + t * (s2 - s1), v1 + t * (v2 - v1))
-
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1089,7 +1087,7 @@ class ToolbarRenderer:
 
     def ensure_gmcp_ready(self) -> bool:
         """Initialize toolbar on first GMCP data; return ``False`` if no data yet."""
-        from . import client_repl  # noqa: PLC0415  # circular
+        from . import client_repl  # circular
 
         gmcp_data: dict[str, Any] | None = self.ctx.gmcp_data or None
         if not self.has_gmcp:
@@ -1185,7 +1183,7 @@ class ToolbarRenderer:
         self, gmcp_data: dict[str, Any], bar_configs: list[Any], now: float, slots: list[ToolbarSlot]
     ) -> bool:
         """Build vital bar slots from user-configured progress bar list."""
-        from . import progressbars  # noqa: PLC0415  # circular
+        from . import progressbars  # circular
 
         needs_reflash = False
         for i, cfg in enumerate(bar_configs):
@@ -1399,7 +1397,7 @@ class ToolbarRenderer:
 
     def travel_bar_slot(self, cur: Any, tot: Any, width: int, kind: str, slots: list[ToolbarSlot]) -> None:
         """Append a travel progress bar slot, using config colors when available."""
-        from . import progressbars  # noqa: PLC0415  # circular
+        from . import progressbars  # circular
 
         travel_cfg = None
         for cfg in self.ctx.progressbar_configs or []:
@@ -1570,7 +1568,7 @@ class ToolbarRenderer:
             ac_elapsed = time.monotonic() - self.ctx.active_command_time
             show_cmd = cq is not None or (ac is not None and ac_elapsed < FLASH.DURATION)
             if show_cmd:
-                from . import client_repl_commands  # noqa: PLC0415  # circular
+                from . import client_repl_commands  # circular
 
                 hint = activity_hint(engine, bt.width)
                 prog = until_progress(engine)

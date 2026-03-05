@@ -7,7 +7,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import macros, autoreply, ws_transport, gmcp_snapshot, mslp
+from . import mslp, macros, autoreply, ws_transport, gmcp_snapshot
 
 
 class CommandQueue:

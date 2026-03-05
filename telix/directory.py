@@ -1,9 +1,9 @@
 """Load the bundled MUD/BBS directory and convert to session configs."""
 
 # std imports
-import configparser
 import json
 import typing
+import configparser
 import importlib.resources
 
 from . import client_tui_base
@@ -73,9 +73,7 @@ def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_base.SessionCo
     """Convert a single directory/favorites entry dict to a SessionConfig."""
     host = entry["host"]
     port = entry.get("port", 23)
-    cfg = client_tui_base.SessionConfig(
-        host=host, port=port, name=entry.get("name", host)
-    )
+    cfg = client_tui_base.SessionConfig(host=host, port=port, name=entry.get("name", host))
     if entry.get("ssl"):
         cfg.ssl = True
     enc = entry.get("encoding")

@@ -74,6 +74,7 @@ class TestLoadFavorites:
 
     def test_topaz_alias(self) -> None:
         from telix.directory import _ENCODING_ALIASES
+
         assert _ENCODING_ALIASES["topaz"] == "latin1"
 
     def test_port_is_int(self) -> None:
@@ -130,13 +131,8 @@ class TestDirectoryToSessions:
     def test_favorites_new_entry_added(self) -> None:
         sessions = directory_to_sessions()
         favorites = load_favorites()
-        directory_keys = {
-            f"{e['host']}:{e.get('port', 23)}" for e in load_directory()
-        }
-        fav_only = [
-            f for f in favorites
-            if f"{f['host']}:{f.get('port', 23)}" not in directory_keys
-        ]
+        directory_keys = {f"{e['host']}:{e.get('port', 23)}" for e in load_directory()}
+        fav_only = [f for f in favorites if f"{f['host']}:{f.get('port', 23)}" not in directory_keys]
         for fav in fav_only:
             key = f"{fav['host']}:{fav.get('port', 23)}"
             assert key in sessions

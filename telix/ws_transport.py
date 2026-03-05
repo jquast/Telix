@@ -22,8 +22,8 @@ import typing
 import asyncio
 import logging
 
-import websockets.exceptions
 import telnetlib3.telopt
+import websockets.exceptions
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ CMD_EOR = b"\xef"
 # GMCP telopt byte used as ext callback key.
 GMCP = b"\xc9"
 
-__all__ = ("WebSocketReader", "WebSocketWriter", "parse_gmcp_frame", "extract_iac")
+__all__ = ("WebSocketReader", "WebSocketWriter", "extract_iac", "parse_gmcp_frame")
 
 
 def parse_gmcp_frame(text: str) -> tuple[str, typing.Any]:
@@ -82,9 +82,7 @@ NEGOTIATION_CMDS = {
 TWO_BYTE_CMDS = {telnetlib3.telopt.GA, telnetlib3.telopt.CMD_EOR}
 
 
-def extract_iac(
-    data: bytes, remainder: bytes = b""
-) -> tuple[bytes, list[IacEvent], bytes]:
+def extract_iac(data: bytes, remainder: bytes = b"") -> tuple[bytes, list[IacEvent], bytes]:
     """
     Extract IAC sequences from a binary telnet stream.
 
@@ -248,12 +246,7 @@ class WebSocketWriter:
     so that code shared with the telnet path does not need conditionals.
     """
 
-    def __init__(
-        self,
-        ws: typing.Any,
-        peername: tuple[str, int] | None = None,
-        encoding: str = "utf-8",
-    ) -> None:
+    def __init__(self, ws: typing.Any, peername: tuple[str, int] | None = None, encoding: str = "utf-8") -> None:
         """
         Initialise the writer.
 

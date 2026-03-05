@@ -22,7 +22,9 @@ class TestMainRouting:
         monkeypatch.setattr(sys, "argv", ["telix", "ws://example.com:4000"])
         run_ws_calls = []
 
-        async def fake_run_ws(url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs):
+        async def fake_run_ws(
+            url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs
+        ):
             run_ws_calls.append(url)
 
         with patch("telix.main.ws_client.run_ws_client", side_effect=fake_run_ws):
@@ -35,7 +37,9 @@ class TestMainRouting:
         monkeypatch.setattr(sys, "argv", ["telix", "wss://example.com"])
         run_ws_called = []
 
-        async def fake_run_ws(url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs):
+        async def fake_run_ws(
+            url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs
+        ):
             run_ws_called.append(url)
 
         with patch("telix.main.ws_client.run_ws_client", side_effect=fake_run_ws):
@@ -49,7 +53,7 @@ class TestMainRouting:
         with (
             patch("telix.main.ws_client.run_ws_client") as mock_ws,
             patch("telix.main.asyncio.run") as mock_run,
-            patch("telix.main.telnetlib3.client.run_client") as mock_telnet,
+            patch("telix.main.telnetlib3.client.run_client"),
         ):
             main()
         mock_ws.assert_not_called()
@@ -71,7 +75,9 @@ class TestMainRouting:
         monkeypatch.setattr(sys, "argv", ["telix", "ws://example.com:4000", "--no-repl"])
         run_ws_calls = []
 
-        async def fake_run_ws(url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs):
+        async def fake_run_ws(
+            url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs
+        ):
             run_ws_calls.append(no_repl)
 
         with patch("telix.main.ws_client.run_ws_client", side_effect=fake_run_ws):
@@ -84,10 +90,7 @@ class TestServerTypePresets:
     def test_bbs_telnet_injects_raw_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--bbs injects --raw-mode, VGA colormatch, and the telix shell."""
         monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "bbs.example.com"])
-        with (
-            patch("telix.main.asyncio.run"),
-            patch("telix.main.telnetlib3.client.run_client"),
-        ):
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
             main()
         assert "--raw-mode" in sys.argv
         assert main_mod._color_args.colormatch == "vga"
@@ -97,10 +100,7 @@ class TestServerTypePresets:
     def test_mud_telnet_injects_line_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--mud injects --line-mode, --compression, and the telix shell."""
         monkeypatch.setattr(sys, "argv", ["telix", "--mud", "mud.example.com", "4000"])
-        with (
-            patch("telix.main.asyncio.run"),
-            patch("telix.main.telnetlib3.client.run_client"),
-        ):
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
             main()
         assert "--line-mode" in sys.argv
         assert "--compression" in sys.argv
@@ -115,7 +115,9 @@ class TestServerTypePresets:
         monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "ws://bbs.example.com"])
         captured = []
 
-        async def fake_run_ws(url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs):
+        async def fake_run_ws(
+            url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs
+        ):
             captured.append(no_repl)
 
         with patch("telix.main.ws_client.run_ws_client", side_effect=fake_run_ws):
@@ -128,7 +130,9 @@ class TestServerTypePresets:
         monkeypatch.setattr(sys, "argv", ["telix", "--mud", "ws://mud.example.com"])
         captured = []
 
-        async def fake_run_ws(url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs):
+        async def fake_run_ws(
+            url, shell, no_repl, loglevel, logfile, typescript, logfile_mode, typescript_mode, **kwargs
+        ):
             captured.append(no_repl)
 
         with patch("telix.main.ws_client.run_ws_client", side_effect=fake_run_ws):
@@ -139,10 +143,7 @@ class TestServerTypePresets:
     def test_bbs_flag_removed_from_argv(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--bbs is removed from sys.argv before telnetlib3 parses it."""
         monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "bbs.example.com"])
-        with (
-            patch("telix.main.asyncio.run"),
-            patch("telix.main.telnetlib3.client.run_client"),
-        ):
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
             main()
         assert "--bbs" not in sys.argv
 

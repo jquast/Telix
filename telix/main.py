@@ -1,19 +1,20 @@
 """Entry point for the telix CLI."""
 
 # std imports
-import argparse
-import asyncio
 import os
 import sys
+import asyncio
+import argparse
 
 if os.environ.get("COVERAGE_PROCESS_START"):
     import coverage
+
     coverage.process_startup()
 
 import telnetlib3.client
 
 # local
-from . import directory, client_tui_base, client_tui_dialogs, mtts, ws_client
+from . import mtts, directory, ws_client, client_tui_base, client_tui_dialogs
 
 # Module-level store for telix-specific args, set by main() before
 # telnetlib3 starts the shell.  Read by client_shell._setup_color_filter().
@@ -39,6 +40,7 @@ def _detect_terminal_colors() -> None:
     """
     global _detected_bg, _detected_fg, _detected_sw_name
     import blessed
+
     term = blessed.Terminal()
     with term.cbreak():
         bg = term.get_bgcolor(timeout=0.5, bits=8)
@@ -58,16 +60,11 @@ def _build_telix_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--colormatch", default="vga")
-    parser.add_argument("--color-brightness", type=float, default=1.0,
-                        dest="color_brightness")
-    parser.add_argument("--color-contrast", type=float, default=1.0,
-                        dest="color_contrast")
-    parser.add_argument("--background-color", default="#000000",
-                        dest="background_color")
-    parser.add_argument("--no-ice-colors", action="store_true", default=False,
-                        dest="no_ice_colors")
-    parser.add_argument("--no-repl", action="store_true", default=False,
-                        dest="no_repl")
+    parser.add_argument("--color-brightness", type=float, default=1.0, dest="color_brightness")
+    parser.add_argument("--color-contrast", type=float, default=1.0, dest="color_contrast")
+    parser.add_argument("--background-color", default="#000000", dest="background_color")
+    parser.add_argument("--no-ice-colors", action="store_true", default=False, dest="no_ice_colors")
+    parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
     return parser
 
 
@@ -93,157 +90,70 @@ def _build_help_parser() -> argparse.ArgumentParser:
     Groups connection and telix-specific options alphabetically, marking telnet-only options with a dagger.
     """
     parser = argparse.ArgumentParser(
-        prog="telix",
-        usage="telix [options] {host [port] | ws-url}",
-        description="Telnet and WebSocket MUD/BBS client.",
+        prog="telix", usage="telix [options] {host [port] | ws-url}", description="Telnet and WebSocket MUD/BBS client."
     )
 
     conn = parser.add_argument_group("Connection options")
+    conn.add_argument("--always-do", metavar="OPT", help=f"always send DO for this option {DAGGER}")
+    conn.add_argument("--always-dont", metavar="OPT", help=f"always send DONT for this option {DAGGER}")
+    conn.add_argument("--always-will", metavar="OPT", help=f"always send WILL for this option {DAGGER}")
+    conn.add_argument("--always-wont", metavar="OPT", help=f"always send WONT for this option {DAGGER}")
     conn.add_argument(
-        "--always-do", metavar="OPT",
-        help=f"always send DO for this option {DAGGER}",
+        "--ansi-keys", action="store_true", help=f"transmit raw ANSI escape sequences for arrow/function keys {DAGGER}"
     )
     conn.add_argument(
-        "--always-dont", metavar="OPT",
-        help=f"always send DONT for this option {DAGGER}",
+        "--ascii-eol", action="store_true", help=f"use ASCII CR/LF instead of encoding-native EOL {DAGGER}"
+    )
+    conn.add_argument("--compression", action="store_true", default=None, help=f"request MCCP compression {DAGGER}")
+    conn.add_argument(
+        "--connect-maxwait", metavar="N", type=float, help=f"timeout for pending negotiation (default: 4.0) {DAGGER}"
     )
     conn.add_argument(
-        "--always-will", metavar="OPT",
-        help=f"always send WILL for this option {DAGGER}",
+        "--connect-minwait", metavar="N", type=float, help=f"shell delay for negotiation (default: 0) {DAGGER}"
     )
     conn.add_argument(
-        "--always-wont", metavar="OPT",
-        help=f"always send WONT for this option {DAGGER}",
-    )
-    conn.add_argument(
-        "--ansi-keys", action="store_true",
-        help=f"transmit raw ANSI escape sequences for arrow/function keys {DAGGER}",
-    )
-    conn.add_argument(
-        "--ascii-eol", action="store_true",
-        help=f"use ASCII CR/LF instead of encoding-native EOL {DAGGER}",
-    )
-    conn.add_argument(
-        "--compression", action="store_true", default=None,
-        help=f"request MCCP compression {DAGGER}",
-    )
-    conn.add_argument(
-        "--connect-maxwait", metavar="N", type=float,
-        help=f"timeout for pending negotiation (default: 4.0) {DAGGER}",
-    )
-    conn.add_argument(
-        "--connect-minwait", metavar="N", type=float,
-        help=f"shell delay for negotiation (default: 0) {DAGGER}",
-    )
-    conn.add_argument(
-        "--connect-timeout", metavar="N", type=float,
+        "--connect-timeout",
+        metavar="N",
+        type=float,
         help=f"timeout for TCP connection in seconds (default: 10) {DAGGER}",
     )
+    conn.add_argument("--encoding", default="utf-8", help="encoding name (default: utf-8)")
+    conn.add_argument("--encoding-errors", default="replace", help="handler for encoding errors (default: replace)")
+    conn.add_argument("--force-binary", action="store_true", help=f"force binary mode negotiation {DAGGER}")
     conn.add_argument(
-        "--encoding", default="utf-8",
-        help="encoding name (default: utf-8)",
+        "--gmcp-modules", metavar="MODULES", help=f"comma-separated list of GMCP modules to request {DAGGER}"
     )
+    conn.add_argument("--line-mode", action="store_true", help="force line-mode input (default: auto-detect)")
+    conn.add_argument("--logfile", metavar="FILE", help="write log to FILE")
+    conn.add_argument("--logfile-mode", choices=["append", "rewrite"], help="log file write mode (default: append)")
+    conn.add_argument("--loglevel", help="logging level (default: warn)")
+    conn.add_argument("--no-repl", action="store_true", help="disable the interactive REPL (raw I/O only)")
+    conn.add_argument("--raw-mode", action="store_true", help="force raw-mode input (default: auto-detect)")
+    conn.add_argument("--send-environ", metavar="VARS", help=f"comma-separated environment variables to send {DAGGER}")
+    conn.add_argument("--shell", metavar="SHELL", help="dotted path to shell coroutine")
+    conn.add_argument("--speed", metavar="N", type=int, help=f"terminal speed to report (default: 38400) {DAGGER}")
+    conn.add_argument("--ssl", action="store_true", help=f"enable SSL/TLS {DAGGER}")
+    conn.add_argument("--ssl-cafile", metavar="PATH", help=f"CA bundle for SSL verification {DAGGER}")
+    conn.add_argument("--ssl-no-verify", action="store_true", help=f"disable SSL certificate verification {DAGGER}")
+    conn.add_argument("--term", metavar="TERM", help=f"terminal type to negotiate (default: $TERM) {DAGGER}")
+    conn.add_argument("--typescript", metavar="FILE", help="record session to FILE")
     conn.add_argument(
-        "--encoding-errors", default="replace",
-        help="handler for encoding errors (default: replace)",
-    )
-    conn.add_argument(
-        "--force-binary", action="store_true",
-        help=f"force binary mode negotiation {DAGGER}",
-    )
-    conn.add_argument(
-        "--gmcp-modules", metavar="MODULES",
-        help=f"comma-separated list of GMCP modules to request {DAGGER}",
-    )
-    conn.add_argument(
-        "--line-mode", action="store_true",
-        help="force line-mode input (default: auto-detect)",
-    )
-    conn.add_argument(
-        "--logfile", metavar="FILE",
-        help="write log to FILE",
-    )
-    conn.add_argument(
-        "--logfile-mode", choices=["append", "rewrite"],
-        help="log file write mode (default: append)",
-    )
-    conn.add_argument(
-        "--loglevel",
-        help="logging level (default: warn)",
-    )
-    conn.add_argument(
-        "--no-repl", action="store_true",
-        help="disable the interactive REPL (raw I/O only)",
-    )
-    conn.add_argument(
-        "--raw-mode", action="store_true",
-        help="force raw-mode input (default: auto-detect)",
-    )
-    conn.add_argument(
-        "--send-environ", metavar="VARS",
-        help=f"comma-separated environment variables to send {DAGGER}",
-    )
-    conn.add_argument(
-        "--shell", metavar="SHELL",
-        help="dotted path to shell coroutine",
-    )
-    conn.add_argument(
-        "--speed", metavar="N", type=int,
-        help=f"terminal speed to report (default: 38400) {DAGGER}",
-    )
-    conn.add_argument(
-        "--ssl", action="store_true",
-        help=f"enable SSL/TLS {DAGGER}",
-    )
-    conn.add_argument(
-        "--ssl-cafile", metavar="PATH",
-        help=f"CA bundle for SSL verification {DAGGER}",
-    )
-    conn.add_argument(
-        "--ssl-no-verify", action="store_true",
-        help=f"disable SSL certificate verification {DAGGER}",
-    )
-    conn.add_argument(
-        "--term", metavar="TERM",
-        help=f"terminal type to negotiate (default: $TERM) {DAGGER}",
-    )
-    conn.add_argument(
-        "--typescript", metavar="FILE",
-        help="record session to FILE",
-    )
-    conn.add_argument(
-        "--typescript-mode", choices=["append", "rewrite"],
-        help="typescript write mode (default: append)",
+        "--typescript-mode", choices=["append", "rewrite"], help="typescript write mode (default: append)"
     )
 
     telix = parser.add_argument_group("Telix options")
     telix.add_argument(
-        "--background-color", metavar="COLOR",
-        help="terminal background color as #RRGGBB (default: #000000)",
+        "--background-color", metavar="COLOR", help="terminal background color as #RRGGBB (default: #000000)"
     )
+    telix.add_argument("--bbs", action="store_true", help="apply BBS connection presets")
+    telix.add_argument("--color-brightness", metavar="N", type=float, help="color brightness multiplier (default: 1.0)")
+    telix.add_argument("--color-contrast", metavar="N", type=float, help="color contrast multiplier (default: 1.0)")
     telix.add_argument(
-        "--bbs", action="store_true",
-        help="apply BBS connection presets",
+        "--colormatch", metavar="PALETTE", help="color palette for remapping (default: vga, 'none' to disable)"
     )
+    telix.add_argument("--mud", action="store_true", help="apply MUD connection presets")
     telix.add_argument(
-        "--color-brightness", metavar="N", type=float,
-        help="color brightness multiplier (default: 1.0)",
-    )
-    telix.add_argument(
-        "--color-contrast", metavar="N", type=float,
-        help="color contrast multiplier (default: 1.0)",
-    )
-    telix.add_argument(
-        "--colormatch", metavar="PALETTE",
-        help="color palette for remapping (default: vga, 'none' to disable)",
-    )
-    telix.add_argument(
-        "--mud", action="store_true",
-        help="apply MUD connection presets",
-    )
-    telix.add_argument(
-        "--no-ice-colors", action="store_true",
-        help="disable iCE color (blink as bright background) support",
+        "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
     )
 
     parser.epilog = f"{DAGGER} telnet-only option (not applicable to WebSocket connections)"
@@ -258,17 +168,9 @@ def reinit() -> None:
     print(f"Loaded {len(sessions)} sessions from directory.")
 
 
-BBS_TELNET_FLAGS = [
-    "--raw-mode",
-    "--colormatch", "vga",
-]
+BBS_TELNET_FLAGS = ["--raw-mode", "--colormatch", "vga"]
 
-MUD_TELNET_FLAGS = [
-    "--line-mode",
-    "--compression",
-    "--colormatch", "none",
-    "--no-ice-colors",
-]
+MUD_TELNET_FLAGS = ["--line-mode", "--compression", "--colormatch", "none", "--no-ice-colors"]
 
 
 def pop_server_type() -> str:
@@ -351,19 +253,19 @@ def main() -> None:
         )
         try:
             asyncio.run(
-            ws_client.run_ws_client(
-                url=args.url,
-                shell=args.shell,
-                no_repl=no_repl,
-                loglevel=args.loglevel,
-                logfile=args.logfile,
-                typescript=args.typescript,
-                logfile_mode=args.logfile_mode,
-                typescript_mode=args.typescript_mode,
-                encoding=args.encoding,
-                encoding_errors=args.encoding_errors,
+                ws_client.run_ws_client(
+                    url=args.url,
+                    shell=args.shell,
+                    no_repl=no_repl,
+                    loglevel=args.loglevel,
+                    logfile=args.logfile,
+                    typescript=args.typescript,
+                    logfile_mode=args.logfile_mode,
+                    typescript_mode=args.typescript_mode,
+                    encoding=args.encoding,
+                    encoding_errors=args.encoding_errors,
+                )
             )
-        )
         except KeyboardInterrupt:
             pass
         except OSError as err:
@@ -400,8 +302,9 @@ def main() -> None:
     # Install MTTS TTYPE cycling and MNES for MUD connections.
     if server_type != "bbs":
         is_ssl = "--ssl" in sys.argv or "--ssl-no-verify" in sys.argv
-        mtts.install_mtts(_get_term_value(), ssl=is_ssl, sw_name=_detected_sw_name,
-                         encoding=_get_argv_value("--encoding", "utf-8"))
+        mtts.install_mtts(
+            _get_term_value(), ssl=is_ssl, sw_name=_detected_sw_name, encoding=_get_argv_value("--encoding", "utf-8")
+        )
 
     try:
         asyncio.run(telnetlib3.client.run_client())

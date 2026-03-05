@@ -109,10 +109,7 @@ def load_configs(ctx: session_context.SessionContext) -> None:
     ctx.macro_defs = macros.ensure_builtin_macros(ctx.macro_defs)
 
     # resolve dynamic keyboard escape from disconnect builtin
-    disconnect = next(
-        (m for m in ctx.macro_defs if m.builtin_name == "disconnect" and m.enabled),
-        None,
-    )
+    disconnect = next((m for m in ctx.macro_defs if m.builtin_name == "disconnect" and m.enabled), None)
     if disconnect is not None:
         seq = macros.key_name_to_seq(disconnect.key)
         if seq is not None:
@@ -196,13 +193,7 @@ def _setup_color_filter(
     uses the encoding-specific filter instead of ColorFilter.
     """
     from . import main as _main_mod
-    from .color_filter import (
-        PALETTES,
-        ColorConfig,
-        ColorFilter,
-        PetsciiColorFilter,
-        AtasciiControlFilter,
-    )
+    from .color_filter import PALETTES, ColorConfig, ColorFilter, PetsciiColorFilter, AtasciiControlFilter
 
     args = _main_mod._color_args
     if args is None:
@@ -227,9 +218,7 @@ def _setup_color_filter(
         return
 
     if is_petscii or colormatch == "c64":
-        ctx.color_filter = PetsciiColorFilter(
-            brightness=args.color_brightness, contrast=args.color_contrast
-        )
+        ctx.color_filter = PetsciiColorFilter(brightness=args.color_brightness, contrast=args.color_contrast)
         return
 
     if is_atascii:
@@ -390,12 +379,7 @@ async def telix_client_shell(
         # resulting in double echo (local + server).
         if ctx.raw_mode is not False and tty_shell._istty:
             try:
-                await asyncio.wait_for(
-                    telnet_writer.wait_for_condition(
-                        lambda w: w.mode != "local"
-                    ),
-                    timeout=0.05,
-                )
+                await asyncio.wait_for(telnet_writer.wait_for_condition(lambda w: w.mode != "local"), timeout=0.05)
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 pass
 
@@ -475,11 +459,7 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
 
     ts_file = None
     if typescript_path:
-        ts_file = open(  # noqa: SIM115
-            typescript_path,
-            "w" if typescript_mode == "rewrite" else "a",
-            encoding="utf-8",
-        )
+        ts_file = open(typescript_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")
         ctx.typescript_file = ts_file
 
     try:
@@ -537,16 +517,11 @@ async def ws_client_shell(reader: ws_transport.WebSocketReader, writer: ws_trans
             elif tty_shell._istty:
                 # Raw mode: byte-at-a-time I/O for BBS connections.
                 if tty_shell._save_mode is not None:
-                    tty_shell.set_mode(
-                        tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True)
-                    )
+                    tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
                 linesep = "\r\n"
                 stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
                 state = telnetlib3.client_shell._RawLoopState(
-                    switched_to_raw=True,
-                    last_will_echo=False,
-                    local_echo=not writer.will_echo,
-                    linesep=linesep,
+                    switched_to_raw=True, last_will_echo=False, local_echo=not writer.will_echo, linesep=linesep
                 )
                 await telnetlib3.client_shell._raw_event_loop(
                     reader,  # type: ignore[arg-type]

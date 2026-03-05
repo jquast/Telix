@@ -132,6 +132,7 @@ ignore = [
     "SIM117",   # multiple-with-statements (readability preference)
     "RUF005",   # collection-literal-concatenation (style preference)
     "B018",     # useless-expression (test import probing)
+    "PLC0415",  # import-outside-toplevel (deferred imports intentional throughout)
 ]
 
 [tool.ruff.lint.isort]

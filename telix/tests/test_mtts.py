@@ -15,8 +15,18 @@ from telix import mtts
         ({"mouse_tracking": True}, 1823),
         ({"truecolor": False}, 1551),
         ({"mnes": False}, 1295),
-        ({"ansi": False, "vt100": False, "utf8": False, "colors_256": False,
-          "truecolor": False, "mnes": False, "mslp": False}, 0),
+        (
+            {
+                "ansi": False,
+                "vt100": False,
+                "utf8": False,
+                "colors_256": False,
+                "truecolor": False,
+                "mnes": False,
+                "mslp": False,
+            },
+            0,
+        ),
         ({"mslp": False}, 783),
     ],
 )
@@ -71,9 +81,15 @@ def test_telix_client_send_ttype_without_factory():
 
 def test_telix_client_send_env_mnes_all_keys():
     client = mtts.TelixClient.__new__(mtts.TelixClient)
-    client._extra = {"lang": "en_US.utf8", "term": "xterm", "rows": 25,
-                     "cols": 80, "tspeed": "38400,38400", "xdisploc": "",
-                     "charset": "utf8"}
+    client._extra = {
+        "lang": "en_US.utf8",
+        "term": "xterm",
+        "rows": 25,
+        "cols": 80,
+        "tspeed": "38400,38400",
+        "xdisploc": "",
+        "charset": "utf8",
+    }
     client._send_environ = {"TERM", "LANG"}
     client.mnes_env = {"CLIENT_NAME": "TELIX", "CLIENT_VERSION": "0.1.0"}
     env = client.send_env([])
@@ -84,9 +100,15 @@ def test_telix_client_send_env_mnes_all_keys():
 
 def test_telix_client_send_env_mnes_specific_keys():
     client = mtts.TelixClient.__new__(mtts.TelixClient)
-    client._extra = {"lang": "en_US.utf8", "term": "xterm", "rows": 25,
-                     "cols": 80, "tspeed": "38400,38400", "xdisploc": "",
-                     "charset": "utf8"}
+    client._extra = {
+        "lang": "en_US.utf8",
+        "term": "xterm",
+        "rows": 25,
+        "cols": 80,
+        "tspeed": "38400,38400",
+        "xdisploc": "",
+        "charset": "utf8",
+    }
     client._send_environ = {"TERM"}
     client.mnes_env = {"CLIENT_NAME": "TELIX", "CLIENT_VERSION": "0.1.0"}
     env = client.send_env(["CLIENT_NAME", "TERM"])
@@ -96,9 +118,15 @@ def test_telix_client_send_env_mnes_specific_keys():
 
 def test_telix_client_send_env_no_mnes():
     client = mtts.TelixClient.__new__(mtts.TelixClient)
-    client._extra = {"lang": "en_US.utf8", "term": "xterm", "rows": 25,
-                     "cols": 80, "tspeed": "38400,38400", "xdisploc": "",
-                     "charset": "utf8"}
+    client._extra = {
+        "lang": "en_US.utf8",
+        "term": "xterm",
+        "rows": 25,
+        "cols": 80,
+        "tspeed": "38400,38400",
+        "xdisploc": "",
+        "charset": "utf8",
+    }
     client._send_environ = {"TERM"}
     client.mnes_env = None
     env = client.send_env([])
@@ -106,13 +134,7 @@ def test_telix_client_send_env_no_mnes():
 
 
 @pytest.mark.parametrize(
-    "sw_name, expected",
-    [
-        (None, "Telix"),
-        ("", "Telix"),
-        ("Konsole", "Telix/Konsole"),
-        ("XTerm", "Telix/XTerm"),
-    ],
+    "sw_name, expected", [(None, "Telix"), ("", "Telix"), ("Konsole", "Telix/Konsole"), ("XTerm", "Telix/XTerm")]
 )
 def test_client_name(sw_name, expected):
     assert mtts.client_name(sw_name) == expected

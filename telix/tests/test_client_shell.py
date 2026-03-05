@@ -315,6 +315,7 @@ class TestWsClientShellNoRepl:
     def test_repl_enabled_by_default(self) -> None:
         """ctx.repl_enabled is True when no_repl is not set on the initial ctx."""
         from telnetlib3._session_context import TelnetSessionContext
+
         from telix.ws_transport import WebSocketWriter
 
         ws = MagicMock()
@@ -328,6 +329,7 @@ class TestWsClientShellNoRepl:
     def test_no_repl_flag_on_initial_ctx_disables_repl(self) -> None:
         """When initial ctx has no_repl=True, ws_client_shell sets repl_enabled=False."""
         from telnetlib3._session_context import TelnetSessionContext
+
         from telix.ws_transport import WebSocketWriter
         from telix.session_context import SessionContext
 
@@ -386,7 +388,7 @@ class TestWsClientShellTypescript:
             return real_open(path, mode, **kwargs)
 
         monkeypatch.setattr("builtins.open", patched_open)
-        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")  # noqa: SIM115
+        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")
         f.close()
 
         assert opened_files[0] == "a"
@@ -409,7 +411,7 @@ class TestWsClientShellTypescript:
             return real_open(path, mode, **kwargs)
 
         monkeypatch.setattr("builtins.open", patched_open)
-        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")  # noqa: SIM115
+        f = open(ts_path, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")
         f.close()
 
         assert opened_files[0] == "w"
@@ -418,7 +420,7 @@ class TestWsClientShellTypescript:
         """ws_client_shell closes typescript file even when an exception occurs in the shell."""
         ts_path = str(tmp_path / "session.txt")
 
-        ts_file = open(ts_path, "a", encoding="utf-8")  # noqa: SIM115
+        ts_file = open(ts_path, "a", encoding="utf-8")
         assert not ts_file.closed
         try:
             raise RuntimeError("shell failure")

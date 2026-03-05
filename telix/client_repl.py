@@ -24,56 +24,57 @@ import telnetlib3.client_shell
 from .macros import build_macro_dispatch
 from .autoreply import AutoreplyEngine
 from .highlighter import HighlightEngine
+from .session_context import CommandQueue
 
 # local
 # Re-export from sub-modules so existing ``from .client_repl import X``
 # in tests and other modules continues to work without changes.
 # pylint: disable=unused-import,useless-import-alias
 from .client_repl_render import (  # noqa: F401
-    ACTIVITY,
-    CURSOR,
-    DISPLAY,
     FLASH,
+    CURSOR,
     PHASES,
+    DISPLAY,
     SEXTANT,
+    ACTIVITY,
     SEXTANT_BITS,
+    STYLE_NORMAL,
     SEXTANT_VISIBLE,
     STYLE_AUTOREPLY,
-    STYLE_NORMAL,
-    ActivityDot,
-    ActivityTiming,
     CursorSeq,
-    DisplayChars,
-    FlashTiming,
     Stoplight,
-    ToolbarRenderer,
+    ActivityDot,
+    FlashTiming,
     ToolbarSlot,
-    activity_hint,
-    center_truncate,
-    cursor_ar_osc,
-    cursor_osc,
-    dmz_line,
-    editor_cursor_col,
-    flash_color,
-    fmt_value,
-    hsv_to_rgb,
-    idle_ar_rgb,
-    idle_rgb,
-    layout_toolbar,
-    lerp_hsv,
-    lerp_rgb,
-    make_styles,
-    rgb_to_hsv,
-    scramble_password,
-    segmented,
-    set_session_key,
+    DisplayChars,
+    ActivityTiming,
+    ToolbarRenderer,
     sgr_bg,
     sgr_fg,
-    until_progress,
-    vital_bar,
-    vital_color,
+    dmz_line,
+    idle_rgb,
+    lerp_hsv,
+    lerp_rgb,
     wcswidth,
+    fmt_value,
+    segmented,
+    vital_bar,
+    cursor_osc,
+    hsv_to_rgb,
+    rgb_to_hsv,
     write_hint,
+    flash_color,
+    idle_ar_rgb,
+    make_styles,
+    vital_color,
+    activity_hint,
+    cursor_ar_osc,
+    layout_toolbar,
+    until_progress,
+    center_truncate,
+    set_session_key,
+    editor_cursor_col,
+    scramble_password,
 )
 from .client_repl_travel import (  # noqa: F401
     DEFAULT_WALK_LIMIT,
@@ -86,15 +87,15 @@ from .client_repl_dialogs import (  # noqa: F401
     show_help,
     reload_macros,
     confirm_dialog,
-    subprocess_buffer,
     launch_tui_editor,
     randomwalk_dialog,
+    subprocess_buffer,
     launch_chat_viewer,
     reload_autoreplies,
-    subprocess_is_active,
     autodiscover_dialog,
     launch_room_browser,
     reload_progressbars,
+    subprocess_is_active,
     launch_unified_editor,
 )
 from .client_repl_commands import (  # noqa: F401  # noqa: F401
@@ -113,7 +114,6 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
 from .client_repl_commands import expand_commands as expand_commands
 from .client_repl_commands import expand_commands_ex as expand_commands_ex
 from .client_repl_commands import execute_macro_commands as execute_macro_commands
-from .session_context import CommandQueue
 
 # pylint: enable=unused-import,useless-import-alias
 
@@ -817,7 +817,7 @@ if sys.platform != "win32":
 
         def init_terminal(self) -> None:
             """Import blessed, create terminal singleton, styles, replay buffer."""
-            import telix.client_repl_dialogs as dialogs_mod  # noqa: PLC0415 - circular
+            import telix.client_repl_dialogs as dialogs_mod
 
             self.dialogs_mod = dialogs_mod
             self.loop = asyncio.get_event_loop()
@@ -879,10 +879,7 @@ if sys.platform != "win32":
             """Render the line editor, scrambling password text."""
             raw = self.editor.render(bt, row, width)
             if self.editor.password_mode and self.editor._buf:
-                raw = "".join(
-                    random.choice(SEXTANT_VISIBLE) if ch == PASSWORD_CHAR else ch
-                    for ch in raw
-                )
+                raw = "".join(random.choice(SEXTANT_VISIBLE) if ch == PASSWORD_CHAR else ch for ch in raw)
             return raw
 
         def editor_cursor(self) -> int:
@@ -1348,7 +1345,6 @@ if sys.platform != "win32":
             self.refresh_highlight_engine()
 
             assert self.scroll is not None
-            scroll = self.scroll
             self.ctx.repl_actions = {
                 "help": lambda: show_help(replay_buf=self.replay_buf),
                 "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
@@ -1531,9 +1527,13 @@ if sys.platform != "win32":
                 elif self.mslp_index is not None:
                     mslp_cmd = self.ctx.mslp_collector.available[self.mslp_index].command
                     cursor_col = render_active_command(
-                        mslp_cmd, scroll, self.stdout,
-                        hint=self.hint_text(), progress=prog,
-                        base_bg_sgr=bg, autoreply=ar,
+                        mslp_cmd,
+                        scroll,
+                        self.stdout,
+                        hint=self.hint_text(),
+                        progress=prog,
+                        base_bg_sgr=bg,
+                        autoreply=ar,
                     )
                 else:
                     self.update_input_style()
@@ -1586,7 +1586,9 @@ if sys.platform != "win32":
                         if self.mslp_index is not None:
                             cmd = self.ctx.mslp_collector.available[self.mslp_index].command
                             cursor_col = render_active_command(
-                                cmd, scroll, self.stdout,
+                                cmd,
+                                scroll,
+                                self.stdout,
                                 hint=self.hint_text(),
                                 progress=until_progress(self.autoreply_engine),
                                 base_bg_sgr=self.bg_sgr,
@@ -1594,9 +1596,7 @@ if sys.platform != "win32":
                             )
                         else:
                             self.update_input_style()
-                            self.stdout.write(
-                                self.render_editor(bt, scroll.input_row, self.input_width()).encode()
-                            )
+                            self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                             cursor_col = self.editor_cursor()
                         self.toolbar.render(self.autoreply_engine)
                         self.show_cursor_or_light(scroll.input_row, cursor_col)
@@ -1617,9 +1617,7 @@ if sys.platform != "win32":
                                 self.prompt_ready.clear()
                             self.toolbar.hide_cursor()
                             self.update_input_style()
-                            self.stdout.write(
-                                self.render_editor(bt, scroll.input_row, self.input_width()).encode()
-                            )
+                            self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                             self.toolbar.render(self.autoreply_engine)
                             cursor_col = self.editor_cursor()
                             self.show_cursor_or_light(scroll.input_row, cursor_col)

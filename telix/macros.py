@@ -24,8 +24,13 @@ import blessed.line_editor
 from . import paths
 
 __all__ = (
-    "Macro", "build_macro_dispatch", "load_macros", "save_macros",
-    "ensure_builtin_macros", "key_name_to_seq", "BUILTIN_MACROS",
+    "BUILTIN_MACROS",
+    "Macro",
+    "build_macro_dispatch",
+    "ensure_builtin_macros",
+    "key_name_to_seq",
+    "load_macros",
+    "save_macros",
 )
 
 
@@ -69,9 +74,14 @@ def parse_entries(entries: list[dict[str, str]]) -> list[Macro]:
         builtin_name = str(entry.get("builtin_name", ""))
         macros.append(
             Macro(
-                key=key, text=text, enabled=enabled, last_used=last_used,
-                toggle=toggle, toggle_text=toggle_text,
-                builtin=builtin, builtin_name=builtin_name,
+                key=key,
+                text=text,
+                enabled=enabled,
+                last_used=last_used,
+                toggle=toggle,
+                toggle_text=toggle_text,
+                builtin=builtin,
+                builtin_name=builtin_name,
             )
         )
     return macros
@@ -133,15 +143,32 @@ def save_macros(path: str, macros: list[Macro], session_key: str) -> None:
 
 # Ctrl key name to ASCII control character offset.
 _CTRL_CHAR_MAP: dict[str, str] = {
-    "KEY_CTRL_A": "\x01", "KEY_CTRL_B": "\x02", "KEY_CTRL_C": "\x03",
-    "KEY_CTRL_D": "\x04", "KEY_CTRL_E": "\x05", "KEY_CTRL_F": "\x06",
-    "KEY_CTRL_G": "\x07", "KEY_CTRL_H": "\x08", "KEY_CTRL_I": "\x09",
-    "KEY_CTRL_J": "\x0a", "KEY_CTRL_K": "\x0b", "KEY_CTRL_L": "\x0c",
-    "KEY_CTRL_M": "\x0d", "KEY_CTRL_N": "\x0e", "KEY_CTRL_O": "\x0f",
-    "KEY_CTRL_P": "\x10", "KEY_CTRL_Q": "\x11", "KEY_CTRL_R": "\x12",
-    "KEY_CTRL_S": "\x13", "KEY_CTRL_T": "\x14", "KEY_CTRL_U": "\x15",
-    "KEY_CTRL_V": "\x16", "KEY_CTRL_W": "\x17", "KEY_CTRL_X": "\x18",
-    "KEY_CTRL_Y": "\x19", "KEY_CTRL_Z": "\x1a",
+    "KEY_CTRL_A": "\x01",
+    "KEY_CTRL_B": "\x02",
+    "KEY_CTRL_C": "\x03",
+    "KEY_CTRL_D": "\x04",
+    "KEY_CTRL_E": "\x05",
+    "KEY_CTRL_F": "\x06",
+    "KEY_CTRL_G": "\x07",
+    "KEY_CTRL_H": "\x08",
+    "KEY_CTRL_I": "\x09",
+    "KEY_CTRL_J": "\x0a",
+    "KEY_CTRL_K": "\x0b",
+    "KEY_CTRL_L": "\x0c",
+    "KEY_CTRL_M": "\x0d",
+    "KEY_CTRL_N": "\x0e",
+    "KEY_CTRL_O": "\x0f",
+    "KEY_CTRL_P": "\x10",
+    "KEY_CTRL_Q": "\x11",
+    "KEY_CTRL_R": "\x12",
+    "KEY_CTRL_S": "\x13",
+    "KEY_CTRL_T": "\x14",
+    "KEY_CTRL_U": "\x15",
+    "KEY_CTRL_V": "\x16",
+    "KEY_CTRL_W": "\x17",
+    "KEY_CTRL_X": "\x18",
+    "KEY_CTRL_Y": "\x19",
+    "KEY_CTRL_Z": "\x1a",
     "KEY_CTRL_OPEN_BRACKET": "\x1b",
     "KEY_CTRL_BACKSLASH": "\x1c",
     "KEY_CTRL_CLOSE_BRACKET": "\x1d",
@@ -164,47 +191,32 @@ def key_name_to_seq(name: str) -> str | None:
     if name in _CTRL_CHAR_MAP:
         return _CTRL_CHAR_MAP[name]
     if name.startswith("KEY_ALT_SHIFT_"):
-        letter = name[len("KEY_ALT_SHIFT_"):]
+        letter = name[len("KEY_ALT_SHIFT_") :]
         if len(letter) == 1 and letter.isalpha():
             return "\x1b" + letter.upper()
     if name.startswith("KEY_ALT_"):
-        letter = name[len("KEY_ALT_"):]
+        letter = name[len("KEY_ALT_") :]
         if len(letter) == 1 and letter.isalpha():
             return "\x1b" + letter.lower()
     return None
 
 
 BUILTIN_MACROS: list[Macro] = [
-    Macro(key="KEY_F1", text="`help`",
-          builtin=True, builtin_name="help"),
-    Macro(key="KEY_F3", text="`randomwalk dialog`",
-          builtin=True, builtin_name="randomwalk_dialog"),
-    Macro(key="KEY_F4", text="`autodiscover dialog`",
-          builtin=True, builtin_name="autodiscover_dialog"),
-    Macro(key="KEY_F5", text="`resume walk`",
-          builtin=True, builtin_name="resume_walk"),
-    Macro(key="KEY_ALT_H", text="`edit highlights`",
-          builtin=True, builtin_name="edit_highlights"),
-    Macro(key="KEY_ALT_M", text="`edit macros`",
-          builtin=True, builtin_name="edit_macros"),
-    Macro(key="KEY_ALT_A", text="`edit autoreplies`",
-          builtin=True, builtin_name="edit_autoreplies"),
-    Macro(key="KEY_ALT_R", text="`edit rooms`",
-          builtin=True, builtin_name="edit_rooms"),
-    Macro(key="KEY_ALT_C", text="`edit captures`",
-          builtin=True, builtin_name="edit_captures"),
-    Macro(key="KEY_ALT_B", text="`edit bars`",
-          builtin=True, builtin_name="edit_bars"),
-    Macro(key="KEY_ALT_T", text="`edit theme`",
-          builtin=True, builtin_name="edit_theme"),
-    Macro(key="KEY_ALT_SHIFT_H", text="`toggle highlights`",
-          builtin=True, builtin_name="toggle_highlights"),
-    Macro(key="KEY_ALT_SHIFT_A", text="`toggle autoreplies`",
-          builtin=True, builtin_name="toggle_autoreplies"),
-    Macro(key="KEY_CTRL_L", text="`repaint`",
-          builtin=True, builtin_name="repaint"),
-    Macro(key="KEY_CTRL_CLOSE_BRACKET", text="`disconnect`",
-          builtin=True, builtin_name="disconnect"),
+    Macro(key="KEY_F1", text="`help`", builtin=True, builtin_name="help"),
+    Macro(key="KEY_F3", text="`randomwalk dialog`", builtin=True, builtin_name="randomwalk_dialog"),
+    Macro(key="KEY_F4", text="`autodiscover dialog`", builtin=True, builtin_name="autodiscover_dialog"),
+    Macro(key="KEY_F5", text="`resume walk`", builtin=True, builtin_name="resume_walk"),
+    Macro(key="KEY_ALT_H", text="`edit highlights`", builtin=True, builtin_name="edit_highlights"),
+    Macro(key="KEY_ALT_M", text="`edit macros`", builtin=True, builtin_name="edit_macros"),
+    Macro(key="KEY_ALT_A", text="`edit autoreplies`", builtin=True, builtin_name="edit_autoreplies"),
+    Macro(key="KEY_ALT_R", text="`edit rooms`", builtin=True, builtin_name="edit_rooms"),
+    Macro(key="KEY_ALT_C", text="`edit captures`", builtin=True, builtin_name="edit_captures"),
+    Macro(key="KEY_ALT_B", text="`edit bars`", builtin=True, builtin_name="edit_bars"),
+    Macro(key="KEY_ALT_T", text="`edit theme`", builtin=True, builtin_name="edit_theme"),
+    Macro(key="KEY_ALT_SHIFT_H", text="`toggle highlights`", builtin=True, builtin_name="toggle_highlights"),
+    Macro(key="KEY_ALT_SHIFT_A", text="`toggle autoreplies`", builtin=True, builtin_name="toggle_autoreplies"),
+    Macro(key="KEY_CTRL_L", text="`repaint`", builtin=True, builtin_name="repaint"),
+    Macro(key="KEY_CTRL_CLOSE_BRACKET", text="`disconnect`", builtin=True, builtin_name="disconnect"),
 ]
 
 
@@ -241,7 +253,7 @@ def build_macro_dispatch(macros: list[Macro], ctx: typing.Any, log: logging.Logg
     :param log: Logger instance.
     :returns: Dict mapping blessed key names (or raw chars) to handlers.
     """
-    from . import client_repl as repl  # noqa: PLC0415  # circular
+    from . import client_repl as repl  # circular
 
     result: dict[str, typing.Any] = {}
     for macro in macros:

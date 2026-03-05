@@ -13,16 +13,18 @@ from unittest.mock import patch
 import pytest
 
 from telix.macros import (
-    Macro, load_macros, save_macros, build_macro_dispatch,
-    ensure_builtin_macros, key_name_to_seq, BUILTIN_MACROS,
-)
-from telix.client_repl_commands import (
-    REPL_ACTION_RE, EDIT_RE, TOGGLE_RE, WALK_DIALOG_RE,
-    _dispatch_repl_action,
+    BUILTIN_MACROS,
+    Macro,
+    load_macros,
+    save_macros,
+    key_name_to_seq,
+    build_macro_dispatch,
+    ensure_builtin_macros,
 )
 
 # local
 from telix.client_repl import expand_commands
+from telix.client_repl_commands import EDIT_RE, TOGGLE_RE, REPL_ACTION_RE, WALK_DIALOG_RE, _dispatch_repl_action
 
 SK = "test.host:23"
 
@@ -222,17 +224,20 @@ def test_ensure_builtin_macros_preserves_user_macros():
     assert user_kept[0].text == "equip all;"
 
 
-@pytest.mark.parametrize("key_name, expected", [
-    ("KEY_CTRL_L", "\x0c"),
-    ("KEY_CTRL_CLOSE_BRACKET", "\x1d"),
-    ("KEY_CTRL_A", "\x01"),
-    ("KEY_ALT_H", "\x1bh"),
-    ("KEY_ALT_M", "\x1bm"),
-    ("KEY_ALT_SHIFT_H", "\x1bH"),
-    ("KEY_ALT_SHIFT_A", "\x1bA"),
-    ("KEY_F1", None),
-    ("KEY_F3", None),
-])
+@pytest.mark.parametrize(
+    "key_name, expected",
+    [
+        ("KEY_CTRL_L", "\x0c"),
+        ("KEY_CTRL_CLOSE_BRACKET", "\x1d"),
+        ("KEY_CTRL_A", "\x01"),
+        ("KEY_ALT_H", "\x1bh"),
+        ("KEY_ALT_M", "\x1bm"),
+        ("KEY_ALT_SHIFT_H", "\x1bH"),
+        ("KEY_ALT_SHIFT_A", "\x1bA"),
+        ("KEY_F1", None),
+        ("KEY_F3", None),
+    ],
+)
 def test_key_name_to_seq(key_name, expected):
     assert key_name_to_seq(key_name) == expected
 
@@ -276,51 +281,63 @@ def test_builtin_macros_constant():
     assert len(names) == len(set(names))
 
 
-@pytest.mark.parametrize("cmd, expected", [
-    ("`help`", True),
-    ("`disconnect`", True),
-    ("`repaint`", True),
-    ("`HELP`", True),
-    ("`look`", False),
-    ("help", False),
-])
+@pytest.mark.parametrize(
+    "cmd, expected",
+    [
+        ("`help`", True),
+        ("`disconnect`", True),
+        ("`repaint`", True),
+        ("`HELP`", True),
+        ("`look`", False),
+        ("help", False),
+    ],
+)
 def test_repl_action_re(cmd, expected):
     assert bool(REPL_ACTION_RE.match(cmd)) is expected
 
 
-@pytest.mark.parametrize("cmd, expected_tab", [
-    ("`edit macros`", "macros"),
-    ("`edit highlights`", "highlights"),
-    ("`edit autoreplies`", "autoreplies"),
-    ("`edit rooms`", "rooms"),
-    ("`edit captures`", "captures"),
-    ("`edit bars`", "bars"),
-    ("`edit theme`", "theme"),
-    ("`Edit Macros`", "macros"),
-])
+@pytest.mark.parametrize(
+    "cmd, expected_tab",
+    [
+        ("`edit macros`", "macros"),
+        ("`edit highlights`", "highlights"),
+        ("`edit autoreplies`", "autoreplies"),
+        ("`edit rooms`", "rooms"),
+        ("`edit captures`", "captures"),
+        ("`edit bars`", "bars"),
+        ("`edit theme`", "theme"),
+        ("`Edit Macros`", "macros"),
+    ],
+)
 def test_edit_re(cmd, expected_tab):
     m = EDIT_RE.match(cmd)
     assert m is not None
     assert m.group(1).lower() == expected_tab
 
 
-@pytest.mark.parametrize("cmd, expected_name", [
-    ("`toggle highlights`", "highlights"),
-    ("`toggle autoreplies`", "autoreplies"),
-    ("`Toggle Highlights`", "highlights"),
-])
+@pytest.mark.parametrize(
+    "cmd, expected_name",
+    [
+        ("`toggle highlights`", "highlights"),
+        ("`toggle autoreplies`", "autoreplies"),
+        ("`Toggle Highlights`", "highlights"),
+    ],
+)
 def test_toggle_re(cmd, expected_name):
     m = TOGGLE_RE.match(cmd)
     assert m is not None
     assert m.group(1).lower() == expected_name
 
 
-@pytest.mark.parametrize("cmd, expected_action", [
-    ("`randomwalk dialog`", "randomwalk"),
-    ("`autodiscover dialog`", "autodiscover"),
-    ("`resume walk`", "resume"),
-    ("`Randomwalk Dialog`", "randomwalk"),
-])
+@pytest.mark.parametrize(
+    "cmd, expected_action",
+    [
+        ("`randomwalk dialog`", "randomwalk"),
+        ("`autodiscover dialog`", "autodiscover"),
+        ("`resume walk`", "resume"),
+        ("`Randomwalk Dialog`", "randomwalk"),
+    ],
+)
 def test_walk_dialog_re(cmd, expected_action):
     m = WALK_DIALOG_RE.match(cmd)
     assert m is not None
@@ -337,7 +354,7 @@ def test_dispatch_repl_action_calls_help():
 
 def test_dispatch_repl_action_calls_edit():
     called = []
-    ctx = types.SimpleNamespace(repl_actions={"edit": lambda tab: called.append(tab)})
+    ctx = types.SimpleNamespace(repl_actions={"edit": called.append})
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`edit macros`", ctx, log) is True
     assert called == ["macros"]
@@ -345,9 +362,7 @@ def test_dispatch_repl_action_calls_edit():
 
 def test_dispatch_repl_action_calls_toggle():
     called = []
-    ctx = types.SimpleNamespace(
-        repl_actions={"toggle_highlights": lambda: called.append("th")}
-    )
+    ctx = types.SimpleNamespace(repl_actions={"toggle_highlights": lambda: called.append("th")})
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`toggle highlights`", ctx, log) is True
     assert called == ["th"]

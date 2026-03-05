@@ -29,18 +29,18 @@ from . import __version__ as version
 class MttsCapabilities:
     """Named boolean fields for each MTTS capability bit."""
 
-    ansi: bool = True               # 1
-    vt100: bool = True              # 2
-    utf8: bool = True               # 4
-    colors_256: bool = True         # 8
-    mouse_tracking: bool = False    # 16
-    osc_color_palette: bool = False # 32
-    screen_reader: bool = False     # 64
-    proxy: bool = False             # 128
-    truecolor: bool = True          # 256
-    mnes: bool = True               # 512
-    mslp: bool = True               # 1024
-    ssl: bool = False               # 2048
+    ansi: bool = True  # 1
+    vt100: bool = True  # 2
+    utf8: bool = True  # 4
+    colors_256: bool = True  # 8
+    mouse_tracking: bool = False  # 16
+    osc_color_palette: bool = False  # 32
+    screen_reader: bool = False  # 64
+    proxy: bool = False  # 128
+    truecolor: bool = True  # 256
+    mnes: bool = True  # 512
+    mslp: bool = True  # 1024
+    ssl: bool = False  # 2048
 
     @property
     def bitvector(self) -> int:
@@ -129,8 +129,7 @@ def client_name(sw_name: str | None = None) -> str:
     return "Telix"
 
 
-def install_mtts(term: str, ssl: bool = False, sw_name: str | None = None,
-                 encoding: str = "utf-8") -> None:
+def install_mtts(term: str, ssl: bool = False, sw_name: str | None = None, encoding: str = "utf-8") -> None:
     """
     Patch telnetlib3 client classes to use MTTS/MNES.
 

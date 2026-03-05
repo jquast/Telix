@@ -17,18 +17,18 @@ from __future__ import annotations
 
 # std imports
 import re
-from typing import Dict, List, Match, Optional, Tuple, NamedTuple
+from typing import NamedTuple
 
 # 3rd party
-from wcwidth.sgr_state import _SGR_PATTERN
+import wcwidth.sgr_state
 
-__all__ = ("AtasciiControlFilter", "ColorConfig", "ColorFilter", "PetsciiColorFilter", "PALETTES")
+__all__ = ("PALETTES", "AtasciiControlFilter", "ColorConfig", "ColorFilter", "PetsciiColorFilter")
 
 # Type alias for a 16-color palette: 16 (R, G, B) tuples indexed 0-15.
 PaletteRGB = tuple[tuple[int, int, int], ...]
 
 # Hardware color palettes.  Each defines exact RGB values for ANSI colors 0-15.
-PALETTES: Dict[str, PaletteRGB] = {
+PALETTES: dict[str, PaletteRGB] = {
     "vga": (
         (0, 0, 0),
         (170, 0, 0),
@@ -109,13 +109,13 @@ class ColorConfig(NamedTuple):
     palette_name: str = "vga"
     brightness: float = 1.0
     contrast: float = 1.0
-    background_color: Tuple[int, int, int] = (0, 0, 0)
+    background_color: tuple[int, int, int] = (0, 0, 0)
     ice_colors: bool = True
-    foreground_color: Optional[Tuple[int, int, int]] = None
+    foreground_color: tuple[int, int, int] | None = None
     force_black_bg: bool = False
 
 
-def _sgr_code_to_palette_index(code: int) -> Optional[int]:
+def _sgr_code_to_palette_index(code: int) -> int | None:
     """
     Map a basic SGR color code to a palette index (0-15).
 
@@ -143,9 +143,7 @@ def _is_foreground_code(code: int) -> bool:
     return (30 <= code <= 37) or (90 <= code <= 97)
 
 
-def _adjust_color(
-    r: int, g: int, b: int, brightness: float, contrast: float
-) -> Tuple[int, int, int]:
+def _adjust_color(r: int, g: int, b: int, brightness: float, contrast: float) -> tuple[int, int, int]:
     """
     Apply brightness and contrast scaling to an RGB color.
 
@@ -160,11 +158,7 @@ def _adjust_color(
     r_f = mid + (r * brightness - mid) * contrast
     g_f = mid + (g * brightness - mid) * contrast
     b_f = mid + (b * brightness - mid) * contrast
-    return (
-        max(0, min(255, int(r_f + 0.5))),
-        max(0, min(255, int(g_f + 0.5))),
-        max(0, min(255, int(b_f + 0.5))),
-    )
+    return (max(0, min(255, int(r_f + 0.5))), max(0, min(255, int(g_f + 0.5))), max(0, min(255, int(b_f + 0.5))))
 
 
 class ColorFilter:
@@ -184,7 +178,7 @@ class ColorFilter:
         """Initialize with the given color configuration."""
         self._config = config
         palette = PALETTES[config.palette_name]
-        self._adjusted: List[Tuple[int, int, int]] = [
+        self._adjusted: list[tuple[int, int, int]] = [
             _adjust_color(r, g, b, config.brightness, config.contrast) for r, g, b in palette
         ]
         bg = config.background_color
@@ -222,14 +216,14 @@ class ColorFilter:
         if not text:
             return ""
 
-        result = _SGR_PATTERN.sub(self._replace_sgr, text)
+        result = wcwidth.sgr_state._SGR_PATTERN.sub(self._replace_sgr, text)
 
         if self._initial:
             self._initial = False
             result = self._bg_sgr + result
         return result
 
-    def _replace_sgr(self, match: Match[str]) -> str:  # noqa: C901
+    def _replace_sgr(self, match: re.Match[str]) -> str:
         r"""
         Regex replacement callback for a single SGR sequence.
 
@@ -248,7 +242,7 @@ class ColorFilter:
             return match.group()
 
         parts = params_str.split(";")
-        output_parts: List[str] = []
+        output_parts: list[str] = []
         i = 0
 
         seq_sets_bold = False
@@ -388,9 +382,8 @@ class ColorFilter:
         return result
 
 
-
 # PETSCII decoded control character -> VIC-II palette index (0-15).
-_PETSCII_COLOR_CODES: Dict[str, int] = {
+_PETSCII_COLOR_CODES: dict[str, int] = {
     "\x05": 1,  # WHT (white)
     "\x1c": 2,  # RED
     "\x1e": 5,  # GRN (green)
@@ -410,7 +403,7 @@ _PETSCII_COLOR_CODES: Dict[str, int] = {
 }
 
 # PETSCII cursor/screen control codes -> ANSI escape sequences.
-_PETSCII_CURSOR_CODES: Dict[str, str] = {
+_PETSCII_CURSOR_CODES: dict[str, str] = {
     "\x11": "\x1b[B",  # cursor down
     "\x91": "\x1b[A",  # cursor up
     "\x1d": "\x1b[C",  # cursor right
@@ -421,9 +414,7 @@ _PETSCII_CURSOR_CODES: Dict[str, str] = {
 }
 
 # All PETSCII control chars handled by the filter.
-_PETSCII_FILTER_CHARS = (
-    frozenset(_PETSCII_COLOR_CODES) | frozenset(_PETSCII_CURSOR_CODES) | {"\x12", "\x92"}
-)
+_PETSCII_FILTER_CHARS = frozenset(_PETSCII_COLOR_CODES) | frozenset(_PETSCII_CURSOR_CODES) | {"\x12", "\x92"}
 
 _PETSCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_PETSCII_FILTER_CHARS))) + "]")
 
@@ -446,13 +437,9 @@ class PetsciiColorFilter:
     :param contrast: Contrast factor [0.0..1.0] for palette adjustment.
     """
 
-    def __init__(
-        self,
-        brightness: float = 1.0,
-        contrast: float = 1.0,
-    ) -> None:
+    def __init__(self, brightness: float = 1.0, contrast: float = 1.0) -> None:
         """Initialize PETSCII filter with optional brightness/contrast."""
-        self._adjusted: List[Tuple[int, int, int]] = [
+        self._adjusted: list[tuple[int, int, int]] = [
             _adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES["c64"]
         ]
 
@@ -472,7 +459,7 @@ class PetsciiColorFilter:
             return text
         return _PETSCII_CTRL_RE.sub(self._replace, text)
 
-    def _replace(self, match: Match[str]) -> str:
+    def _replace(self, match: re.Match[str]) -> str:
         """Regex callback for a single PETSCII control character."""
         ch = match.group()
         idx = _PETSCII_COLOR_CODES.get(ch)
@@ -497,7 +484,7 @@ class PetsciiColorFilter:
 
 
 # ATASCII decoded control character glyphs -> ANSI terminal sequences.
-_ATASCII_CONTROL_CODES: Dict[str, str] = {
+_ATASCII_CONTROL_CODES: dict[str, str] = {
     "\u25c0": "\x08\x1b[P",  # ◀  backspace/delete (0x7E / 0xFE)
     "\u25b6": "\t",  # ▶  tab (0x7F / 0xFF)
     "\u21b0": "\x1b[2J\x1b[H",  # ↰  clear screen (0x7D / 0xFD)
@@ -536,7 +523,7 @@ class AtasciiControlFilter:
         return _ATASCII_CTRL_RE.sub(self._replace, text)
 
     @staticmethod
-    def _replace(match: Match[str]) -> str:
+    def _replace(match: re.Match[str]) -> str:
         """Regex callback for a single ATASCII control glyph."""
         return _ATASCII_CONTROL_CODES.get(match.group(), "")
 

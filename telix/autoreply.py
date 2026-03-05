@@ -930,7 +930,7 @@ class AutoreplyEngine:
 
         :param reply_text: Fully substituted reply string.
         """
-        from . import client_repl_commands  # noqa: PLC0415  # circular
+        from . import client_repl_commands  # circular
 
         expanded = client_repl_commands.expand_commands_ex(reply_text)
         writer = self.ctx.writer

@@ -177,8 +177,7 @@ class MacroEditPane(client_tui_base.EditListPane):
                 pass
         loaded = macros.ensure_builtin_macros(loaded)
         self.macros = [
-            (m.key, m.text, m.enabled, m.last_used, m.toggle, m.toggle_text, m.builtin, m.builtin_name)
-            for m in loaded
+            (m.key, m.text, m.enabled, m.last_used, m.toggle, m.toggle_text, m.builtin, m.builtin_name) for m in loaded
         ]
 
     def matches_search(self, idx: int, query: str) -> bool:
@@ -279,10 +278,7 @@ class MacroEditPane(client_tui_base.EditListPane):
         lu = self.macros[self.editing_idx][3] if self.editing_idx is not None else ""
         builtin = self.macros[self.editing_idx][6] if self.editing_idx is not None else False
         bname = self.macros[self.editing_idx][7] if self.editing_idx is not None else ""
-        self.finalize_edit(
-            (key_val, text_val, enabled, lu, toggle, toggle_text, builtin, bname),
-            bool(key_val),
-        )
+        self.finalize_edit((key_val, text_val, enabled, lu, toggle, toggle_text, builtin, bname), bool(key_val))
 
     @staticmethod
     def blessed_display(blessed_name: str) -> str:
@@ -342,8 +338,7 @@ class MacroEditPane(client_tui_base.EditListPane):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         macro_list = [
             macros.Macro(
-                key=k, text=t, enabled=ena, last_used=lu,
-                toggle=tog, toggle_text=tt, builtin=bi, builtin_name=bn,
+                key=k, text=t, enabled=ena, last_used=lu, toggle=tog, toggle_text=tt, builtin=bi, builtin_name=bn
             )
             for k, t, ena, lu, tog, tt, bi, bn in self.macros
         ]

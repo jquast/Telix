@@ -50,18 +50,7 @@ def test_color_config_defaults() -> None:
 
 
 @pytest.mark.parametrize(
-    "code,expected",
-    [
-        (30, 0),
-        (31, 1),
-        (37, 7),
-        (40, 0),
-        (47, 7),
-        (90, 8),
-        (97, 15),
-        (100, 8),
-        (107, 15),
-    ],
+    "code,expected", [(30, 0), (31, 1), (37, 7), (40, 0), (47, 7), (90, 8), (97, 15), (100, 8), (107, 15)]
 )
 def test_color_code_maps_to_palette_index(code: int, expected: int) -> None:
     assert _sgr_code_to_palette_index(code) == expected
@@ -108,8 +97,7 @@ def test_adjust_color_clamp_low() -> None:
 
 
 @pytest.mark.parametrize(
-    "sgr,palette_idx,prefix",
-    [("31", 1, "38;2"), ("41", 1, "48;2"), ("91", 9, "38;2"), ("101", 9, "48;2")],
+    "sgr,palette_idx,prefix", [("31", 1, "38;2"), ("41", 1, "48;2"), ("91", 9, "38;2"), ("101", 9, "48;2")]
 )
 def test_color_filter_basic_translation(sgr: str, palette_idx: int, prefix: str) -> None:
     f = _make_filter()
@@ -118,9 +106,7 @@ def test_color_filter_basic_translation(sgr: str, palette_idx: int, prefix: str)
     assert f"{prefix};{rgb[0]};{rgb[1]};{rgb[2]}" in result
 
 
-@pytest.mark.parametrize(
-    "code,idx", [(30, 0), (31, 1), (32, 2), (33, 3), (34, 4), (35, 5), (36, 6), (37, 7)]
-)
+@pytest.mark.parametrize("code,idx", [(30, 0), (31, 1), (32, 2), (33, 3), (34, 4), (35, 5), (36, 6), (37, 7)])
 def test_all_normal_foreground_colors(code: int, idx: int) -> None:
     f = _make_filter()
     result = f.filter(f"\x1b[{code}m")
@@ -128,9 +114,7 @@ def test_all_normal_foreground_colors(code: int, idx: int) -> None:
     assert f"38;2;{rgb[0]};{rgb[1]};{rgb[2]}" in result
 
 
-@pytest.mark.parametrize(
-    "code,idx", [(40, 0), (41, 1), (42, 2), (43, 3), (44, 4), (45, 5), (46, 6), (47, 7)]
-)
+@pytest.mark.parametrize("code,idx", [(40, 0), (41, 1), (42, 2), (43, 3), (44, 4), (45, 5), (46, 6), (47, 7)])
 def test_all_normal_background_colors(code: int, idx: int) -> None:
     f = _make_filter()
     result = f.filter(f"\x1b[{code}m")
@@ -234,9 +218,7 @@ def test_non_sgr_pass_through(seq: str, needle: str) -> None:
     assert needle in f.filter(seq)
 
 
-@pytest.mark.parametrize(
-    "sgr_code,expected_prefix", [("39", "38;2;170;170;170"), ("49", "48;2;0;0;0")]
-)
+@pytest.mark.parametrize("sgr_code,expected_prefix", [("39", "38;2;170;170;170"), ("49", "48;2;0;0;0")])
 def test_default_color_translated(sgr_code: str, expected_prefix: str) -> None:
     f = _make_filter()
     assert expected_prefix in f.filter(f"\x1b[{sgr_code}m")
@@ -268,15 +250,9 @@ def test_bold_single_seq_uses_bright(seq: str) -> None:
 
 @pytest.mark.parametrize(
     "setup_seqs,test_seq,palette_idx",
-    [
-        (["\x1b[1m"], "\x1b[30m", 8),
-        (["\x1b[1m", "\x1b[22m"], "\x1b[30m", 0),
-        (["\x1b[1m", "\x1b[0m"], "\x1b[30m", 0),
-    ],
+    [(["\x1b[1m"], "\x1b[30m", 8), (["\x1b[1m", "\x1b[22m"], "\x1b[30m", 0), (["\x1b[1m", "\x1b[0m"], "\x1b[30m", 0)],
 )
-def test_bold_state_across_sequences(
-    setup_seqs: list[str], test_seq: str, palette_idx: int
-) -> None:
+def test_bold_state_across_sequences(setup_seqs: list[str], test_seq: str, palette_idx: int) -> None:
     f = _make_filter()
     for seq in setup_seqs:
         f.filter(seq)
@@ -299,9 +275,7 @@ def test_bold_does_not_affect_background() -> None:
     assert f"48;2;{normal_black[0]};{normal_black[1]};{normal_black[2]}" in result
 
 
-@pytest.mark.parametrize(
-    "code,normal_idx", [(30, 0), (31, 1), (32, 2), (33, 3), (34, 4), (35, 5), (36, 6), (37, 7)]
-)
+@pytest.mark.parametrize("code,normal_idx", [(30, 0), (31, 1), (32, 2), (33, 3), (34, 4), (35, 5), (36, 6), (37, 7)])
 def test_all_bold_fg_use_bright_palette(code: int, normal_idx: int) -> None:
     f = _make_filter()
     result = f.filter(f"\x1b[1;{code}m")
@@ -330,15 +304,9 @@ def test_ice_blink_single_seq_uses_bright(seq: str) -> None:
 
 @pytest.mark.parametrize(
     "setup_seqs,test_seq,palette_idx",
-    [
-        (["\x1b[5m"], "\x1b[40m", 8),
-        (["\x1b[5m", "\x1b[25m"], "\x1b[40m", 0),
-        (["\x1b[5m", "\x1b[0m"], "\x1b[40m", 0),
-    ],
+    [(["\x1b[5m"], "\x1b[40m", 8), (["\x1b[5m", "\x1b[25m"], "\x1b[40m", 0), (["\x1b[5m", "\x1b[0m"], "\x1b[40m", 0)],
 )
-def test_ice_blink_state_across_sequences(
-    setup_seqs: list[str], test_seq: str, palette_idx: int
-) -> None:
+def test_ice_blink_state_across_sequences(setup_seqs: list[str], test_seq: str, palette_idx: int) -> None:
     f = _make_ice_filter()
     for seq in setup_seqs:
         f.filter(seq)
@@ -361,9 +329,7 @@ def test_ice_blink_does_not_affect_bright_bg() -> None:
     assert f"48;2;{bright_black[0]};{bright_black[1]};{bright_black[2]}" in result
 
 
-@pytest.mark.parametrize(
-    "code,normal_idx", [(40, 0), (41, 1), (42, 2), (43, 3), (44, 4), (45, 5), (46, 6), (47, 7)]
-)
+@pytest.mark.parametrize("code,normal_idx", [(40, 0), (41, 1), (42, 2), (43, 3), (44, 4), (45, 5), (46, 6), (47, 7)])
 def test_all_blink_bg_use_bright_palette(code: int, normal_idx: int) -> None:
     f = _make_ice_filter()
     result = f.filter(f"\x1b[5;{code}m")
