@@ -31,6 +31,7 @@ from .client_tui_base import (  # noqa: F401
     int_val,
     float_val,
     build_command,
+    normalize_encoding,
     launch_editor,
     load_sessions,
     relative_time,

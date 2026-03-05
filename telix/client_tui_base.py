@@ -13,6 +13,7 @@ import abc
 import sys
 import json
 import shlex
+import codecs
 import typing
 import logging
 import datetime
@@ -145,6 +146,35 @@ ENCODINGS = (
     "atascii",
     "petscii",
 )
+
+# Map Python canonical codec name -> ENCODINGS entry.  Built in reverse order
+# so the first entry in ENCODINGS wins when two entries share a canonical name
+# (e.g. "latin-1" and "iso-8859-1" both resolve to "iso8859-1").
+_CODEC_MAP: dict[str, str] = {}
+for _enc in reversed(ENCODINGS):
+    try:
+        _CODEC_MAP[codecs.lookup(_enc).name] = _enc
+    except LookupError:
+        pass
+
+
+def normalize_encoding(enc: str) -> str:
+    """Return the ENCODINGS entry that best matches *enc*, or ``ENCODINGS[0]``.
+
+    Strips whitespace then resolves Python codec aliases so that e.g.
+    ``"utf-8"``, ``"latin1"``, or ``" cp437 "`` each map to the canonical
+    ENCODINGS label.
+    """
+    enc = enc.strip()
+    if enc in ENCODINGS:
+        return enc
+    try:
+        canonical = codecs.lookup(enc).name
+        if canonical in _CODEC_MAP:
+            return _CODEC_MAP[canonical]
+    except LookupError:
+        pass
+    return ENCODINGS[0]
 
 
 DEFAULTS_KEY = "__defaults__"
@@ -339,6 +369,9 @@ class SessionConfig:
 
     # Developer
     coverage: bool = False
+
+    # Server type: "bbs", "mud", or "" (unset)
+    server_type: str = ""
 
     # Bookmarked sessions sort to top of the list
     bookmarked: bool = False
@@ -652,6 +685,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         table.cursor_type = "row"
         table.add_column(" ", width=4, key="icon")
         table.add_column("Host/Name", width=20, key="name")
+        table.add_column("Type", width=5, key="type")
         table.add_column("Port", width=6, key="port")
         table.add_column("Enc", width=5, key="enc")
         table.add_column("Last", width=8, key="last")
@@ -664,9 +698,9 @@ class SessionListScreen(textual.screen.Screen[None]):
     def resize_name_column(self) -> None:
         """Set Host/Name column width to fill available space."""
         table = self.query_one("#session-table", textual.widgets.DataTable)
-        # Fixed columns: icon(4) + Port(6) + Enc(5) + Last(8) + Flags(12) = 35
-        # Button col(12) + padding/borders(6) + column gutters(10)
-        fixed = 35 + 12 + 6 + 10
+        # Fixed columns: icon(4) + Type(5) + Port(6) + Enc(5) + Last(8) + Flags(12) = 40
+        # Button col(12) + padding/borders(6) + column gutters(11)
+        fixed = 40 + 12 + 6 + 11
         name_w = max(16, self.app.size.width - fixed)
         col = table.columns.get("name")
         if col is not None:
@@ -708,6 +742,7 @@ class SessionListScreen(textual.screen.Screen[None]):
             table.add_row(
                 "\u2021" if cfg.bookmarked else "",
                 cfg.name or cfg.host,
+                cfg.server_type.upper() if cfg.server_type else "",
                 str(cfg.port),
                 cfg.encoding,
                 relative_time(cfg.last_connected),
@@ -772,6 +807,11 @@ class SessionListScreen(textual.screen.Screen[None]):
         table = self.query_one("#session-table", textual.widgets.DataTable)
         theme_btn = self.query_one("#theme-btn", textual.widgets.Button)
 
+        if self.focused is table and event.key == "enter":
+            self.action_connect()
+            event.prevent_default()
+            return
+
         # Right from search -> theme button; left from theme -> search
         if self.focused is search_input and event.key == "right":
             theme_btn.focus()
@@ -835,7 +875,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         self.cursor_just_moved = True
 
     def on_data_table_row_selected(self, event: textual.widgets.DataTable.RowSelected) -> None:
-        """Connect when clicking an already-selected row or pressing Enter."""
+        """Connect on mouse: skip the first click (which moves the cursor), connect on the second."""
         if self.cursor_just_moved:
             self.cursor_just_moved = False
             return
@@ -1355,8 +1395,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
             with textual.containers.Horizontal(id="server-type-col"):
                 yield textual.widgets.Label("Server Type", id="server-type-label")
                 with textual.widgets.RadioSet(id="server-type-radio"):
-                    yield textual.widgets.RadioButton("BBS", id="type-bbs")
-                    yield textual.widgets.RadioButton("MUD", id="type-mud")
+                    yield textual.widgets.RadioButton("BBS", value=cfg.server_type == "bbs", id="type-bbs")
+                    yield textual.widgets.RadioButton("Mud", value=cfg.server_type == "mud", id="type-mud")
             with textual.containers.Vertical(id="compression-col"):
                 yield textual.widgets.Label("MCCP Compression")
                 with textual.widgets.RadioSet(id="compression-radio"):
@@ -1383,13 +1423,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
                 repl_dim = "" if cfg.mode != "raw" else " dimmed"
                 yield textual.widgets.Label("Advanced REPL", id="repl-label", classes=f"field-label{repl_dim}")
                 yield textual.widgets.Switch(value=not cfg.no_repl, id="use-repl", disabled=cfg.mode == "raw")
-        enc = cfg.encoding or "utf-8"
+        enc = normalize_encoding(cfg.encoding or "utf8")
         is_retro = enc.lower() in ("atascii", "petscii")
         with textual.containers.Horizontal(classes="field-row"):
             yield textual.widgets.Label("Encoding", id="enc-label")
             yield textual.widgets.Select(
                 [(e, e) for e in ENCODINGS],
-                value=enc if enc in ENCODINGS else "utf-8",
+                value=enc,
                 id="encoding",
                 allow_blank=False,
             )
@@ -1849,6 +1889,14 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         cfg.no_repl = not self.query_one("#use-repl", textual.widgets.Switch).value
         if cfg.mode == "raw":
             cfg.no_repl = True
+
+        radio = self.query_one("#server-type-radio", textual.widgets.RadioSet)
+        if radio.pressed_index == 0:
+            cfg.server_type = "bbs"
+        elif radio.pressed_index == 1:
+            cfg.server_type = "mud"
+        else:
+            cfg.server_type = ""
 
         return cfg
 

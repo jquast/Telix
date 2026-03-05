@@ -5195,12 +5195,6 @@
   "type": "bbs"
  },
  {
-  "host": "a-net.online",
-  "port": 513,
-  "name": "a-net.online",
-  "type": "bbs"
- },
- {
   "host": "aardmud.org",
   "port": 23,
   "name": "aardmud.org",
@@ -5217,7 +5211,7 @@
   "port": 1940,
   "name": "absinthebbs.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "acentauribbs.no-ip.org",
@@ -5267,7 +5261,7 @@
   "port": 23,
   "name": "alco.bbs.io",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "alephbbs.com",
@@ -5305,7 +5299,7 @@
   "port": 6880,
   "name": "amibbs.amigaretro.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "amigacity.xyz",
@@ -5318,28 +5312,28 @@
   "port": 23,
   "name": "amiganer.amms-bbs.de",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "amigaunderground.com",
   "port": 1985,
   "name": "amigaunderground.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "amigaunderground.com",
   "port": 2002,
   "name": "amigaunderground.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "amigaunderground.com",
   "port": 2300,
   "name": "amigaunderground.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "amis86.ddns.net",
@@ -5468,6 +5462,12 @@
   "host": "athelstan.org",
   "port": 23,
   "name": "athelstan.org",
+  "type": "bbs"
+ },
+ {
+  "host": "atl.ddns.net",
+  "port": 6401,
+  "name": "atl.ddns.net",
   "type": "bbs"
  },
  {
@@ -5712,7 +5712,7 @@
   "port": 2023,
   "name": "bbs.bottomlessabyss.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "bbs.buema.ch",
@@ -6134,14 +6134,14 @@
   "port": 1581,
   "name": "bbs.idbbs.ca",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "bbs.idbbs.ca",
   "port": 59,
   "name": "bbs.idbbs.ca",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "bbs.impakt.net",
@@ -6491,6 +6491,12 @@
   "type": "bbs"
  },
  {
+  "host": "bbs.pwecksretreat.com",
+  "port": 2332,
+  "name": "bbs.pwecksretreat.com",
+  "type": "bbs"
+ },
+ {
   "host": "bbs.qzwx.com",
   "port": 23,
   "name": "bbs.qzwx.com",
@@ -6507,7 +6513,7 @@
   "port": 1337,
   "name": "bbs.retro32.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "bbs.retroarchive.org",
@@ -6651,12 +6657,6 @@
  {
   "host": "bbs.stardoc134.com",
   "port": 2323,
-  "name": "bbs.stardoc134.com",
-  "type": "bbs"
- },
- {
-  "host": "bbs.stardoc134.com",
-  "port": 513,
   "name": "bbs.stardoc134.com",
   "type": "bbs"
  },
@@ -6939,12 +6939,6 @@
   "type": "bbs"
  },
  {
-  "host": "bbsgamer.ddns.net",
-  "port": 513,
-  "name": "bbsgamer.ddns.net",
-  "type": "bbs"
- },
- {
   "host": "bbswordle.com",
   "port": 23,
   "name": "bbswordle.com",
@@ -7101,12 +7095,6 @@
   "type": "bbs"
  },
  {
-  "host": "c3bbs.retronetworking.org",
-  "port": 513,
-  "name": "c3bbs.retronetworking.org",
-  "type": "bbs"
- },
- {
   "host": "c64u.club",
   "port": 6400,
   "name": "c64u.club",
@@ -7124,7 +7112,7 @@
   "port": 6800,
   "name": "call.rofbbs.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "call.rofbbs.com",
@@ -7136,12 +7124,6 @@
  {
   "host": "capitolcityonline.net",
   "port": 23,
-  "name": "capitolcityonline.net",
-  "type": "bbs"
- },
- {
-  "host": "capitolcityonline.net",
-  "port": 513,
   "name": "capitolcityonline.net",
   "type": "bbs"
  },
@@ -7250,7 +7232,7 @@
   "port": 6400,
   "name": "ciaamigabbs.dynu.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "cib.dyndns.org",
@@ -7671,7 +7653,7 @@
   "port": 7411,
   "name": "digitalx.ddns.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "din.asciiattic.com",
@@ -7732,7 +7714,7 @@
   "port": 6800,
   "name": "dragon.vk3heg.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "dragonballrevolt.genesismuds.com",
@@ -7814,12 +7796,6 @@
   "type": "bbs"
  },
  {
-  "host": "endofthelinebbs.com",
-  "port": 513,
-  "name": "endofthelinebbs.com",
-  "type": "bbs"
- },
- {
   "host": "eniacv2.net",
   "port": 1337,
   "name": "eniacv2.net",
@@ -7858,12 +7834,6 @@
  {
   "host": "error404bbs.ddns.net",
   "port": 404,
-  "name": "error404bbs.ddns.net",
-  "type": "bbs"
- },
- {
-  "host": "error404bbs.ddns.net",
-  "port": 513,
   "name": "error404bbs.ddns.net",
   "type": "bbs"
  },
@@ -8038,6 +8008,12 @@
   "type": "bbs"
  },
  {
+  "host": "freespeak.hopto.org",
+  "port": 1337,
+  "name": "freespeak.hopto.org",
+  "type": "bbs"
+ },
+ {
   "host": "freeway.vkradio.com",
   "port": 23,
   "name": "freeway.vkradio.com",
@@ -8084,7 +8060,13 @@
   "port": 6800,
   "name": "fw2.cnetbbs.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
+ },
+ {
+  "host": "g-point.tunk.org",
+  "port": 500,
+  "name": "g-point.tunk.org",
+  "type": "bbs"
  },
  {
   "host": "galaxy74bbs.com",
@@ -8107,12 +8089,6 @@
  {
   "host": "game.a-net-online.lol",
   "port": 2112,
-  "name": "game.a-net-online.lol",
-  "type": "bbs"
- },
- {
-  "host": "game.a-net-online.lol",
-  "port": 513,
   "name": "game.a-net-online.lol",
   "type": "bbs"
  },
@@ -8308,6 +8284,12 @@
   "host": "hobbyspace.ddns.net",
   "port": 23,
   "name": "hobbyspace.ddns.net",
+  "type": "bbs"
+ },
+ {
+  "host": "home.thezen.garden",
+  "port": 23,
+  "name": "home.thezen.garden",
   "type": "bbs"
  },
  {
@@ -8625,12 +8607,6 @@
   "type": "bbs"
  },
  {
-  "host": "lovelybits.org",
-  "port": 513,
-  "name": "lovelybits.org",
-  "type": "bbs"
- },
- {
   "host": "lunarout.synchro.net",
   "port": 8023,
   "name": "lunarout.synchro.net",
@@ -8662,12 +8638,6 @@
   "rows": 1
  },
  {
-  "host": "macos.retro-os.live",
-  "port": 513,
-  "name": "macos.retro-os.live",
-  "type": "bbs"
- },
- {
   "host": "madmanbbs.ddns.net",
   "port": 23,
   "name": "madmanbbs.ddns.net",
@@ -8676,12 +8646,6 @@
  {
   "host": "magnumbbs.net",
   "port": 23,
-  "name": "magnumbbs.net",
-  "type": "bbs"
- },
- {
-  "host": "magnumbbs.net",
-  "port": 513,
   "name": "magnumbbs.net",
   "type": "bbs"
  },
@@ -8822,6 +8786,13 @@
   "host": "montereybbs.com",
   "port": 23,
   "name": "montereybbs.com",
+  "type": "bbs",
+  "encoding": "latin1"
+ },
+ {
+  "host": "moratahack.com",
+  "port": 23,
+  "name": "moratahack.com",
   "type": "bbs"
  },
  {
@@ -8854,7 +8825,7 @@
   "port": 23,
   "name": "mstation.servebbs.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "mtlgeek.synchro.net",
@@ -8865,12 +8836,6 @@
  {
   "host": "mtlgeek.synchro.net",
   "port": 23,
-  "name": "mtlgeek.synchro.net",
-  "type": "bbs"
- },
- {
-  "host": "mtlgeek.synchro.net",
-  "port": 513,
   "name": "mtlgeek.synchro.net",
   "type": "bbs"
  },
@@ -8905,6 +8870,12 @@
   "type": "bbs"
  },
  {
+  "host": "mushhaven.com",
+  "port": 1280,
+  "name": "mushhaven.com",
+  "type": "bbs"
+ },
+ {
   "host": "mutiny.cigdangle.com",
   "port": 65023,
   "name": "mutiny.cigdangle.com",
@@ -8934,12 +8905,6 @@
  {
   "host": "mystic-anet.online",
   "port": 23,
-  "name": "mystic-anet.online",
-  "type": "bbs"
- },
- {
-  "host": "mystic-anet.online",
-  "port": 513,
   "name": "mystic-anet.online",
   "type": "bbs"
  },
@@ -9012,12 +8977,6 @@
  {
   "host": "netpoint.webhop.me",
   "port": 23,
-  "name": "netpoint.webhop.me",
-  "type": "bbs"
- },
- {
-  "host": "netpoint.webhop.me",
-  "port": 513,
   "name": "netpoint.webhop.me",
   "type": "bbs"
  },
@@ -9124,6 +9083,12 @@
   "host": "ohb.synchronetbbs.org",
   "port": 23,
   "name": "ohb.synchronetbbs.org",
+  "type": "bbs"
+ },
+ {
+  "host": "oim.wolfpaw.net",
+  "port": 1960,
+  "name": "oim.wolfpaw.net",
   "type": "bbs"
  },
  {
@@ -9307,7 +9272,7 @@
   "port": 4489,
   "name": "phantasm.bbs.io",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "phantomrage.ddns.net",
@@ -9319,6 +9284,12 @@
   "host": "phoenix.bnbbbs.net",
   "port": 23,
   "name": "phoenix.bnbbbs.net",
+  "type": "bbs"
+ },
+ {
+  "host": "pkmud.net",
+  "port": 5000,
+  "name": "pkmud.net",
   "type": "bbs"
  },
  {
@@ -9361,6 +9332,12 @@
   "host": "pofobbs.ddns.net",
   "port": 992,
   "name": "pofobbs.ddns.net",
+  "type": "bbs"
+ },
+ {
+  "host": "portal.wanderingmad.com",
+  "port": 23,
+  "name": "portal.wanderingmad.com",
   "type": "bbs"
  },
  {
@@ -9561,12 +9538,6 @@
   "type": "bbs"
  },
  {
-  "host": "rns.risenshinebbs.com",
-  "port": 513,
-  "name": "rns.risenshinebbs.com",
-  "type": "bbs"
- },
- {
   "host": "rofbbs.ddns.net",
   "port": 2300,
   "name": "rofbbs.ddns.net",
@@ -9589,7 +9560,7 @@
   "port": 1541,
   "name": "sanctuary.zapto.org",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "sanctumbbs.com",
@@ -9645,7 +9616,7 @@
   "port": 4000,
   "name": "scenewall.bbs.io",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "scoobysdoo.ddns.net",
@@ -9688,12 +9659,6 @@
  {
   "host": "sestar.synchro.net",
   "port": 23,
-  "name": "sestar.synchro.net",
-  "type": "bbs"
- },
- {
-  "host": "sestar.synchro.net",
-  "port": 513,
   "name": "sestar.synchro.net",
   "type": "bbs"
  },
@@ -9817,7 +9782,7 @@
   "port": 1023,
   "name": "southcentral.se",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "southernamis.ddns.net",
@@ -9907,7 +9872,7 @@
   "port": 1338,
   "name": "subhuman.ddns.net",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "suga.se",
@@ -10084,7 +10049,7 @@
   "port": 1541,
   "name": "terminal-obsession.hopto.org",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "terrorkom-server.de",
@@ -10208,6 +10173,12 @@
   "type": "bbs"
  },
  {
+  "host": "themegabbs.ddns.net",
+  "port": 6400,
+  "name": "themegabbs.ddns.net",
+  "type": "bbs"
+ },
+ {
   "host": "thenervoushospital.com",
   "port": 1996,
   "name": "thenervoushospital.com",
@@ -10224,7 +10195,7 @@
   "port": 2020,
   "name": "thenorthernpalace.com",
   "type": "bbs",
-  "encoding": "topaz"
+  "encoding": "latin1"
  },
  {
   "host": "theoldnet.com",
@@ -10232,6 +10203,12 @@
   "name": "theoldnet.com",
   "type": "bbs",
   "encoding": "petscii"
+ },
+ {
+  "host": "theparityerror.com",
+  "port": 23,
+  "name": "theparityerror.com",
+  "type": "bbs"
  },
  {
   "host": "thepenaltybox.org",
@@ -10258,32 +10235,14 @@
   "type": "bbs"
  },
  {
-  "host": "threeblindmice.synchronetbbs.org",
-  "port": 513,
-  "name": "threeblindmice.synchronetbbs.org",
-  "type": "bbs"
- },
- {
   "host": "thunder.synchro.net",
   "port": 23,
   "name": "thunder.synchro.net",
   "type": "bbs"
  },
  {
-  "host": "thunder.synchro.net",
-  "port": 513,
-  "name": "thunder.synchro.net",
-  "type": "bbs"
- },
- {
   "host": "tiabbs.synchro.net",
   "port": 23,
-  "name": "tiabbs.synchro.net",
-  "type": "bbs"
- },
- {
-  "host": "tiabbs.synchro.net",
-  "port": 513,
   "name": "tiabbs.synchro.net",
   "type": "bbs"
  },
@@ -10327,12 +10286,6 @@
  {
   "host": "tmz.synchronetbbs.org",
   "port": 23,
-  "name": "tmz.synchronetbbs.org",
-  "type": "bbs"
- },
- {
-  "host": "tmz.synchronetbbs.org",
-  "port": 513,
   "name": "tmz.synchronetbbs.org",
   "type": "bbs"
  },
@@ -10480,7 +10433,7 @@
   "port": 23,
   "name": "uzisuicide.servebbs.org",
   "type": "bbs",
-  "encoding": "topaz",
+  "encoding": "latin1",
   "columns": 80,
   "rows": 1
  },

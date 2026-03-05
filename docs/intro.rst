@@ -1,4 +1,6 @@
-|pypi_downloads| |codecov| |license| |linux| |windows| |mac|
+|pypi_downloads| |codecov| |license| |linux| |mac|
+
+.. TODO: |windows|
 
 Introduction
 ============
@@ -50,8 +52,7 @@ Connect directly via WebSocket::
     telix ws://mud.example.com:9119
     telix wss://mud.example.com/ws
 
-Use ``--bbs`` or ``--mud`` to apply server type presets (see
-:doc:`session-manager` for details)::
+Use ``--bbs`` or ``--mud`` to apply server type presets::
 
     telix --bbs bbs.example.com
     telix --mud mud.example.com 4000

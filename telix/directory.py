@@ -79,7 +79,9 @@ def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_base.SessionCo
     enc = entry.get("encoding")
     if enc:
         cfg.encoding = enc
-    _apply_type_presets(cfg, entry.get("type", ""))
+    entry_type = entry.get("type", "")
+    _apply_type_presets(cfg, entry_type)
+    cfg.server_type = entry_type
     return cfg
 
 

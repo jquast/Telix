@@ -1,4 +1,4 @@
-"""
+r"""
 MSLP (Mud Server Link Protocol) keyboard navigation.
 
 Parses OSC 68 sequences from server output, strips them from display,

@@ -23,6 +23,7 @@ from telix.client_tui import (
     EDITOR_TABS,
     DEFAULTS_KEY,
     PRIMARY_PASTE_COMMANDS,
+    normalize_encoding,
     CapsPane,
     MacroEditPane,
     SessionConfig,
@@ -177,6 +178,25 @@ def test_build_command_encoding() -> None:
 def test_build_command_default_encoding_omitted() -> None:
     cfg = SessionConfig(host="h", port=23, encoding="utf8")
     assert "--encoding" not in build_command(cfg)
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("utf8", "utf8"),
+        ("latin-1", "latin-1"),
+        ("cp437", "cp437"),
+        ("utf-8", "utf8"),
+        ("latin1", "latin-1"),
+        ("iso-8859-1", "iso-8859-1"),
+        (" utf8 ", "utf8"),
+        (" latin-1 ", "latin-1"),
+        ("bogus-unknown-codec", "utf8"),
+    ],
+)
+def test_normalize_encoding(raw: str, expected: str) -> None:
+    """normalize_encoding maps aliases and strips whitespace to ENCODINGS entries."""
+    assert normalize_encoding(raw) == expected
 
 
 def test_build_command_always_will_do() -> None:
