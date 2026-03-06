@@ -32,6 +32,7 @@ __all__ = (
     "Macro",
     "build_macro_dispatch",
     "ensure_builtin_macros",
+    "key_name_to_ansi_seq",
     "key_name_to_seq",
     "load_macros",
     "save_macros",
@@ -143,6 +144,48 @@ def save_macros(path: str, macros: list[Macro], session_key: str) -> None:
 
     content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
     paths.atomic_write(path, content)
+
+
+# Blessed key name to VT100/xterm ANSI escape sequence, for ansi_keys mode.
+_SPECIAL_KEY_MAP: dict[str, str] = {
+    "KEY_UP": "\x1b[A",
+    "KEY_DOWN": "\x1b[B",
+    "KEY_RIGHT": "\x1b[C",
+    "KEY_LEFT": "\x1b[D",
+    "KEY_HOME": "\x1b[H",
+    "KEY_END": "\x1b[F",
+    "KEY_PGUP": "\x1b[5~",
+    "KEY_PGDOWN": "\x1b[6~",
+    "KEY_INSERT": "\x1b[2~",
+    "KEY_DELETE": "\x1b[3~",
+    "KEY_BTAB": "\x1b[Z",
+    "KEY_F1": "\x1bOP",
+    "KEY_F2": "\x1bOQ",
+    "KEY_F3": "\x1bOR",
+    "KEY_F4": "\x1bOS",
+    "KEY_F5": "\x1b[15~",
+    "KEY_F6": "\x1b[17~",
+    "KEY_F7": "\x1b[18~",
+    "KEY_F8": "\x1b[19~",
+    "KEY_F9": "\x1b[20~",
+    "KEY_F10": "\x1b[21~",
+    "KEY_F11": "\x1b[23~",
+    "KEY_F12": "\x1b[24~",
+}
+
+
+def key_name_to_ansi_seq(name: str) -> str | None:
+    """
+    Return the ANSI escape sequence for a blessed key name, or ``None``.
+
+    Used when ``ansi_keys`` is enabled to transmit raw escape sequences for
+    navigation keys that blessed normally absorbs and returns as named
+    :class:`~blessed.keyboard.Keystroke` objects.
+
+    :param name: Blessed key name (e.g. ``KEY_UP``, ``KEY_F1``).
+    :returns: ANSI escape sequence string, or ``None`` if not mapped.
+    """
+    return _SPECIAL_KEY_MAP.get(name)
 
 
 # Ctrl key name to ASCII control character offset.

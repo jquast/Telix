@@ -17,6 +17,7 @@ from telix.macros import (
     Macro,
     load_macros,
     save_macros,
+    key_name_to_ansi_seq,
     key_name_to_seq,
     build_macro_dispatch,
     ensure_builtin_macros,
@@ -378,3 +379,33 @@ def test_dispatch_repl_action_noop_when_missing():
     ctx = types.SimpleNamespace(repl_actions={})
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`help`", ctx, log) is True
+
+
+@pytest.mark.parametrize(
+    "key_name, expected",
+    [
+        ("KEY_UP", "\x1b[A"),
+        ("KEY_DOWN", "\x1b[B"),
+        ("KEY_RIGHT", "\x1b[C"),
+        ("KEY_LEFT", "\x1b[D"),
+        ("KEY_HOME", "\x1b[H"),
+        ("KEY_END", "\x1b[F"),
+        ("KEY_PGUP", "\x1b[5~"),
+        ("KEY_PGDOWN", "\x1b[6~"),
+        ("KEY_INSERT", "\x1b[2~"),
+        ("KEY_DELETE", "\x1b[3~"),
+        ("KEY_BTAB", "\x1b[Z"),
+        ("KEY_F1", "\x1bOP"),
+        ("KEY_F2", "\x1bOQ"),
+        ("KEY_F3", "\x1bOR"),
+        ("KEY_F4", "\x1bOS"),
+        ("KEY_F5", "\x1b[15~"),
+        ("KEY_F12", "\x1b[24~"),
+    ],
+)
+def test_key_name_to_ansi_seq(key_name, expected):
+    assert key_name_to_ansi_seq(key_name) == expected
+
+
+def test_key_name_to_ansi_seq_unknown():
+    assert key_name_to_ansi_seq("KEY_F99") is None

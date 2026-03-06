@@ -2016,7 +2016,18 @@ def tui_main() -> None:
     """Launch the Textual TUI session manager."""
     client_tui_base.patch_writer_thread_queue()
     app = TelnetSessionApp()
-    app.run()
+    try:
+        app.run()
+    except BaseException:
+        import traceback
+        client_tui_base.pause_before_exit()
+        sys.stdout.write(client_tui_base.TERMINAL_CLEANUP)
+        sys.stdout.flush()
+        client_tui_base.restore_opost()
+        traceback.print_exc()
+        raise
+    if app.return_code and app.return_code != 0:
+        client_tui_base.pause_before_exit()
     # Move cursor to bottom-right corner and print a newline while still in
     # the alternate screen, then exit fullscreen and print another newline
     # so the shell prompt appears on a clean line.

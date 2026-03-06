@@ -221,6 +221,7 @@ async def _run_telnet_over_ws(
     async def wrapped_shell(reader: "object", writer: "object") -> None:
         ctx = writer.ctx  # type: ignore[union-attr]
         ctx.raw_mode = raw_mode_val
+        ctx.ansi_keys = ansi_keys
         if typescript:
             ctx.typescript_file = open(typescript, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")
         try:
@@ -356,6 +357,7 @@ async def _run_gmcp_ws(
     )
     writer.ctx.no_repl = no_repl
     writer.ctx.ascii_eol = ascii_eol
+    writer.ctx.ansi_keys = ansi_keys
 
     # Mode-based echo default: BBS (no_repl or raw mode) = server echoes; MUD = local echo.
     writer.will_echo = no_repl or raw_mode is True

@@ -36,7 +36,7 @@ import textual.css.query
 import textual.containers
 
 # local
-from . import util, paths, rooms
+from . import terminal, util, paths, rooms
 
 log = logging.getLogger(__name__)
 
@@ -56,16 +56,7 @@ def restore_opost() -> None:
     Textual puts the terminal in raw mode which disables output post-processing.  If the driver fails to fully restore
     termios (or we catch an exception before it gets the chance), newlines render as bare LF producing staircase output.
     """
-    import termios
-
-    try:
-        fd = sys.stdout.fileno()
-        attrs = termios.tcgetattr(fd)
-        if not (attrs[1] & termios.OPOST):
-            attrs[1] |= termios.OPOST
-            termios.tcsetattr(fd, termios.TCSANOW, attrs)
-    except (OSError, termios.error, ValueError, AttributeError):
-        pass
+    terminal.restore_opost()
 
 
 def write_crash_file(crash_path: str, traceback_text: str, source: str) -> None:
@@ -1075,7 +1066,7 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # O_NONBLOCK on the shared description, which persists
                 # after the child exits.  Textual's input loop expects
                 # blocking reads -- restore before Textual resumes.
-                os.set_blocking(sys.stdin.fileno(), True)
+                terminal.restore_io_blocking()
                 # Reset terminal to known-good state -- the child may
                 # have left raw mode, SGR attributes, mouse tracking,
                 # or alternate screen active.
@@ -1471,7 +1462,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):  # type: i
         with textual.containers.Horizontal(id="keys-eol-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("ANSI Keys", id="ansi-keys-label", classes=f"field-label{dim}")
-                yield textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys", disabled=not is_retro)
+                sw = textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys", disabled=not is_retro)
+                sw.tooltip = "Required for Windows"
+                yield sw
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("ASCII EOL", id="ascii-eol-label", classes=f"field-label{dim}")
                 yield textual.widgets.Switch(value=cfg.ascii_eol, id="ascii-eol", disabled=not is_retro)
@@ -2563,32 +2556,7 @@ def restore_blocking_fds(logfile: str = "") -> None:
 
     :param logfile: Optional path to the parent's logfile for child logging.
     """
-    if logfile:
-        logging.basicConfig(
-            filename=logfile, level=logging.DEBUG, format="%(asctime)s %(levelname)-5s %(name)s: %(message)s"
-        )
-
-    log = logging.getLogger(__name__)
-    log.debug(
-        "child pre-fix: fd0_blocking=%s fd1=%s fd2=%s "
-        "stdin_isatty=%s __stdin___isatty=%s "
-        "stderr_isatty=%s __stderr___isatty=%s",
-        os.get_blocking(0),
-        os.get_blocking(1),
-        os.get_blocking(2),
-        sys.stdin.isatty(),
-        sys.__stdin__.isatty(),
-        sys.stderr.isatty(),
-        sys.__stderr__.isatty(),
-    )
-    for fd in (0, 1, 2):
-        try:
-            os.set_blocking(fd, True)
-        except OSError:
-            pass
-    log.debug(
-        "child post-fix: fd0_blocking=%s fd1=%s fd2=%s", os.get_blocking(0), os.get_blocking(1), os.get_blocking(2)
-    )
+    terminal.restore_blocking_fds(logfile)
 
 
 def log_child_diagnostics() -> None:
@@ -2655,24 +2623,7 @@ def run_editor_app(app: EditorApp) -> None:
 
 def pause_before_exit() -> None:
     """Prompt user to press RETURN so they can read error output."""
-    import termios
-
-    sys.stdout.write("\r\nPress RETURN to continue...\r\n")
-    sys.stdout.flush()
-    fd = sys.stdin.fileno()
-    try:
-        os.set_blocking(fd, True)
-        old = termios.tcgetattr(fd)
-        # Restore cooked mode so RETURN works and Ctrl+C raises SIGINT.
-        new = termios.tcgetattr(fd)
-        new[3] |= termios.ICANON | termios.ECHO | termios.ISIG
-        try:
-            termios.tcsetattr(fd, termios.TCSANOW, new)
-            os.read(fd, 1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    except (OSError, termios.error, EOFError, KeyboardInterrupt):
-        pass
+    terminal.pause_before_exit()
 
 
 def launch_editor(screen: textual.screen.Screen[typing.Any], session_key: str = "", logfile: str = "") -> None:

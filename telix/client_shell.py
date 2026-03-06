@@ -298,6 +298,23 @@ def _setup_color_filter(
     ctx.erase_eol = True
 
 
+def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Set ``ctx.ansi_keys`` from the telix CLI ``--ansi-keys`` flag.
+
+    Reads :data:`telix.main._color_args` set by :func:`~telix.main.main`
+    before the shell starts.  No-op when called outside a main() context.
+
+    :param ctx: Session context to update.
+    """
+    from . import main as _main_mod
+
+    args = _main_mod._color_args
+    if args is None:
+        return
+    ctx.ansi_keys = bool(getattr(args, "ansi_keys", False))
+
+
 async def telix_client_shell(
     telnet_reader: (telnetlib3.stream_reader.TelnetReader | telnetlib3.stream_reader.TelnetReaderUnicode),
     telnet_writer: (telnetlib3.stream_writer.TelnetWriter | telnetlib3.stream_writer.TelnetWriterUnicode),
@@ -325,6 +342,7 @@ async def telix_client_shell(
     load_configs(ctx)
 
     _setup_color_filter(ctx, telnet_writer)
+    _setup_ansi_keys(ctx)
 
     # 3. Setup GMCP callbacks
     base_on_gmcp = telnet_writer._ext_callback.get(telnetlib3.telopt.GMCP)

@@ -148,6 +148,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.color_filter: Any | None = None
         self.erase_eol: bool = False
         self.repl_enabled: bool = False
+        self.ansi_keys: bool = False
         self.history_file: str | None = None
 
         # modem activity dots (set by REPL, used by send_chained et al.)
