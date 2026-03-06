@@ -25,7 +25,7 @@ Architecture
 ------------
 
 Telix is a TUI Telnet client for MUD and BBS systems, layered on top of telnetlib3_, blessed_,
-and textual_::
+wcwidth_, and textual_::
 
     telix
       |--> wcwidth
@@ -35,10 +35,12 @@ and textual_::
       |--> telnetlib3
       |    |
       |    +-->  wcwidth
-      |
+      |    |
       +--> blessed
       |    |
       |    +-->  wcwidth
+      |    |
+      |    +-->  jinxed (windows)
       |
       textual
            |
@@ -46,7 +48,12 @@ and textual_::
                 |
                 +--> wcwidth
 
-wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.
+wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.  wcwidth_ to measure the
+width of strings containing sequences and complex unicode. blessed_ is depended on for general
+terminal support for access to terminal sequence, feature detection, and keyboard handling, and to
+provide the repl for MUD connections. telnetlib3_ also requires blessed for the same, and, textual_
+is used for all complex TUIs, which depends on its core library rich_.  For Windows systems, jinxed_
+is used by both Telix and telnetlib3_ for msvcrt keyboard routines.
 
 Telix code file overview::
 
@@ -362,3 +369,4 @@ the telnet reader's internal buffer and consumed by the first
 .. _rich: https://github.com/Textualize/rich
 .. _pytest: https://pytest.org
 .. _ruff: https://docs.astral.sh/ruff/
+.. _jinxed: https://github.com/rockhopper-Technologies/jinxed
