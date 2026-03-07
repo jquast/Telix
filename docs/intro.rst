@@ -1,6 +1,4 @@
-|pypi_downloads| |codecov| |license| |linux| |mac|
-
-.. TODO: |windows|
+|pypi_downloads| |codecov| |license| |linux| |mac| |windows|
 
 Introduction
 ============
@@ -53,7 +51,7 @@ Using ssl::
 
 Connect directly via WebSocket::
 
-    telix wss://xibalba.vip:44512 
+    telix wss://xibalba.vip:44512
     telix wss://mud.example.com/ws
 
 Use ``--bbs`` or ``--mud`` to apply server type presets::

@@ -20,8 +20,8 @@ from telix.client_repl_dialogs import (
     launch_chat_viewer,
     format_crash_banner,
     launch_room_browser,
-    launch_unified_editor,
     most_recent_channel,
+    launch_unified_editor,
 )
 
 
@@ -230,10 +230,7 @@ class TestMostRecentChannel:
         assert most_recent_channel(msgs, cap) == "gossip"
 
     def test_multiple_capture_channels(self):
-        cap = {
-            "tells": [{"ts": "2024-01-01T10:00:00"}],
-            "ooc": [{"ts": "2024-01-01T12:00:00"}],
-        }
+        cap = {"tells": [{"ts": "2024-01-01T10:00:00"}], "ooc": [{"ts": "2024-01-01T12:00:00"}]}
         assert most_recent_channel([], cap) == "ooc"
 
     def test_no_ts_fields(self):
