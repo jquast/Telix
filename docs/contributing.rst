@@ -135,16 +135,16 @@ Run individual linters::
     tox -e pydocstyle
     tox -e codespell
 
-Style and static analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Style
+-----
 
 .. include:: ../.claude/CLAUDE.md
    :parser: myst
    :start-after: ## Style and static analysis
    :end-before: ## Development workflow
 
-Development workflow
-~~~~~~~~~~~~~~~~~~~~
+Workflow
+--------
 
 .. include:: ../.claude/CLAUDE.md
    :parser: myst

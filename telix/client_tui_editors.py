@@ -390,7 +390,8 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
     #autoreply-form .form-label { width: 12; }
     #autoreply-form .form-label-mid { width: 9; }
     #autoreply-form .insert-btn { margin: 0; padding: 0 1; }
-    #autoreply-cond-vital { width: 20; }
+    #autoreply-cond-source { width: 18; }
+    #autoreply-cond-vital { width: 18; }
     #autoreply-cond-op { width: 8; }
     #autoreply-cond-val { width: 9; border: tall grey; }
     #autoreply-cond-val:focus { border: tall $accent; }
@@ -473,10 +474,17 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Label("Condition", classes="form-label-short")
                             yield textual.widgets.Select(
-                                [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%"), ("HP", "HP"), ("MP", "MP")],
+                                [("(none)", "")],
+                                value="",
+                                allow_blank=False,
+                                id="autoreply-cond-source",
+                            )
+                            yield textual.widgets.Select(
+                                [("(none)", "")],
                                 value="",
                                 allow_blank=False,
                                 id="autoreply-cond-vital",
+                                disabled=True,
                             )
                             yield textual.widgets.Select(
                                 [(">", ">"), ("<", "<"), (">=", ">="), ("<=", "<="), ("=", "=")],
@@ -485,7 +493,9 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                                 id="autoreply-cond-op",
                             )
                             yield textual.widgets.Input(value="99", placeholder="99", id="autoreply-cond-val")
-                            yield textual.widgets.Label("(as percent)", classes="form-label-pct")
+                            yield textual.widgets.Label(
+                                "(as percent)", id="autoreply-cond-pct-label", classes="form-label-pct"
+                            )
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Button("When", id="autoreply-btn-when", classes="insert-btn")
                             yield textual.widgets.Button("Until", id="autoreply-btn-until", classes="insert-btn")
@@ -507,26 +517,64 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                             yield textual.widgets.Button("OK", variant="success", id="autoreply-ok")
                     yield textual.widgets.Static("", id="autoreply-count")
 
-    def gmcp_condition_choices(self) -> list[tuple[str, str]]:
-        """Build Select choices for the condition field, including GMCP numeric keys."""
-        fixed = [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%"), ("HP", "HP"), ("MP", "MP")]
+    def gmcp_source_choices(self) -> list[tuple[str, str]]:
+        """Build Select choices for the GMCP source dropdown."""
+        options: list[tuple[str, str]] = [("(none)", ""), ("Built-in (HP/MP)", "__builtin__")]
         if not self.gmcp_snapshot_path or not os.path.exists(self.gmcp_snapshot_path):
-            return fixed
+            return options
         with open(self.gmcp_snapshot_path, encoding="utf-8") as fh:
             data = json.load(fh)
         packages = data.get("packages", {}) if isinstance(data, dict) else {}
-        fixed_vals = {"HP%", "MP%", "HP", "MP", ""}
-        seen: set[str] = set()
-        for pkg_info in packages.values():
+        for pkg_name, pkg_info in sorted(packages.items()):
             pkg_data = pkg_info.get("data", {}) if isinstance(pkg_info, dict) else {}
             if not isinstance(pkg_data, dict):
                 continue
-            for k, v in pkg_data.items():
-                if isinstance(v, (int, float)) and not isinstance(v, bool) and k not in fixed_vals:
-                    seen.add(k)
-        if not seen:
-            return fixed
-        return fixed + [(k, k) for k in sorted(seen)]
+            if any(isinstance(v, (int, float)) and not isinstance(v, bool) for v in pkg_data.values()):
+                options.append((pkg_name, pkg_name))
+        return options
+
+    def gmcp_field_choices(self, source: str) -> list[tuple[str, str]]:
+        """Build Select choices for the condition field given a source."""
+        if source == "__builtin__":
+            return [("(none)", ""), ("HP%", "HP%"), ("MP%", "MP%"), ("HP", "HP"), ("MP", "MP")]
+        if not source or not self.gmcp_snapshot_path or not os.path.exists(self.gmcp_snapshot_path):
+            return [("(none)", "")]
+        with open(self.gmcp_snapshot_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        packages = data.get("packages", {}) if isinstance(data, dict) else {}
+        pkg_info = packages.get(source, {})
+        pkg_data = pkg_info.get("data", {}) if isinstance(pkg_info, dict) else {}
+        if not isinstance(pkg_data, dict):
+            return [("(none)", "")]
+        fields = sorted(k for k, v in pkg_data.items() if isinstance(v, (int, float)) and not isinstance(v, bool))
+        if not fields:
+            return [("(none)", "")]
+        field_lower_set = {k.lower() for k in fields}
+        paired = [k for k in fields if f"max{k.lower()}" in field_lower_set]
+        options: list[tuple[str, str]] = [("(none)", "")]
+        for k in paired:
+            options.append((f"{k}%", f"{k}%"))
+        for k in fields:
+            options.append((k, k))
+        return options
+
+    def find_condition_source(self, vital_key: str) -> str:
+        """Return the GMCP source package for *vital_key*, or ``'__builtin__'`` for built-ins."""
+        if vital_key in {"HP%", "MP%", "HP", "MP"}:
+            return "__builtin__"
+        if not self.gmcp_snapshot_path or not os.path.exists(self.gmcp_snapshot_path):
+            return "__builtin__"
+        base_key = vital_key[:-1] if vital_key.endswith("%") else vital_key
+        with open(self.gmcp_snapshot_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        packages = data.get("packages", {}) if isinstance(data, dict) else {}
+        for pkg_name, pkg_info in packages.items():
+            pkg_data = pkg_info.get("data", {}) if isinstance(pkg_info, dict) else {}
+            if not isinstance(pkg_data, dict):
+                continue
+            if base_key in pkg_data:
+                return pkg_name
+        return "__builtin__"
 
     def on_mount(self) -> None:
         """Load autoreplies from file and populate table."""
@@ -539,7 +587,7 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         table.add_column("Reply", width=col_w, key="reply")
         table.add_column("Flags", width=8, key="flags")
         table.add_column("Last", width=8, key="last")
-        self.query_one("#autoreply-cond-vital", textual.widgets.Select).set_options(self.gmcp_condition_choices())
+        self.query_one("#autoreply-cond-source", textual.widgets.Select).set_options(self.gmcp_source_choices())
         self.load_from_file()
         self.refresh_table()
         self.query_one("#autoreply-form").display = False
@@ -628,18 +676,26 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         self.query_one("#autoreply-enabled", textual.widgets.Switch).value = enabled
         self.query_one("#autoreply-immediate", textual.widgets.Switch).value = immediate
         self.query_one("#autoreply-case-sensitive", textual.widgets.Switch).value = case_sensitive
-        cond_vital, cond_op, cond_val = "", ">", "99"
+        cond_source, cond_vital, cond_op, cond_val = "", "", ">", "99"
         if when:
             vital = next(iter(when), "")
             expr = when.get(vital, ">99")
             if m := re.match(r"^(>=|<=|>|<|=)(\d+)$", expr):
                 cond_vital, cond_op, cond_val = vital, m.group(1), m.group(2)
-        self.query_one("#autoreply-cond-vital", textual.widgets.Select).value = cond_vital
+            cond_source = self.find_condition_source(cond_vital) if cond_vital else ""
+        source_sel = self.query_one("#autoreply-cond-source", textual.widgets.Select)
+        source_sel.value = cond_source
+        field_sel = self.query_one("#autoreply-cond-vital", textual.widgets.Select)
+        field_sel.set_options(self.gmcp_field_choices(cond_source))
+        field_sel.value = cond_vital
+        field_sel.disabled = not cond_source
         self.query_one("#autoreply-cond-op", textual.widgets.Select).value = cond_op
         self.query_one("#autoreply-cond-val", textual.widgets.Input).value = cond_val
-        cond_none = not when
+        cond_none = not cond_vital
         self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = cond_none
         self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = cond_none
+        is_pct = cond_vital.endswith("%")
+        self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = is_pct
         self.query_one("#autoreply-search", textual.widgets.Input).display = False
         self.query_one("#autoreply-table").display = False
         self.query_one("#autoreply-form").display = True
@@ -675,11 +731,22 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         self.finalize_edit(entry, bool(pattern_val))
 
     def on_select_changed(self, event: textual.widgets.Select.Changed) -> None:
-        """Disable operator/value fields when condition vital is '(none)'."""
-        if event.select.id == "autoreply-cond-vital":
+        """Update field/operator/value dropdowns when source or field changes."""
+        if event.select.id == "autoreply-cond-source":
+            source = event.value if isinstance(event.value, str) else ""
+            field_sel = self.query_one("#autoreply-cond-vital", textual.widgets.Select)
+            field_sel.set_options(self.gmcp_field_choices(source))
+            field_sel.value = ""
+            field_sel.disabled = not source
+            self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = True
+            self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = True
+            self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = False
+        elif event.select.id == "autoreply-cond-vital":
             disabled = not event.value or event.value is textual.widgets.Select.BLANK
             self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = disabled
             self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = disabled
+            is_pct = isinstance(event.value, str) and event.value.endswith("%")
+            self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = is_pct
 
     def do_extra_button(self, suffix: str, btn: str) -> None:
         """Handle autoreply-specific buttons (travel, etc.)."""
