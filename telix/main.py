@@ -140,7 +140,6 @@ def _build_help_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--encoding", default="utf-8", help="encoding name (default: utf-8)")
     conn.add_argument("--encoding-errors", default="replace", help="handler for encoding errors (default: replace)")
-    conn.add_argument("--force-binary", action="store_true", help="force binary mode negotiation")
     conn.add_argument("--gmcp-modules", metavar="MODULES", help="comma-separated list of GMCP modules to request")
     conn.add_argument("--line-mode", action="store_true", help="force line-mode input (default: auto-detect)")
     conn.add_argument("--logfile", metavar="FILE", help="write log to FILE")
@@ -302,7 +301,7 @@ def main() -> None:
                     always_will=always_will,
                     always_dont=always_dont,
                     always_wont=always_wont,
-                    force_binary=args.force_binary,
+                    force_binary=True,
                     term=args.term,
                     speed=args.speed,
                     send_environ=send_environ,

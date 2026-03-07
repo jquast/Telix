@@ -336,7 +336,7 @@ async def telix_client_shell(
     ctx = telnet_writer.ctx = session_context.TelixSessionContext.create_using_telnet_ctx(
         writer=telnet_writer,
         session_key=build_session_key(telnet_writer),
-        encoding=telnet_writer.fn_encoding(outgoing=False),
+        encoding=telnet_writer.fn_encoding(incoming=True),
     )
     ctx.repl_enabled = True
 

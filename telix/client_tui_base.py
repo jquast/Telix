@@ -183,7 +183,6 @@ FLAG_TO_WIDGET: dict[str, str] = {
     "term": "term",
     "encoding": "encoding",
     "encoding-errors": "encoding-errors",
-    "force-binary": "force-binary",
     "raw-mode": "mode-raw",
     "line-mode": "mode-line",
     "connect-timeout": "connect-timeout",
@@ -325,7 +324,6 @@ class SessionConfig:
     term: str = ""  # empty = use $TERM at runtime
     speed: int = 38400
     encoding: str = "utf8"
-    force_binary: bool = True
     encoding_errors: str = "replace"
 
     # Mode: "auto", "raw", or "line"
@@ -545,8 +543,6 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         cmd.append("--ansi-keys")
     if config.ascii_eol:
         cmd.append("--ascii-eol")
-    if config.force_binary:
-        cmd.append("--force-binary")
     if config.compression is True:
         cmd.append("--compression")
     elif config.compression is False:
@@ -745,8 +741,6 @@ class SessionListScreen(textual.screen.Screen[None]):
             parts.append("raw")
         elif cfg.mode == "line":
             parts.append("line")
-        if not cfg.force_binary:
-            parts.append("!bin")
         if cfg.ansi_keys:
             parts.append("ansi")
         if cfg.ascii_eol:

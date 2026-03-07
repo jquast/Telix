@@ -58,7 +58,6 @@ async def run_ws_client(
     always_will: "set[bytes] | None" = None,
     always_dont: "set[bytes] | None" = None,
     always_wont: "set[bytes] | None" = None,
-    force_binary: bool = False,
     term: str = "",
     speed: int = 38400,
     send_environ: "tuple[str, ...] | None" = None,
@@ -99,7 +98,6 @@ async def run_ws_client(
     :param always_will: Telnet options to always send WILL for.
     :param always_dont: Telnet options to always send DONT for.
     :param always_wont: Telnet options to always send WONT for.
-    :param force_binary: If ``True``, request BINARY mode.
     :param term: Terminal type string (default: ``$TERM``).
     :param speed: Terminal speed (default: 38400).
     :param send_environ: Environment variable names to send via NEW-ENVIRON.
@@ -143,7 +141,7 @@ async def run_ws_client(
                 port=port,
                 encoding=encoding,
                 encoding_errors=encoding_errors,
-                force_binary=force_binary,
+                force_binary=True,
                 term=term or "",
                 speed=speed,
                 send_environ=send_environ or (),
@@ -187,7 +185,6 @@ async def _run_telnet_over_ws(
     port: int,
     encoding: str,
     encoding_errors: str,
-    force_binary: bool,
     term: str,
     speed: int,
     send_environ: "tuple[str, ...]",
@@ -240,7 +237,7 @@ async def _run_telnet_over_ws(
     client = client_cls(
         encoding=encoding,
         encoding_errors=encoding_errors,
-        force_binary=force_binary,
+        force_binary=True,
         term=term or "unknown",
         tspeed=(speed, speed),
         shell=wrapped_shell,
@@ -530,9 +527,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="ascii_eol",
         help="use ASCII CR/LF instead of encoding-native EOL",
-    )
-    conn.add_argument(
-        "--force-binary", action="store_true", default=False, dest="force_binary", help="force binary mode negotiation"
     )
     conn.add_argument(
         "--gmcp-modules",

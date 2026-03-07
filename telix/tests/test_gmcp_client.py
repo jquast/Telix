@@ -13,7 +13,7 @@ from telnetlib3.accessories import get_version
 # local
 from telix.client_repl import segmented, vital_bar
 
-CLIENT_DEFAULTS = {"encoding": "utf8", "encoding_errors": "strict", "force_binary": False, "connect_maxwait": 0.02}
+CLIENT_DEFAULTS = {"encoding": "utf8", "encoding_errors": "strict", "force_binary": True, "connect_maxwait": 0.02}
 
 
 class MockTransport:
