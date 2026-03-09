@@ -14,15 +14,15 @@ def get_help(topic: str) -> str:
     """
     Return combined help text for a TUI help topic.
 
-    :param str topic: One of ``"macro"``, ``"autoreply"``, ``"highlight"``,
+    :param str topic: One of ``"macro"``, ``"trigger"``, ``"highlight"``,
         ``"room"``, or ``"keybindings"``.
     :rtype: str
     """
     commands = read_topic("commands")
     if topic == "macro":
         return read_topic("macros") + "\n---\n\n" + commands
-    if topic == "autoreply":
-        return read_topic("autoreplies") + "\n---\n\n" + commands
+    if topic == "trigger":
+        return read_topic("triggers") + "\n---\n\n" + commands
     if topic == "highlight":
         return read_topic("highlights")
     if topic == "room":

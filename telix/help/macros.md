@@ -21,13 +21,13 @@ disable a builtin, but you cannot delete it.
 | F5 | Resume last walk |
 | Alt+H | Edit highlights |
 | Alt+M | Edit macros |
-| Alt+A | Edit autoreplies |
+| Alt+A | Edit triggers |
 | Alt+R | Edit rooms |
 | Alt+C | Edit captures |
 | Alt+B | Edit bars |
 | Alt+T | Edit theme |
 | Alt+Shift+H | Toggle highlights |
-| Alt+Shift+A | Toggle autoreplies |
+| Alt+Shift+A | Toggle triggers |
 | Ctrl+L | Repaint screen |
 | Ctrl+] | Disconnect |
 

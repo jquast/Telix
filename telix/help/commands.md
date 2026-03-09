@@ -87,13 +87,13 @@ Same as `until` but the pattern match is **case-sensitive**.
 
 ### Travel
 
-Navigate to a room by its GMCP room ID.  Autoreplies fire in each room
+Navigate to a room by its GMCP room ID.  Triggers fire in each room
 by default; add `noreply` to disable them.
 
 | Example | Effect |
 |---------|--------|
 | `` `travel abc123` `` | Travel to room abc123 |
-| `` `travel abc123 noreply` `` | Travel with autoreplies disabled |
+| `` `travel abc123 noreply` `` | Travel with triggers disabled |
 
 ### Return
 
@@ -102,7 +102,7 @@ Travel back to the room where the current macro started executing.
 | Example | Effect |
 |---------|--------|
 | `` `return` `` | Return to start room |
-| `` `return noreply` `` | Return with autoreplies disabled |
+| `` `return noreply` `` | Return with triggers disabled |
 
 ### Home
 
@@ -121,15 +121,15 @@ BFS-explore unvisited exits from nearby rooms.  Optional arguments
 - **limit** -- maximum exits to explore (default 999)
 - **bfs** / **dfs** -- search strategy (default bfs)
 - **autosearch** -- send ``search`` in each new room
-- **autoevaluate** -- enable consider-before-kill autoreply logic
+- **autoevaluate** -- enable consider-before-kill trigger logic
 - **autosurvey** -- send ``survey`` in each new room
-- **noreply** -- completely disable autoreply processing during the walk
+- **noreply** -- completely disable trigger processing during the walk
 
 | Example | Effect |
 |---------|--------|
 | `` `autodiscover` `` | Explore up to 999 unvisited exits |
 | `` `autodiscover 50` `` | Explore up to 50 exits |
-| `` `autodiscover dfs noreply` `` | DFS explore with autoreplies disabled |
+| `` `autodiscover dfs noreply` `` | DFS explore with triggers disabled |
 | `` `autodiscover autosearch autosurvey` `` | Explore with auto search and survey |
 
 ### Random Walk
@@ -140,15 +140,15 @@ arguments (in any order after the verb):
 - **limit** -- maximum steps (default 999)
 - **visit_level** -- minimum visits per room before stopping (default 2)
 - **autosearch** -- send ``search`` in each new room
-- **autoevaluate** -- enable consider-before-kill autoreply logic
+- **autoevaluate** -- enable consider-before-kill trigger logic
 - **autosurvey** -- send ``survey`` in each new room
-- **noreply** -- completely disable autoreply processing during the walk
+- **noreply** -- completely disable trigger processing during the walk
 
 | Example | Effect |
 |---------|--------|
 | `` `randomwalk` `` | Random walk up to 999 steps |
 | `` `randomwalk 100` `` | Random walk up to 100 steps |
-| `` `randomwalk noreply autosearch` `` | Walk with autoreplies disabled, auto-search |
+| `` `randomwalk noreply autosearch` `` | Walk with triggers disabled, auto-search |
 | `` `randomwalk autosearch autosurvey` `` | Walk with auto search and survey |
 
 ### Resume

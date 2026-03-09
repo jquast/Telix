@@ -9,7 +9,7 @@ from telix.help import get_help
 from telix.client_repl_dialogs import render_help_md
 
 
-@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight", "keybindings"])
+@pytest.mark.parametrize("topic", ["macro", "trigger", "highlight", "keybindings"])
 def test_get_help_returns_string(topic: str) -> None:
     result = get_help(topic)
     assert isinstance(result, str)
@@ -22,9 +22,9 @@ def test_macro_includes_commands() -> None:
     assert "## Command Syntax" in result
 
 
-def test_autoreply_includes_commands() -> None:
-    result = get_help("autoreply")
-    assert "## Autoreply Editor" in result
+def test_trigger_includes_commands() -> None:
+    result = get_help("trigger")
+    assert "## Trigger Editor" in result
     assert "## Command Syntax" in result
 
 

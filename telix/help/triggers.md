@@ -1,6 +1,6 @@
-## Autoreply Editor
+## Trigger Editor
 
-Autoreplies automatically send commands when a **regex pattern** matches
+Triggers automatically send commands when a **regex pattern** matches
 server output.  Rules are evaluated in priority order (top to bottom);
 the first match wins unless a rule is marked **Always**.
 
@@ -28,7 +28,7 @@ the first match wins unless a rule is marked **Always**.
 - **W (When)** -- a vital-percentage condition gate is set on this rule.
 - **(off)** -- the rule is disabled and won't match.  Toggle via the
   Enabled switch in the form, or use Alt+Shift+A in-session to disable
-  all autoreplies globally.
+  all triggers globally.
 
 ### Form Fields
 
@@ -85,7 +85,7 @@ raw GMCP values, or any captured variable name (e.g. **Adrenaline**,
 | Adrenaline > 100 | Only fire when captured Adrenaline is above 100 |
 | Adrenaline% > 50 | Only fire when Adrenaline/MaxAdrenaline is above 50% |
 
-### Example Autoreplies
+### Example Triggers
 
 | Pattern | Reply | Notes |
 |---------|-------|-------|

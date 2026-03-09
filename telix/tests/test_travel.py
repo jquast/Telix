@@ -8,7 +8,7 @@ from telix import rooms, client_repl_travel
 
 
 class FakeEngine:
-    """Minimal stand-in for AutoreplyEngine."""
+    """Minimal stand-in for TriggerEngine."""
 
     def __init__(self):
         self.exclusive_active = False
@@ -19,8 +19,8 @@ class FakeEngine:
 
 
 @pytest.mark.asyncio()
-async def test_settle_autoreplies_noreply_skips():
-    """settle_autoreplies returns immediately when noreply is True."""
+async def test_settle_triggers_noreply_skips():
+    """settle_triggers returns immediately when noreply is True."""
     engine = FakeEngine()
     engine.exclusive_active = True
     engine.reply_pending = True
@@ -30,21 +30,21 @@ async def test_settle_autoreplies_noreply_skips():
         nonlocal called
         called = True
 
-    await client_repl_travel.settle_autoreplies(engine, wait_fn, noreply=True)
+    await client_repl_travel.settle_triggers(engine, wait_fn, noreply=True)
     assert not called
 
 
 @pytest.mark.asyncio()
-async def test_settle_autoreplies_no_pending():
-    """settle_autoreplies returns immediately when nothing is pending."""
+async def test_settle_triggers_no_pending():
+    """settle_triggers returns immediately when nothing is pending."""
     engine = FakeEngine()
 
-    await client_repl_travel.settle_autoreplies(engine, None, noreply=False)
+    await client_repl_travel.settle_triggers(engine, None, noreply=False)
 
 
 @pytest.mark.asyncio()
-async def test_settle_autoreplies_waits_for_exclusive():
-    """settle_autoreplies waits until exclusive_active clears."""
+async def test_settle_triggers_waits_for_exclusive():
+    """settle_triggers waits until exclusive_active clears."""
     engine = FakeEngine()
     engine.exclusive_active = True
 
@@ -58,7 +58,7 @@ async def test_settle_autoreplies_waits_for_exclusive():
 
     engine.check_timeout = fake_check_timeout
 
-    await client_repl_travel.settle_autoreplies(engine, None, noreply=False)
+    await client_repl_travel.settle_triggers(engine, None, noreply=False)
     assert iterations >= 2
 
 

@@ -23,7 +23,7 @@ import telnetlib3.client_shell
 from . import terminal
 from . import highlighter
 from .macros import build_macro_dispatch
-from .autoreply import AutoreplyEngine
+from .trigger import TriggerEngine
 from .highlighter import HighlightEngine
 from .session_context import CommandQueue
 
@@ -38,7 +38,7 @@ from .client_repl_render import (  # noqa: F401
     SEXTANT,
     STYLE_NORMAL,
     SEXTANT_VISIBLE,
-    STYLE_AUTOREPLY,
+    STYLE_TRIGGER,
     CursorSeq,
     FlashTiming,
     ToolbarSlot,
@@ -85,7 +85,7 @@ from .client_repl_dialogs import (  # noqa: F401
     randomwalk_dialog,
     subprocess_buffer,
     launch_chat_viewer,
-    reload_autoreplies,
+    reload_triggers,
     autodiscover_dialog,
     launch_room_browser,
     reload_progressbars,
@@ -346,7 +346,7 @@ def repaint_screen(
     Re-establishes the DECSTBM scroll region and replays buffered output so recent MUD text reappears with colors
     intact.
 
-    :param active: Use gold DMZ color when autoreply/walk/discover is active.
+    :param active: Use gold DMZ color when trigger/walk/discover is active.
     """
     reserve = scroll.reserve if scroll is not None else RESERVE_WITH_TOOLBAR
     try:
@@ -767,7 +767,7 @@ class ReplSession:
         self.last_resize_size: list[int] = [0, 0]
         self.last_input_style: dict[str, str] | None = None
         self.scroll: ScrollRegion | None = None
-        self.autoreply_engine: AutoreplyEngine | None = None
+        self.trigger_engine: TriggerEngine | None = None
         self.ar_rules_ref: object = None
         self.prompt_ready = asyncio.Event()
         self.prompt_ready.set()
@@ -824,8 +824,8 @@ class ReplSession:
             self.dispatch.set_macros(self.macro_defs, self.ctx, self.telnet_writer.log)
         self.ctx.key_dispatch = self.dispatch
 
-    def echo_autoreply(self, cmd: str) -> None:
-        """Echo an autoreply command into the scroll region."""
+    def echo_trigger(self, cmd: str) -> None:
+        """Echo a trigger command into the scroll region."""
         assert self.scroll is not None
         is_pw = self.telnet_writer.will_echo
         display_cmd = scramble_password(len(cmd)) if is_pw else cmd
@@ -859,11 +859,11 @@ class ReplSession:
         """Insert text into the line editor buffer."""
         self.editor.insert_text(text)
 
-    def on_autoreply_activity(self) -> None:
-        """Kick the toolbar progress ticker when an autoreply delay starts."""
-        if self.autoreply_engine is None or self.scroll is None:
+    def on_trigger_activity(self) -> None:
+        """Kick the toolbar progress ticker when a trigger delay starts."""
+        if self.trigger_engine is None or self.scroll is None:
             return
-        self.toolbar.schedule_until_progress(self.loop, self.autoreply_engine, self.editor, self.blessed_term)
+        self.toolbar.schedule_until_progress(self.loop, self.trigger_engine, self.editor, self.blessed_term)
 
     def mslp_tab(self) -> None:
         """Cycle forward through available MSLP commands."""
@@ -912,43 +912,43 @@ class ReplSession:
             pass
         self.prompt_ready.clear()
 
-    def refresh_autoreply_engine(self) -> None:
-        """Rebuild the autoreply engine when rules change."""
-        cur_rules = self.ctx.autoreply_rules or None
+    def refresh_trigger_engine(self) -> None:
+        """Rebuild the trigger engine when rules change."""
+        cur_rules = self.ctx.trigger_rules or None
         if cur_rules is self.ar_rules_ref:
             return
         self.ar_rules_ref = cur_rules
-        prev_enabled = self.autoreply_engine.enabled if self.autoreply_engine is not None else True
-        if self.autoreply_engine is not None:
-            self.autoreply_engine.cancel()
-            self.autoreply_engine = None
+        prev_enabled = self.trigger_engine.enabled if self.trigger_engine is not None else True
+        if self.trigger_engine is not None:
+            self.trigger_engine.cancel()
+            self.trigger_engine = None
         if cur_rules:
-            self.autoreply_engine = AutoreplyEngine(
+            self.trigger_engine = TriggerEngine(
                 cur_rules,
                 self.ctx,
                 self.telnet_writer.log,
                 insert_fn=self.insert_into_prompt,
-                echo_fn=self.echo_autoreply,
+                echo_fn=self.echo_trigger,
                 wait_fn=self.wait_for_prompt,
             )
-            self.autoreply_engine.enabled = prev_enabled
-        self.ctx.autoreply_engine = self.autoreply_engine
+            self.trigger_engine.enabled = prev_enabled
+        self.ctx.trigger_engine = self.trigger_engine
 
     def refresh_highlight_engine(self) -> None:
-        """Rebuild the highlight engine when rules or autoreplies change."""
+        """Rebuild the highlight engine when rules or triggers change."""
         hl_rules = self.ctx.highlight_rules or []
-        ar_rules = self.ctx.autoreply_rules or []
+        ar_rules = self.ctx.trigger_rules or []
         prev_enabled = self.ctx.highlight_engine.enabled if self.ctx.highlight_engine is not None else True
         builtin_rule = next((r for r in hl_rules if r.builtin), None)
-        ar_highlight = builtin_rule.highlight if builtin_rule else highlighter.DEFAULT_AUTOREPLY_HIGHLIGHT
+        ar_highlight = builtin_rule.highlight if builtin_rule else highlighter.DEFAULT_TRIGGER_HIGHLIGHT
         ar_enabled = builtin_rule.enabled if builtin_rule is not None else True
         self.ctx.highlight_engine = HighlightEngine(
             hl_rules,
             ar_rules,
             self.blessed_term,
             self.ctx,
-            autoreply_highlight=ar_highlight,
-            autoreply_enabled=ar_enabled,
+            trigger_highlight=ar_highlight,
+            trigger_enabled=ar_enabled,
         )
         self.ctx.highlight_engine.enabled = prev_enabled
 
@@ -975,8 +975,8 @@ class ReplSession:
         self.stdout.write(encoded)
         self.replay_buf.append(encoded)
         self.stdout.write(bt.save.encode())
-        if self.autoreply_engine is not None:
-            self.autoreply_engine.feed(text)
+        if self.trigger_engine is not None:
+            self.trigger_engine.feed(text)
         assert self.scroll is not None
         self.update_input_style()
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
@@ -991,7 +991,7 @@ class ReplSession:
         self.update_input_style()
         self.stdout.write(bt.hide_cursor.encode())
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
-        self.toolbar.render(self.autoreply_engine)
+        self.toolbar.render(self.trigger_engine)
         cursor_col = self.editor_cursor()
         self.show_cursor(self.scroll.input_row, cursor_col)
 
@@ -1002,7 +1002,7 @@ class ReplSession:
             return
         engine.enabled = not engine.enabled
         state = "ON" if engine.enabled else "OFF"
-        self.echo_autoreply(f"HIGHLIGHTS {state}")
+        self.echo_trigger(f"HIGHLIGHTS {state}")
         self.repaint_after_toggle()
 
     def reg_close(self) -> None:
@@ -1014,13 +1014,13 @@ class ReplSession:
         """Return whether GMCP data is available."""
         return bool(self.ctx.gmcp_data)
 
-    def toggle_autoreplies(self) -> None:
-        """Toggle the autoreply engine on/off."""
-        if self.autoreply_engine is None:
+    def toggle_triggers(self) -> None:
+        """Toggle the trigger engine on/off."""
+        if self.trigger_engine is None:
             return
-        self.autoreply_engine.enabled = not self.autoreply_engine.enabled
-        state = "ON" if self.autoreply_engine.enabled else "OFF"
-        self.echo_autoreply(f"AUTOREPLIES {state}")
+        self.trigger_engine.enabled = not self.trigger_engine.enabled
+        state = "ON" if self.trigger_engine.enabled else "OFF"
+        self.echo_trigger(f"TRIGGERS {state}")
         self.repaint_after_toggle()
 
     def on_walk_done(self, task: "asyncio.Task[None]") -> None:
@@ -1031,7 +1031,7 @@ class ReplSession:
         self.update_input_style()
         self.stdout.write(bt.hide_cursor.encode())
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
-        self.toolbar.render(self.autoreply_engine)
+        self.toolbar.render(self.trigger_engine)
         cursor_col = self.editor_cursor()
         self.show_cursor(self.scroll.input_row, cursor_col)
 
@@ -1111,23 +1111,23 @@ class ReplSession:
         if self.gmcp_keys_registered:
             return
         self.gmcp_keys_registered = True
-        self.toolbar.schedule_eta_refresh(self.loop, self.autoreply_engine, self.editor, self.blessed_term)
+        self.toolbar.schedule_eta_refresh(self.loop, self.trigger_engine, self.editor, self.blessed_term)
 
     def update_input_style(self) -> None:
-        """Update editor style based on autoreply / walk state."""
+        """Update editor style based on trigger / walk state."""
         assert self.scroll is not None
         self.editor.set_password_mode(bool(self.telnet_writer.will_echo))
-        engine = self.autoreply_engine
+        engine = self.trigger_engine
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
         disc = self.ctx.discover_active
         rwalk = self.ctx.randomwalk_active
-        style = STYLE_AUTOREPLY if (disc or rwalk or ar_active) else STYLE_NORMAL
+        style = STYLE_TRIGGER if (disc or rwalk or ar_active) else STYLE_NORMAL
         changed = self.last_input_style is not style
         self.last_input_style = style
         for attr, val in style.items():
             setattr(self.editor, attr, val)
         if changed:
-            active = style is STYLE_AUTOREPLY
+            active = style is STYLE_TRIGGER
             self.toolbar.last_ar_bg = active
             dmz_row = self.scroll.scroll_bottom + 1
             if dmz_row < self.scroll.input_row:
@@ -1142,28 +1142,28 @@ class ReplSession:
                 )
 
     @property
-    def is_autoreply_bg(self) -> bool:
-        """Return ``True`` when the input line uses the autoreply color scheme."""
-        engine = self.autoreply_engine
+    def is_trigger_bg(self) -> bool:
+        """Return ``True`` when the input line uses the trigger color scheme."""
+        engine = self.trigger_engine
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
         return self.ctx.discover_active or self.ctx.randomwalk_active or ar
 
     @property
     def bg_sgr(self) -> str:
         """Return the current input-line background SGR sequence."""
-        if self.is_autoreply_bg:
-            return STYLE_AUTOREPLY["bg_sgr"]
+        if self.is_trigger_bg:
+            return STYLE_TRIGGER["bg_sgr"]
         return STYLE_NORMAL["bg_sgr"]
 
     HELP_HINT = "press F1 for help"
 
     def activity_hint(self) -> str:
         """Build a short status string for the current activity."""
-        return activity_hint(self.autoreply_engine, self.blessed_term.width)
+        return activity_hint(self.trigger_engine, self.blessed_term.width)
 
     def hint_text(self) -> str:
         """Return the current hint string (activity or help)."""
-        ar = self.is_autoreply_bg
+        ar = self.is_trigger_bg
         hint = self.activity_hint() if ar else self.HELP_HINT
         n = self.ctx.mslp_collector.count
         if n > 0 and not ar:
@@ -1192,18 +1192,18 @@ class ReplSession:
         col = bt.width - hint_w
         if col < 2:
             return
-        ar = self.is_autoreply_bg
-        bg = STYLE_AUTOREPLY["bg_sgr"] if ar else STYLE_NORMAL["bg_sgr"]
-        prog = until_progress(self.autoreply_engine)
+        ar = self.is_trigger_bg
+        bg = STYLE_TRIGGER["bg_sgr"] if ar else STYLE_NORMAL["bg_sgr"]
+        prog = until_progress(self.trigger_engine)
         self.stdout.write(bt.move_yx(row, col).encode())
-        write_hint(hint, self.stdout, bt, progress=prog, bg_sgr=bg, autoreply=ar)
+        write_hint(hint, self.stdout, bt, progress=prog, bg_sgr=bg, trigger=ar)
         if prog is not None:
-            self.toolbar.schedule_until_progress(self.loop, self.autoreply_engine, self.editor, bt)
+            self.toolbar.schedule_until_progress(self.loop, self.trigger_engine, self.editor, bt)
 
     def show_cursor(self, row: int, col: int) -> None:
         """Position cursor at the edit position and make it visible."""
         bt = self.blessed_term
-        ar = self.is_autoreply_bg
+        ar = self.is_trigger_bg
         self.render_input_hint(row)
         if self.toolbar.flash_active:
             return
@@ -1255,7 +1255,7 @@ class ReplSession:
         input_row = rows - reserve
         for r in range(input_row, rows):
             self.stdout.write((bt.move_yx(r, 0) + bt.clear_eol).encode())
-        ar_bg = self.is_autoreply_bg
+        ar_bg = self.is_trigger_bg
         if sr is not None:
             dmz = sr.scroll_bottom + 1
             if dmz < sr.input_row:
@@ -1269,11 +1269,11 @@ class ReplSession:
     def _repaint(self) -> None:
         """Full screen repaint including toolbar and input line."""
         assert self.scroll is not None
-        repaint_screen(self.replay_buf, scroll=self.scroll, active=self.is_autoreply_bg)
+        repaint_screen(self.replay_buf, scroll=self.scroll, active=self.is_trigger_bg)
         self.update_input_style()
         bt = get_term()
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
-        self.toolbar.render(self.autoreply_engine)
+        self.toolbar.render(self.trigger_engine)
         cursor_col = self.editor_cursor()
         self.show_cursor(self.scroll.input_row, cursor_col)
 
@@ -1291,7 +1291,7 @@ class ReplSession:
         self.stdout.write(bt.hide_cursor.encode())
         self.update_input_style()
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
-        self.toolbar.render(self.autoreply_engine)
+        self.toolbar.render(self.trigger_engine)
         cursor_col = self.editor_cursor()
         self.show_cursor(self.scroll.input_row, cursor_col)
 
@@ -1301,11 +1301,11 @@ class ReplSession:
         self.telnet_writer.set_iac_callback(telnetlib3.telopt.CMD_EOR, self.on_prompt_signal)
 
         self.ctx.wait_for_prompt = self.wait_for_prompt
-        self.ctx.echo_command = self.echo_autoreply
+        self.ctx.echo_command = self.echo_trigger
         self.ctx.prompt_ready = self.prompt_ready
-        self.ctx.on_autoreply_activity = self.on_autoreply_activity
+        self.ctx.on_trigger_activity = self.on_trigger_activity
 
-        self.refresh_autoreply_engine()
+        self.refresh_trigger_engine()
         self.refresh_highlight_engine()
 
         assert self.scroll is not None
@@ -1313,7 +1313,7 @@ class ReplSession:
             "help": lambda: show_help(replay_buf=self.replay_buf),
             "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
             "toggle_highlights": self.toggle_highlights,
-            "toggle_autoreplies": self.toggle_autoreplies,
+            "toggle_triggers": self.toggle_triggers,
             "disconnect": self.reg_close,
             "repaint": self._repaint,
             "randomwalk_dialog": self.randomwalk_mode,
@@ -1343,9 +1343,9 @@ class ReplSession:
                 self.stdout,
                 flash_elapsed=time.monotonic() - self.ctx.active_command_time,
                 hint=self.activity_hint(),
-                progress=until_progress(self.autoreply_engine),
+                progress=until_progress(self.trigger_engine),
                 base_bg_sgr=self.bg_sgr,
-                autoreply=self.is_autoreply_bg,
+                trigger=self.is_trigger_bg,
             ),
         )
         self.ctx.command_queue = q
@@ -1404,8 +1404,8 @@ class ReplSession:
                         self.replay_buf.append(held_enc)
                         self.stdout.write(bt.save.encode())
                     self.prompt_pending = False
-                    if self.autoreply_engine is not None:
-                        self.autoreply_engine.on_prompt()
+                    if self.trigger_engine is not None:
+                        self.trigger_engine.on_prompt()
                     if self.ctx.script_manager is not None:
                         self.ctx.script_manager.on_prompt()
                     self.update_input_style()
@@ -1423,7 +1423,7 @@ class ReplSession:
             if ts is not None:
                 ts.write(out)
                 ts.flush()
-            self.refresh_autoreply_engine()
+            self.refresh_trigger_engine()
             self.refresh_highlight_engine()
             is_prompt = self.prompt_pending
             if self.dialogs_mod.subprocess_is_active:
@@ -1454,10 +1454,10 @@ class ReplSession:
                 self.stdout.write(encoded)
                 self.replay_buf.append(encoded)
             self.stdout.write(bt.save.encode())
-            if self.autoreply_engine is not None:
-                self.autoreply_engine.feed(emit_now)
+            if self.trigger_engine is not None:
+                self.trigger_engine.feed(emit_now)
                 if is_prompt:
-                    self.autoreply_engine.on_prompt()
+                    self.trigger_engine.on_prompt()
                     self.prompt_pending = False
             if self.ctx.script_manager is not None:
                 self.ctx.script_manager.feed(emit_now)
@@ -1467,9 +1467,9 @@ class ReplSession:
             ac_s = self.ctx.active_command
             ac_elapsed = time.monotonic() - self.ctx.active_command_time
             hint = self.activity_hint()
-            prog = until_progress(self.autoreply_engine)
+            prog = until_progress(self.trigger_engine)
             bg = self.bg_sgr
-            ar = self.is_autoreply_bg
+            ar = self.is_trigger_bg
             if cq_s is not None:
                 cursor_col = render_command_queue(
                     cq_s,
@@ -1479,7 +1479,7 @@ class ReplSession:
                     hint=hint,
                     progress=prog,
                     base_bg_sgr=bg,
-                    autoreply=ar,
+                    trigger=ar,
                 )
             elif ac_s is not None and ac_elapsed < FLASH.DURATION:
                 cursor_col = render_active_command(
@@ -1490,21 +1490,21 @@ class ReplSession:
                     hint=hint,
                     progress=prog,
                     base_bg_sgr=bg,
-                    autoreply=ar,
+                    trigger=ar,
                 )
             elif self.mslp_index is not None:
                 mslp_cmd = self.ctx.mslp_collector.available[self.mslp_index].command
                 cursor_col = render_active_command(
-                    mslp_cmd, scroll, self.stdout, hint=self.hint_text(), progress=prog, base_bg_sgr=bg, autoreply=ar
+                    mslp_cmd, scroll, self.stdout, hint=self.hint_text(), progress=prog, base_bg_sgr=bg, trigger=ar
                 )
             else:
                 self.update_input_style()
                 self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                 cursor_col = self.editor_cursor()
-            needs_reflash = self.toolbar.render(self.autoreply_engine)
+            needs_reflash = self.toolbar.render(self.trigger_engine)
             if needs_reflash and not self.toolbar.flash_active:
                 self.toolbar.flash_active = True
-                self.toolbar.schedule_flash(self.loop, self.autoreply_engine, self.editor, bt)
+                self.toolbar.schedule_flash(self.loop, self.trigger_engine, self.editor, bt)
             self.show_cursor(scroll.input_row, cursor_col)
             if self.telnet_writer.mode != "local":
                 self.mode_switched = True
@@ -1564,15 +1564,15 @@ class ReplSession:
                                 scroll,
                                 self.stdout,
                                 hint=self.hint_text(),
-                                progress=until_progress(self.autoreply_engine),
+                                progress=until_progress(self.trigger_engine),
                                 base_bg_sgr=self.bg_sgr,
-                                autoreply=self.is_autoreply_bg,
+                                trigger=self.is_trigger_bg,
                             )
                         else:
                             self.update_input_style()
                             self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                             cursor_col = self.editor_cursor()
-                        self.toolbar.render(self.autoreply_engine)
+                        self.toolbar.render(self.trigger_engine)
                         self.show_cursor(scroll.input_row, cursor_col)
                     continue
 
@@ -1591,7 +1591,7 @@ class ReplSession:
                         self.stdout.write(bt.hide_cursor.encode())
                         self.update_input_style()
                         self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
-                        self.toolbar.render(self.autoreply_engine)
+                        self.toolbar.render(self.trigger_engine)
                         cursor_col = self.editor_cursor()
                         self.show_cursor(scroll.input_row, cursor_col)
                         continue
@@ -1620,7 +1620,7 @@ class ReplSession:
                         self.stdout.write(bt.hide_cursor.encode())
                         self.update_input_style()
                         self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
-                        self.toolbar.render(self.autoreply_engine)
+                        self.toolbar.render(self.trigger_engine)
                         cursor_col = self.editor_cursor()
                         self.show_cursor(scroll.input_row, cursor_col)
                         continue
@@ -1653,8 +1653,8 @@ class ReplSession:
                     self.replay_buf.append(colored.encode())
                     self.stdout.write(bt.save.encode())
 
-                    if self.autoreply_engine is not None:
-                        self.autoreply_engine.cancel()
+                    if self.trigger_engine is not None:
+                        self.trigger_engine.cancel()
                     disc_task = self.ctx.discover_task
                     if disc_task is not None and not disc_task.done():
                         disc_task.cancel()
@@ -1745,24 +1745,24 @@ class ReplSession:
                             self.stdout,
                             flash_elapsed=ac_elapsed2,
                             hint=self.activity_hint(),
-                            progress=until_progress(self.autoreply_engine),
+                            progress=until_progress(self.trigger_engine),
                             base_bg_sgr=self.bg_sgr,
-                            autoreply=self.is_autoreply_bg,
+                            trigger=self.is_trigger_bg,
                         )
                     else:
                         self.update_input_style()
                         self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                         cursor_col = self.editor_cursor()
-                    needs_reflash = self.toolbar.render(self.autoreply_engine)
+                    needs_reflash = self.toolbar.render(self.trigger_engine)
                     if needs_reflash and not self.toolbar.flash_active:
                         self.toolbar.flash_active = True
-                        self.toolbar.schedule_flash(self.loop, self.autoreply_engine, self.editor, bt)
+                        self.toolbar.schedule_flash(self.loop, self.trigger_engine, self.editor, bt)
                     self.show_cursor(scroll.input_row, cursor_col)
 
     def cleanup(self) -> None:
-        """Cancel autoreply engine, restore cursor, clear kludge DMZ."""
-        if self.autoreply_engine is not None:
-            self.autoreply_engine.cancel()
+        """Cancel trigger engine, restore cursor, clear kludge DMZ."""
+        if self.trigger_engine is not None:
+            self.trigger_engine.cancel()
         self.ctx.close()
         self.stdout.write(get_term().normal_cursor.encode())
         self.stdout.write(CURSOR.DEFAULT.encode())

@@ -59,5 +59,5 @@ options:
 
 Press **E** or click Edit to open the session editor.  The editor
 allows you to change all session options including host, port, encoding,
-connection mode, autoreplies, macros, and more.  Press **N** or click
+connection mode, triggers, macros, and more.  Press **N** or click
 New to create a new session with default settings.

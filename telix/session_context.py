@@ -7,7 +7,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import mslp, macros, autoreply, ws_transport, gmcp_snapshot, ssh_transport
+from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, ssh_transport
 
 if TYPE_CHECKING:
     from . import rooms, scripts, highlighter, progressbars
@@ -31,7 +31,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
     Per-connection runtime state for a MUD client session.
 
     Extends :class:`~telnetlib3._session_context.TelnetSessionContext` with
-    MUD-specific state (rooms, macros, autoreplies, highlights, chat, etc.).
+    MUD-specific state (rooms, macros, triggers, highlights, chat, etc.).
     Created in ``session_shell`` and attached as ``writer.ctx``.
 
     :param session_key: Session identifier (``"host:port"``).
@@ -47,13 +47,15 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         raw_mode: bool | None = None,
         ascii_eol: bool = False,
         input_filter: Any | None = None,
-        autoreply_engine: Any | None = None,
-        autoreply_wait_fn: Callable[..., Awaitable[None]] | None = None,
+        trigger_engine: Any | None = None,
+        trigger_wait_fn: Callable[..., Awaitable[None]] | None = None,
         typescript_file: IO[str] | None = None,
         gmcp_data: dict[str, Any] | None = None,
     ):
         """Initialize session context with default state."""
-        super().__init__()
+        super().__init__(autoreply_engine=trigger_engine, autoreply_wait_fn=trigger_wait_fn)
+        self.trigger_engine: Any | None = trigger_engine
+        self.trigger_wait_fn: Callable[..., Awaitable[None]] | None = trigger_wait_fn
 
         # back-reference to the writer (set by session_shell), kind of annoying, but
         # the 'ctx' is passed around everywhere, so naturally we need access to it
@@ -101,11 +103,11 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         # command queue
         self.command_queue: CommandQueue | None = None
 
-        # macros & autoreplies (autoreply_engine inherited from base)
+        # macros & triggers
         self.macro_defs: list[macros.Macro] = []
         self.macros_file: str = ""
-        self.autoreply_rules: list[autoreply.AutoreplyRule] = []
-        self.autoreplies_file: str = ""
+        self.trigger_rules: list[trigger.TriggerRule] = []
+        self.triggers_file: str = ""
 
         # highlighters
         self.highlight_rules: list[highlighter.HighlightRule] = []
@@ -139,7 +141,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.on_room_info: Callable[[dict[str, Any]], None] | None = None
         self.on_chat_text: Callable[[dict[str, Any]], None] | None = None
         self.on_chat_channels: Callable[[list[dict[str, Any]]], None] | None = None
-        self.on_autoreply_activity: Callable[[], None] | None = None
+        self.on_trigger_activity: Callable[[], None] | None = None
 
         # MSLP link collector
         self.mslp_collector: mslp.MslpCollector = mslp.MslpCollector()
@@ -159,7 +161,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.send_line: Callable[[str], None] | None = None
         self.repl_actions: dict[str, Callable[..., Any]] = {}
         self.keyboard_escape: str = "\x1d"
-        # autoreply_wait_fn inherited from TelnetSessionContext
+
         self.send_naws: Callable[[], None] | None = None
 
         # scripting
@@ -167,7 +169,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
 
         # debounced timestamp persistence
         self.macros_dirty: bool = False
-        self.autoreplies_dirty: bool = False
+        self.triggers_dirty: bool = False
         self.save_timer: asyncio.TimerHandle | None = None
 
     @classmethod
@@ -189,7 +191,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             writer.ctx.autoreply_engine,
             writer.ctx.autoreply_wait_fn,
             writer.ctx.typescript_file,
-            gmcp_data=getattr(writer.ctx, "gmcp_data", None),
+            gmcp_data=writer.ctx.gmcp_data,
         )
 
     def mark_macros_dirty(self) -> None:
@@ -197,9 +199,9 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.macros_dirty = True
         self.schedule_flush()
 
-    def mark_autoreplies_dirty(self) -> None:
-        """Mark autoreplies as needing a save and schedule a debounced flush."""
-        self.autoreplies_dirty = True
+    def mark_triggers_dirty(self) -> None:
+        """Mark triggers as needing a save and schedule a debounced flush."""
+        self.triggers_dirty = True
         self.schedule_flush()
 
     def mark_gmcp_dirty(self) -> None:
@@ -223,13 +225,13 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.flush_timestamps()
 
     def flush_timestamps(self) -> None:
-        """Persist macro/autoreply timestamps if dirty."""
+        """Persist macro/trigger timestamps if dirty."""
         if self.macros_dirty and self.macros_file and self.macro_defs:
             macros.save_macros(self.macros_file, self.macro_defs, self.session_key)
             self.macros_dirty = False
-        if self.autoreplies_dirty and self.autoreplies_file and self.autoreply_rules:
-            autoreply.save_autoreplies(self.autoreplies_file, self.autoreply_rules, self.session_key)
-            self.autoreplies_dirty = False
+        if self.triggers_dirty and self.triggers_file and self.trigger_rules:
+            trigger.save_triggers(self.triggers_file, self.trigger_rules, self.session_key)
+            self.triggers_dirty = False
         if self.gmcp_dirty and self.gmcp_snapshot_file and self.gmcp_data:
             gmcp_snapshot.save_gmcp_snapshot(self.gmcp_snapshot_file, self.session_key, self.gmcp_data)
             self.gmcp_dirty = False

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     import blessed
     import blessed.line_editor
 
-    from . import autoreply as autoreply_mod
+    from . import trigger as trigger_mod
     from . import progressbars
     from .session_context import TelixSessionContext
 
@@ -49,7 +49,7 @@ def idle_rgb() -> tuple[int, int, int]:
 
 
 def idle_ar_rgb() -> tuple[int, int, int]:
-    """Autoreply input-line background as ``(r, g, b)``."""
+    """Trigger input-line background as ``(r, g, b)``."""
     return hex_to_rgb(pal("input_ar_bg"))
 
 
@@ -100,9 +100,9 @@ DISPLAY = DisplayChars()
 CANCEL_SUFFIX = "  [return to cancel]"
 
 
-def activity_hint(engine: "autoreply_mod.AutoreplyEngine | None", cols: int = 0) -> str:
+def activity_hint(engine: "trigger_mod.TriggerEngine | None", cols: int = 0) -> str:
     """
-    Build a short autoreply status hint from *engine*.
+    Build a short trigger status hint from *engine*.
 
     The hint reserves a fixed-width region: at least ``len(CANCEL_SUFFIX) + 16``
     columns and at most one third of the terminal width.  The status portion is
@@ -134,7 +134,7 @@ def activity_hint(engine: "autoreply_mod.AutoreplyEngine | None", cols: int = 0)
     return status + CANCEL_SUFFIX
 
 
-def until_progress(engine: "autoreply_mod.AutoreplyEngine | None") -> float | None:
+def until_progress(engine: "trigger_mod.TriggerEngine | None") -> float | None:
     """
     Return the until timer progress fraction, or ``None``.
 
@@ -151,7 +151,7 @@ def write_hint(
     bt: "blessed.Terminal",
     progress: float | None = None,
     bg_sgr: str = "",
-    autoreply: bool = False,
+    trigger: bool = False,
 ) -> None:
     """
     Write *hint* at the current cursor position with optional progress bar.
@@ -163,12 +163,12 @@ def write_hint(
     :param out: Stream to write SGR-encoded bytes to.
     :param bt: blessed Terminal instance.
     :param progress: ``0.0..1.0`` fraction, or ``None`` for plain dim text.
-    :param bg_sgr: Optional background SGR prefix (e.g. autoreply bg color).
-    :param autoreply: Use autoreply suggestion color instead of normal.
+    :param bg_sgr: Optional background SGR prefix (e.g. trigger bg color).
+    :param trigger: Use trigger suggestion color instead of normal.
     """
     if not hint:
         return
-    if autoreply:
+    if trigger:
         effective_bg = bg_sgr
         dim = str(bt.color_rgb(*hex_to_rgb(pal("input_ar_suggestion"))))
         normal = bt.normal
@@ -239,7 +239,7 @@ def cursor_color_rgb() -> tuple[int, int, int]:
 
 
 def cursor_ar_rgb() -> tuple[int, int, int]:
-    """Autoreply cursor color from the theme palette."""
+    """Trigger cursor color from the theme palette."""
     return hex_to_rgb(pal("cursor_ar_color"))
 
 
@@ -250,7 +250,7 @@ def cursor_osc() -> str:
 
 
 def cursor_ar_osc() -> str:
-    """OSC 12 escape to set cursor color for the autoreply background."""
+    """OSC 12 escape to set cursor color for the trigger background."""
     r, g, b = cursor_ar_rgb()
     return f"\x1b]12;rgb:{r:02x}/{g:02x}/{b:02x}\x07"
 
@@ -259,7 +259,7 @@ def cursor_ar_osc() -> str:
 # Built lazily via make_styles() so blessed color_rgb auto-downgrades
 # on terminals that lack truecolor support.
 STYLE_NORMAL: dict[str, str] = {}
-STYLE_AUTOREPLY: dict[str, str] = {}
+STYLE_TRIGGER: dict[str, str] = {}
 
 
 def make_styles() -> None:
@@ -285,8 +285,8 @@ def make_styles() -> None:
             "cursor_sgr": cursor_fg + blessed_term.on_color_rgb(*n_bg),
         }
     )
-    STYLE_AUTOREPLY.clear()
-    STYLE_AUTOREPLY.update(
+    STYLE_TRIGGER.clear()
+    STYLE_TRIGGER.update(
         {
             "text_sgr": blessed_term.color_rgb(*ar_txt),
             "suggestion_sgr": blessed_term.color_rgb(*ar_sug),
@@ -430,7 +430,7 @@ def dmz_line(cols: int, active: bool = False) -> str:
     Return a styled DMZ divider line of *cols* width.
 
     :param cols: Terminal width.
-    :param active: Use gold color when autoreply/wander/discover is active.
+    :param active: Use gold color when trigger/wander/discover is active.
     """
     blessed_term = get_term()
     rgb = hex_to_rgb(pal("dmz_active") if active else pal("dmz_inactive"))
@@ -844,12 +844,12 @@ class ToolbarRenderer:
         self.bar_trackers: dict[str, VitalTracker] = {}
         self.last_ar_bg: bool = False
 
-    def is_autoreply_bg(self, engine: "autoreply_mod.AutoreplyEngine | None") -> bool:
-        """Return whether the input row should use the autoreply background."""
+    def is_trigger_bg(self, engine: "trigger_mod.TriggerEngine | None") -> bool:
+        """Return whether the input row should use the trigger background."""
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
         return self.ctx.discover_active or self.ctx.randomwalk_active or ar
 
-    def render(self, autoreply_engine: "autoreply_mod.AutoreplyEngine | None") -> bool:
+    def render(self, trigger_engine: "trigger_mod.TriggerEngine | None") -> bool:
         """
         Render GMCP vitals toolbar at ``scroll.input_row + 1``.
 
@@ -860,13 +860,13 @@ class ToolbarRenderer:
             return False
         self.ctx.mark_gmcp_dirty()
 
-        engine = autoreply_engine
+        engine = trigger_engine
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
         discover_active = self.ctx.discover_active
         randomwalk_active = self.ctx.randomwalk_active
 
         now = time.monotonic()
-        is_ar = self.is_autoreply_bg(engine)
+        is_ar = self.is_trigger_bg(engine)
         slots, needs_reflash = self.build_slots(
             engine, ar_active, discover_active, randomwalk_active, now, is_ar_bg=is_ar
         )
@@ -889,7 +889,7 @@ class ToolbarRenderer:
 
     def build_slots(
         self,
-        engine: "autoreply_mod.AutoreplyEngine | None",
+        engine: "trigger_mod.TriggerEngine | None",
         ar_active: bool,
         discover_active: bool,
         randomwalk_active: bool,
@@ -1146,20 +1146,20 @@ class ToolbarRenderer:
 
     def right_slot(
         self,
-        engine: "autoreply_mod.AutoreplyEngine | None",
+        engine: "trigger_mod.TriggerEngine | None",
         ar_active: bool,
         discover_active: bool,
         randomwalk_active: bool,
         slots: list[ToolbarSlot],
     ) -> None:
-        """Append the right-side slot (walk mode, autoreply, or room name)."""
+        """Append the right-side slot (walk mode, trigger, or room name)."""
         if randomwalk_active:
             self.travel_bar_slot(self.ctx.randomwalk_current, self.ctx.randomwalk_total, 24, "randomwalk", slots)
         elif discover_active:
             self.travel_bar_slot(self.ctx.discover_current, self.ctx.discover_total, 20, "discover", slots)
         elif ar_active:
             idx = getattr(engine, "exclusive_rule_index", None)
-            ar_label = f"Autoreply #{idx}" if idx is not None else "Autoreply"
+            ar_label = f"Trigger #{idx}" if idx is not None else "Trigger"
             ar_text = " " + ar_label
             slots.append(
                 ToolbarSlot(
@@ -1235,7 +1235,7 @@ class ToolbarRenderer:
             )
         )
 
-    def paint(self, slots: list[ToolbarSlot], is_autoreply_bg: bool, needs_reflash: bool) -> bool:
+    def paint(self, slots: list[ToolbarSlot], is_trigger_bg: bool, needs_reflash: bool) -> bool:
         """Write ANSI sequences for the toolbar row."""
         blessed_term = get_term()
         cols = blessed_term.width
@@ -1246,7 +1246,7 @@ class ToolbarRenderer:
         toolbar_row = self.scroll.input_row + 1
         self.out.write(blessed_term.move_yx(toolbar_row, 0).encode())
 
-        if is_autoreply_bg:
+        if is_trigger_bg:
             ar_bg = idle_ar_rgb()
             ar_fg = hex_to_rgb(pal("input_ar_text"))
             bg_sgr = blessed_term.on_color_rgb(*ar_bg) + blessed_term.color_rgb(*ar_fg)
@@ -1275,7 +1275,7 @@ class ToolbarRenderer:
         pad = max(1, cols - left_total - right_total)
         self.out.write(f"{bg_sgr}{' ' * pad}".encode())
 
-        right_sgr = sgr_fg(pal("foreground")) if not is_autoreply_bg else ""
+        right_sgr = sgr_fg(pal("foreground")) if not is_trigger_bg else ""
         for i, slot in enumerate(right_slots):
             if i > 0:
                 self.out.write(sep_str.encode())
@@ -1287,9 +1287,9 @@ class ToolbarRenderer:
         self.out.write(blessed_term.normal.encode())
         return needs_reflash
 
-    def restore_cursor(self, bt: "blessed.Terminal", row: int, col: int, is_autoreply_bg: bool) -> None:
+    def restore_cursor(self, bt: "blessed.Terminal", row: int, col: int, is_trigger_bg: bool) -> None:
         """Position cursor at *row*, *col* and make it visible."""
-        osc = cursor_ar_osc() if is_autoreply_bg else cursor_osc()
+        osc = cursor_ar_osc() if is_trigger_bg else cursor_osc()
         self.out.write(bt.move_yx(row, col).encode())
         self.out.write(osc.encode())
         self.out.write(bt.normal_cursor.encode())
@@ -1297,7 +1297,7 @@ class ToolbarRenderer:
     def schedule_flash(
         self,
         loop: asyncio.AbstractEventLoop,
-        autoreply_engine: "autoreply_mod.AutoreplyEngine | None",
+        trigger_engine: "trigger_mod.TriggerEngine | None",
         editor: "blessed.line_editor.LineEditor",
         bt: "blessed.Terminal",
     ) -> None:
@@ -1305,10 +1305,10 @@ class ToolbarRenderer:
 
         def tick() -> None:
             self.out.write(bt.hide_cursor.encode())
-            still = self.render(autoreply_engine)
+            still = self.render(trigger_engine)
             input_row = self.scroll.input_row
-            engine = autoreply_engine
-            is_ar_bg = self.is_autoreply_bg(engine)
+            engine = trigger_engine
+            is_ar_bg = self.is_trigger_bg(engine)
 
             if is_ar_bg != self.last_ar_bg:
                 self.last_ar_bg = is_ar_bg
@@ -1325,7 +1325,7 @@ class ToolbarRenderer:
 
                 hint = activity_hint(engine, bt.width)
                 prog = until_progress(engine)
-                bg = STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
+                bg = STYLE_TRIGGER["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
                 if cq is not None:
                     cursor_col = client_repl_commands.render_command_queue(
                         cq,
@@ -1335,7 +1335,7 @@ class ToolbarRenderer:
                         hint=hint,
                         progress=prog,
                         base_bg_sgr=bg,
-                        autoreply=is_ar_bg,
+                        trigger=is_ar_bg,
                     )
                 else:
                     assert ac is not None
@@ -1347,7 +1347,7 @@ class ToolbarRenderer:
                         hint=hint,
                         progress=prog,
                         base_bg_sgr=bg,
-                        autoreply=is_ar_bg,
+                        trigger=is_ar_bg,
                     )
                 if prog is not None:
                     still = True
@@ -1357,7 +1357,7 @@ class ToolbarRenderer:
                 if not still:
                     self.out.write(bt.normal_cursor.encode())
             else:
-                style = STYLE_AUTOREPLY if is_ar_bg else STYLE_NORMAL
+                style = STYLE_TRIGGER if is_ar_bg else STYLE_NORMAL
                 for attr, val in style.items():
                     setattr(editor, attr, val)
                 hint = activity_hint(engine, bt.width)
@@ -1378,9 +1378,9 @@ class ToolbarRenderer:
                     if hint_split != self.last_hint_split:
                         self.last_hint_split = hint_split
                         col = bt.width - hint_w
-                        bg = STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
+                        bg = STYLE_TRIGGER["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
                         self.out.write(bt.move_yx(input_row, col).encode())
-                        write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg, autoreply=is_ar_bg)
+                        write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg, trigger=is_ar_bg)
                     if prog is not None:
                         still = True
                 else:
@@ -1402,7 +1402,7 @@ class ToolbarRenderer:
     def schedule_eta_refresh(
         self,
         loop: asyncio.AbstractEventLoop,
-        autoreply_engine: "autoreply_mod.AutoreplyEngine | None",
+        trigger_engine: "trigger_mod.TriggerEngine | None",
         editor: "blessed.line_editor.LineEditor",
         bt: "blessed.Terminal",
     ) -> None:
@@ -1432,13 +1432,13 @@ class ToolbarRenderer:
             if eta_text != self.last_eta_text:
                 self.last_eta_text = eta_text
                 self.out.write(bt.hide_cursor.encode())
-                self.render(autoreply_engine)
+                self.render(trigger_engine)
                 has_command = self.ctx.command_queue is not None or self.ctx.active_command is not None
                 if not has_command:
                     cursor_col = editor_cursor_col(editor)
                     input_row = self.scroll.input_row
-                    engine = autoreply_engine
-                    is_ar_bg = self.is_autoreply_bg(engine)
+                    engine = trigger_engine
+                    is_ar_bg = self.is_trigger_bg(engine)
                     self.restore_cursor(bt, input_row, cursor_col, is_ar_bg)
             loop.call_later(self.ETA_REFRESH_INTERVAL, eta_tick)
 
@@ -1449,7 +1449,7 @@ class ToolbarRenderer:
     def schedule_until_progress(
         self,
         loop: asyncio.AbstractEventLoop,
-        autoreply_engine: "autoreply_mod.AutoreplyEngine | None",
+        trigger_engine: "trigger_mod.TriggerEngine | None",
         editor: "blessed.line_editor.LineEditor",
         bt: "blessed.Terminal",
     ) -> None:
@@ -1464,7 +1464,7 @@ class ToolbarRenderer:
         self.last_progress_col = -1
 
         def progress_tick() -> None:
-            engine = autoreply_engine
+            engine = trigger_engine
             prog = until_progress(engine)
             if prog is None:
                 self.until_progress_active = False
@@ -1489,14 +1489,14 @@ class ToolbarRenderer:
             if col < 2:
                 loop.call_later(self.PROGRESS_REFRESH_INTERVAL, progress_tick)
                 return
-            is_ar_bg = self.is_autoreply_bg(engine)
-            bg = STYLE_AUTOREPLY["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
+            is_ar_bg = self.is_trigger_bg(engine)
+            bg = STYLE_TRIGGER["bg_sgr"] if is_ar_bg else STYLE_NORMAL["bg_sgr"]
             self.out.write(bt.hide_cursor.encode())
             self.out.write(bt.move_yx(self.scroll.input_row, col).encode())
-            write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg, autoreply=is_ar_bg)
+            write_hint(hint, self.out, bt, progress=prog, bg_sgr=bg, trigger=is_ar_bg)
             if not self.flash_active:
                 self.flash_active = True
-                self.schedule_flash(loop, autoreply_engine, editor, bt)
+                self.schedule_flash(loop, trigger_engine, editor, bt)
             loop.call_later(self.PROGRESS_REFRESH_INTERVAL, progress_tick)
 
         loop.call_later(self.PROGRESS_REFRESH_INTERVAL, progress_tick)

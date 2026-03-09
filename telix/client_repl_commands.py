@@ -204,14 +204,14 @@ def get_search_buffer(ctx: "TelixSessionContext") -> typing.Any | None:
     """
     Return the :class:`SearchBuffer` for *ctx*, or ``None``.
 
-    Works for both macro execution (where ``ctx.autoreply_engine`` is the
-    engine) and autoreply execution (where the engine *is* ``self`` and
-    ``ctx.autoreply_engine`` points to it).
+    Works for both macro execution (where ``ctx.trigger_engine`` is the
+    engine) and trigger execution (where the engine *is* ``self`` and
+    ``ctx.trigger_engine`` points to it).
 
     :param ctx: Session context.
     :returns: The engine's :class:`SearchBuffer`, or ``None``.
     """
-    engine = ctx.autoreply_engine
+    engine = ctx.trigger_engine
     if engine is not None:
         return engine.buffer
     return None
@@ -234,7 +234,7 @@ async def dispatch_one(
     :param mask_send: If ``True``, mask plain command text in status.
     :returns: :class:`StepResult` indicating what happened.
     """
-    from .autoreply import check_condition
+    from .trigger import check_condition
 
     dm = DELAY_RE.match(cmd)
     if dm:
@@ -418,7 +418,7 @@ def render_active_command(
     hint: str = "",
     progress: float | None = None,
     base_bg_sgr: str = "",
-    autoreply: bool = False,
+    trigger: bool = False,
 ) -> int:
     """
     Render a single highlighted active command on the input row.
@@ -427,10 +427,10 @@ def render_active_command(
     flash animation.
 
     :param flash_elapsed: Unused (kept for API compatibility).
-    :param hint: Right-aligned dim hint text (e.g. autoreply status).
+    :param hint: Right-aligned dim hint text (e.g. trigger status).
     :param progress: Until timer progress ``0.0..1.0``, or ``None``.
     :param base_bg_sgr: Background SGR for the input row.
-    :param autoreply: Use autoreply suggestion color for hints.
+    :param trigger: Use trigger suggestion color for hints.
     :returns: Display width of the rendered command text.
     """
     blessed_term = get_term()
@@ -449,7 +449,7 @@ def render_active_command(
     pad = avail - w
     if pad > 0:
         out.write(f"{base_bg_sgr}{' ' * pad}{normal}".encode())
-    write_hint(hint, out, blessed_term, progress=progress, bg_sgr=base_bg_sgr, autoreply=autoreply)
+    write_hint(hint, out, blessed_term, progress=progress, bg_sgr=base_bg_sgr, trigger=trigger)
     out.write(normal.encode())
     return w
 
@@ -470,7 +470,7 @@ def render_command_queue(
     hint: str = "",
     progress: float | None = None,
     base_bg_sgr: str = "",
-    autoreply: bool = False,
+    trigger: bool = False,
 ) -> int:
     """
     Render the command queue on the input row.
@@ -480,10 +480,10 @@ def render_command_queue(
     ellipsis.
 
     :param flash_elapsed: Unused (kept for API compatibility).
-    :param hint: Right-aligned dim hint text (e.g. autoreply status).
+    :param hint: Right-aligned dim hint text (e.g. trigger status).
     :param progress: Until timer progress ``0.0..1.0``, or ``None``.
     :param base_bg_sgr: Background SGR for the input row.
-    :param autoreply: Use autoreply suggestion color for hints.
+    :param trigger: Use trigger suggestion color for hints.
     :returns: Total display width of all rendered fragments.
     """
     if queue is None:
@@ -529,7 +529,7 @@ def render_command_queue(
     pad = avail - total_w
     if pad > 0:
         out.write(f"{base_bg_sgr}{' ' * pad}{normal}".encode())
-    write_hint(hint, out, blessed_term, progress=progress, bg_sgr=base_bg_sgr, autoreply=autoreply)
+    write_hint(hint, out, blessed_term, progress=progress, bg_sgr=base_bg_sgr, trigger=trigger)
     out.write(normal.encode())
     return total_w
 

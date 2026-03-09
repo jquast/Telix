@@ -99,7 +99,7 @@ Each row has a **Key** (variable name) and a **Value** (group template
 like `\1` or `\2`).  Only integer values are stored; non-numeric
 captures are silently skipped.
 
-These variables are available in `when` conditions on autoreplies and
+These variables are available in `when` conditions on triggers and
 macros.  For example, a highlight on `Adrenaline: (\d+)/(\d+)` with
 captures `Adrenaline=\1` and `MaxAdrenaline=\2` lets you write
 `` `when Adrenaline%>50` `` in a macro.

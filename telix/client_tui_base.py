@@ -2125,7 +2125,7 @@ class CommandHelpScreen(textual.screen.Screen[None]):
 
 
 class EditListPane(textual.containers.Vertical):
-    """Base pane for list-editor UIs (macros, autoreplies, etc.)."""
+    """Base pane for list-editor UIs (macros, triggers, etc.)."""
 
     DEFAULT_CSS = """
     EditListPane {
@@ -2179,7 +2179,7 @@ class EditListPane(textual.containers.Vertical):
     @property
     @abc.abstractmethod
     def noun(self) -> str:
-        """Display noun for this editor, e.g. 'Macro' or 'Autoreply'."""
+        """Display noun for this editor, e.g. 'Macro' or 'Trigger'."""
 
     @property
     def noun_plural(self) -> str:
@@ -2575,7 +2575,7 @@ class EditListScreen(textual.screen.Screen["bool | None"]):
 
 
 class EditorApp(textual.app.App[None]):
-    """Minimal Textual app for standalone macro/autoreply editing."""
+    """Minimal Textual app for standalone macro/trigger editing."""
 
     def __init__(self, screen: textual.screen.Screen[bool | None], session_key: str = "") -> None:
         """Initialize with the editor screen to push."""

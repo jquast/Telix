@@ -18,7 +18,7 @@ pytest.importorskip("textual", reason="textual not installed")
 
 # local
 from telix.macros import load_macros
-from telix.autoreply import load_autoreplies
+from telix.trigger import load_triggers
 from telix.client_tui import (
     EDITOR_TABS,
     DEFAULTS_KEY,
@@ -27,16 +27,16 @@ from telix.client_tui import (
     MacroEditPane,
     SessionConfig,
     ThemeEditPane,
-    AutoreplyTuple,
+    TriggerTuple,
     MacroEditScreen,
     RoomBrowserPane,
     TelnetSessionApp,
-    AutoreplyEditPane,
+    TriggerEditPane,
     CommandHelpScreen,
     HighlightEditPane,
     SessionListScreen,
     TabbedEditorScreen,
-    AutoreplyEditScreen,
+    TriggerEditScreen,
     ProgressBarEditPane,
     RandomwalkDialogScreen,
     AutodiscoverDialogScreen,
@@ -478,31 +478,31 @@ def test_macro_screen_save(tmp_path) -> None:
     assert loaded[1].key == "KEY_ALT_N"
 
 
-def test_autoreply_screen_loads_empty(tmp_path) -> None:
-    path = str(tmp_path / "autoreplies.json")
-    screen = AutoreplyEditScreen(path=path)
+def test_trigger_screen_loads_empty(tmp_path) -> None:
+    path = str(tmp_path / "triggers.json")
+    screen = TriggerEditScreen(path=path)
     assert screen.pane.path == path
     assert screen.pane.rules == []
 
 
-def test_autoreply_screen_loads_file(tmp_path) -> None:
+def test_trigger_screen_loads_file(tmp_path) -> None:
     sk = "test.host:23"
-    fp = tmp_path / "autoreplies.json"
-    fp.write_text(json.dumps({sk: {"autoreplies": [{"pattern": r"\d+ gold", "reply": "get gold;"}]}}))
-    screen = AutoreplyEditScreen(path=str(fp), session_key=sk)
+    fp = tmp_path / "triggers.json"
+    fp.write_text(json.dumps({sk: {"triggers": [{"pattern": r"\d+ gold", "reply": "get gold;"}]}}))
+    screen = TriggerEditScreen(path=str(fp), session_key=sk)
     screen.pane.load_from_file()
     assert len(screen.pane.rules) == 1
-    assert screen.pane.rules[0] == AutoreplyTuple(r"\d+ gold", "get gold;")
+    assert screen.pane.rules[0] == TriggerTuple(r"\d+ gold", "get gold;")
 
 
-def test_autoreply_screen_save(tmp_path) -> None:
+def test_trigger_screen_save(tmp_path) -> None:
     sk = "test.host:23"
-    fp = tmp_path / "autoreplies.json"
-    screen = AutoreplyEditScreen(path=str(fp), session_key=sk)
-    screen.pane.rules = [AutoreplyTuple(r"\d+ gold", "get gold;")]
+    fp = tmp_path / "triggers.json"
+    screen = TriggerEditScreen(path=str(fp), session_key=sk)
+    screen.pane.rules = [TriggerTuple(r"\d+ gold", "get gold;")]
     screen.pane.save_to_file()
 
-    loaded = load_autoreplies(str(fp), sk)
+    loaded = load_triggers(str(fp), sk)
     assert len(loaded) == 1
     assert loaded[0].pattern.pattern == r"\d+ gold"
     assert loaded[0].reply == "get gold;"
@@ -511,12 +511,12 @@ def test_autoreply_screen_save(tmp_path) -> None:
 @pytest.mark.parametrize(
     "entry_extra,field_idx,expected", [({"when": {"HP%": ">50"}}, 4, {"HP%": ">50"}), ({"immediate": True}, 5, True)]
 )
-def test_autoreply_screen_loads_field(tmp_path, entry_extra, field_idx, expected) -> None:
+def test_trigger_screen_loads_field(tmp_path, entry_extra, field_idx, expected) -> None:
     sk = "test.host:23"
-    fp = tmp_path / "autoreplies.json"
+    fp = tmp_path / "triggers.json"
     entry = {"pattern": "x", "reply": "y;", **entry_extra}
-    fp.write_text(json.dumps({sk: {"autoreplies": [entry]}}))
-    screen = AutoreplyEditScreen(path=str(fp), session_key=sk)
+    fp.write_text(json.dumps({sk: {"triggers": [entry]}}))
+    screen = TriggerEditScreen(path=str(fp), session_key=sk)
     screen.pane.load_from_file()
     assert screen.pane.rules[0][field_idx] == expected
 
@@ -529,24 +529,24 @@ def test_autoreply_screen_loads_field(tmp_path, entry_extra, field_idx, expected
         ({}, "immediate", None, True),
     ],
 )
-def test_autoreply_screen_saves_field(tmp_path, rule_kwargs, json_key, expected, absent) -> None:
+def test_trigger_screen_saves_field(tmp_path, rule_kwargs, json_key, expected, absent) -> None:
     sk = "test.host:23"
-    fp = tmp_path / "autoreplies.json"
-    screen = AutoreplyEditScreen(path=str(fp), session_key=sk)
-    screen.pane.rules = [AutoreplyTuple("x", "y;", **rule_kwargs)]
+    fp = tmp_path / "triggers.json"
+    screen = TriggerEditScreen(path=str(fp), session_key=sk)
+    screen.pane.rules = [TriggerTuple("x", "y;", **rule_kwargs)]
     screen.pane.save_to_file()
     raw = json.loads(fp.read_text())
-    entry = raw[sk]["autoreplies"][0]
+    entry = raw[sk]["triggers"][0]
     if absent:
         assert json_key not in entry
     else:
         assert entry[json_key] == expected
 
 
-def test_autoreply_screen_rejects_bad_regex(tmp_path) -> None:
-    fp = tmp_path / "autoreplies.json"
-    screen = AutoreplyEditScreen(path=str(fp))
-    screen.pane.rules = [AutoreplyTuple("[invalid", "x")]
+def test_trigger_screen_rejects_bad_regex(tmp_path) -> None:
+    fp = tmp_path / "triggers.json"
+    screen = TriggerEditScreen(path=str(fp))
+    screen.pane.rules = [TriggerTuple("[invalid", "x")]
     with pytest.raises(re.error):
         screen.pane.save_to_file()
 
@@ -596,13 +596,13 @@ def test_tui_main(monkeypatch) -> None:
     assert called
 
 
-@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight", "session"])
+@pytest.mark.parametrize("topic", ["macro", "trigger", "highlight", "session"])
 def test_help_topics_exist(topic: str) -> None:
     content = get_help_topic(topic)
     assert len(content) > 100
 
 
-@pytest.mark.parametrize("topic", ["macro", "autoreply", "highlight", "session"])
+@pytest.mark.parametrize("topic", ["macro", "trigger", "highlight", "session"])
 def test_help_screen_creates(topic: str) -> None:
     screen = CommandHelpScreen(topic=topic)
     assert screen.pane.topic == topic
@@ -618,9 +618,9 @@ def test_help_topic_macro_contains_key_sections() -> None:
     assert "`resume`" in content
 
 
-def test_help_topic_autoreply_contains_key_sections() -> None:
-    content = get_help_topic("autoreply")
-    assert "## Autoreply Editor" in content
+def test_help_topic_trigger_contains_key_sections() -> None:
+    content = get_help_topic("trigger")
+    assert "## Trigger Editor" in content
     assert "### Flags Explained" in content
     assert "### Pattern Syntax" in content
     assert "### Backreferences in Reply" in content
@@ -738,7 +738,7 @@ def test_autodiscover_dialog_default_strategy() -> None:
 def test_autodiscover_dialog_all_flags(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
-    screen.write_result(True, "bfs", auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True)
+    screen.write_result(True, "bfs", auto_search=True, auto_evaluate=True, auto_survey=True, triggers=True)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
@@ -746,18 +746,18 @@ def test_autodiscover_dialog_all_flags(tmp_path: Any) -> None:
     assert data["auto_search"] is True
     assert data["auto_evaluate"] is True
     assert data["auto_survey"] is True
-    assert data["autoreplies"] is True
+    assert data["triggers"] is True
 
 
 def test_autodiscover_dialog_noreply(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = AutodiscoverDialogScreen(result_file=result_file, default_strategy="dfs")
-    screen.write_result(True, "dfs", autoreplies=False)
+    screen.write_result(True, "dfs", triggers=False)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
     assert data["command"] == "`autodiscover dfs noreply`"
-    assert data["autoreplies"] is False
+    assert data["triggers"] is False
 
 
 def test_autodiscover_dialog_autosurvey_only(tmp_path: Any) -> None:
@@ -772,12 +772,12 @@ def test_autodiscover_dialog_autosurvey_only(tmp_path: Any) -> None:
 
 def test_autodiscover_dialog_default_booleans() -> None:
     screen = AutodiscoverDialogScreen(
-        default_auto_search=True, default_auto_evaluate=True, default_auto_survey=True, default_autoreplies=False
+        default_auto_search=True, default_auto_evaluate=True, default_auto_survey=True, default_triggers=False
     )
     assert screen.default_auto_search is True
     assert screen.default_auto_evaluate is True
     assert screen.default_auto_survey is True
-    assert screen.default_autoreplies is False
+    assert screen.default_triggers is False
 
 
 def test_randomwalk_dialog_autosurvey(tmp_path: Any) -> None:
@@ -794,18 +794,18 @@ def test_randomwalk_dialog_autosurvey(tmp_path: Any) -> None:
 def test_randomwalk_dialog_noreply(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, autoreplies=False)
+    screen.write_result(True, 2, triggers=False)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
     assert data["command"] == "`randomwalk 999 2 noreply`"
-    assert data["autoreplies"] is False
+    assert data["triggers"] is False
 
 
 def test_randomwalk_dialog_all_new_flags(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=3)
-    screen.write_result(True, 3, auto_search=True, auto_evaluate=True, auto_survey=True, autoreplies=True)
+    screen.write_result(True, 3, auto_search=True, auto_evaluate=True, auto_survey=True, triggers=True)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
@@ -815,17 +815,17 @@ def test_randomwalk_dialog_all_new_flags(tmp_path: Any) -> None:
 def test_randomwalk_dialog_noreply_with_flags(tmp_path: Any) -> None:
     result_file = str(tmp_path / "result.json")
     screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, auto_search=True, autoreplies=False)
+    screen.write_result(True, 2, auto_search=True, triggers=False)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
     assert data["command"] == "`randomwalk 999 2 autosearch noreply`"
 
 
-def test_randomwalk_dialog_default_autoreplies() -> None:
-    screen = RandomwalkDialogScreen(default_auto_survey=True, default_autoreplies=False)
+def test_randomwalk_dialog_default_triggers() -> None:
+    screen = RandomwalkDialogScreen(default_auto_survey=True, default_triggers=False)
     assert screen.default_auto_survey is True
-    assert screen.default_autoreplies is False
+    assert screen.default_triggers is False
 
 
 def make_sessions(n: int) -> dict[str, SessionConfig]:
@@ -850,7 +850,7 @@ class TestTabbedEditorScreen:
         return {
             "session_key": "test:4000",
             "macros_file": str(tmp_path / "macros.json"),
-            "autoreplies_file": str(tmp_path / "autoreplies.json"),
+            "triggers_file": str(tmp_path / "triggers.json"),
             "highlights_file": str(tmp_path / "highlights.json"),
             "progressbars_file": str(tmp_path / "progressbars.json"),
             "gmcp_snapshot_file": "",
@@ -880,7 +880,7 @@ class TestTabbedEditorScreen:
 
     def test_editor_tabs_ids(self) -> None:
         ids = [tab_id for _, tab_id in EDITOR_TABS]
-        assert ids == ["highlights", "rooms", "macros", "autoreplies", "captures", "bars", "theme"]
+        assert ids == ["highlights", "rooms", "macros", "triggers", "captures", "bars", "theme"]
 
     def test_create_pane_macros(self, tmp_path: Any) -> None:
         params = self.make_params(tmp_path)
@@ -889,12 +889,12 @@ class TestTabbedEditorScreen:
         assert isinstance(pane, MacroEditPane)
         assert pane.id == "macros"
 
-    def test_create_pane_autoreplies(self, tmp_path: Any) -> None:
+    def test_create_pane_triggers(self, tmp_path: Any) -> None:
         params = self.make_params(tmp_path)
         screen = TabbedEditorScreen(params)
-        pane = screen.create_pane("autoreplies")
-        assert isinstance(pane, AutoreplyEditPane)
-        assert pane.id == "autoreplies"
+        pane = screen.create_pane("triggers")
+        assert isinstance(pane, TriggerEditPane)
+        assert pane.id == "triggers"
 
     def test_create_pane_highlights(self, tmp_path: Any) -> None:
         params = self.make_params(tmp_path)

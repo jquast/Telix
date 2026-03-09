@@ -26,7 +26,7 @@ Common defaults:
 ``$XDG_CONFIG_HOME/telix/`` contains per-feature configuration:
 
 - ``sessions.json``
-- ``autoreplies.json``
+- ``triggers.json``
 - ``macros.json``
 - ``highlights.json``
 - ``progressbars.json`` - progress bar toolbar configuration

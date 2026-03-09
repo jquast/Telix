@@ -6,7 +6,7 @@ TUI telnet and MUD client built on top of telnetlib3.
 - `docs/session-manager.rst`: TUI session manager
 - `docs/contributing.rst`: architecture, integration boundary, development
 - `docs/files.rst`: config file paths, XDG layout
-- `telix/help/`: user-facing help (commands, macros, autoreplies, highlights, rooms)
+- `telix/help/`: user-facing help (commands, macros, triggers, highlights, rooms)
 - `.editorconfig`: defines basic formatting
 
 ## Code file overview
@@ -29,10 +29,10 @@ telix/
 
   client_tui.py           Re-export hub (backwards compat)
   client_tui_base.py      TUI foundation: sessions, base editors, app
-  client_tui_editors.py   Macro/autoreply/highlight/bar editors
+  client_tui_editors.py   Macro/trigger/highlight/bar editors
   client_tui_dialogs.py   Rooms, caps, tabbed editor, dialogs
 
-  autoreply.py            Pattern-triggered automatic responses
+  trigger.py              Pattern-triggered automatic responses
   macros.py               Key-bound macro definitions
   highlighter.py          Regex-based output highlighting + captures
   rooms.py                GMCP Room.Info graph store (SQLite)

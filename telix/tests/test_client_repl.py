@@ -24,13 +24,13 @@ if sys.platform == "win32":
 # local
 from telix.paths import DATA_DIR, history_path
 from telix.macros import Macro, load_macros, save_macros
-from telix.autoreply import SearchBuffer, AutoreplyRule, AutoreplyEngine
+from telix.trigger import SearchBuffer, TriggerRule, TriggerEngine
 from telix.client_repl import (
     TRAVEL_RE,
     STYLE_NORMAL,
     COMMAND_DELAY,
     PASSWORD_CHAR,
-    STYLE_AUTOREPLY,
+    STYLE_TRIGGER,
     ReplSession,
     ScrollRegion,
     LineHoldBuffer,
@@ -432,19 +432,19 @@ def test_style_normal_populated() -> None:
     assert STYLE_NORMAL["suggestion_sgr"] != ""
 
 
-def test_style_autoreply_populated() -> None:
+def test_style_trigger_populated() -> None:
     pytest.importorskip("blessed")
     make_styles()
-    assert isinstance(STYLE_AUTOREPLY, dict)
-    assert STYLE_AUTOREPLY["text_sgr"] != ""
-    assert STYLE_AUTOREPLY["bg_sgr"] != ""
+    assert isinstance(STYLE_TRIGGER, dict)
+    assert STYLE_TRIGGER["text_sgr"] != ""
+    assert STYLE_TRIGGER["bg_sgr"] != ""
 
 
-def test_style_normal_and_autoreply_differ() -> None:
+def test_style_normal_and_trigger_differ() -> None:
     pytest.importorskip("blessed")
     make_styles()
-    assert STYLE_NORMAL["bg_sgr"] != STYLE_AUTOREPLY["bg_sgr"]
-    assert STYLE_NORMAL["text_sgr"] != STYLE_AUTOREPLY["text_sgr"]
+    assert STYLE_NORMAL["bg_sgr"] != STYLE_TRIGGER["bg_sgr"]
+    assert STYLE_NORMAL["text_sgr"] != STYLE_TRIGGER["text_sgr"]
 
 
 def test_render_input_line_basic() -> None:
@@ -914,7 +914,7 @@ def dispatch_hooks(**overrides: Any) -> tuple[Any, list[str], list[str]]:
     echoed: list[str] = []
     status: list[str] = []
     defaults = {
-        "ctx": types.SimpleNamespace(gmcp_data={}, captures={}, autoreply_engine=None),
+        "ctx": types.SimpleNamespace(gmcp_data={}, captures={}, trigger_engine=None),
         "log": __import__("logging").getLogger("test"),
         "wait_fn": None,
         "send_fn": sent.append,
@@ -974,7 +974,7 @@ async def test_dispatch_one_when_pass() -> None:
 
     hooks, sent, _ = dispatch_hooks(
         ctx=types.SimpleNamespace(
-            gmcp_data={"Char.Vitals": {"hp": "80", "maxhp": "100"}}, captures={}, autoreply_engine=None
+            gmcp_data={"Char.Vitals": {"hp": "80", "maxhp": "100"}}, captures={}, trigger_engine=None
         )
     )
     result = await dispatch_one("`when HP%>=50`", 0, 0, frozenset(), hooks)
@@ -989,7 +989,7 @@ async def test_dispatch_one_when_fail() -> None:
 
     hooks, sent, _ = dispatch_hooks(
         ctx=types.SimpleNamespace(
-            gmcp_data={"Char.Vitals": {"hp": "20", "maxhp": "100"}}, captures={}, autoreply_engine=None
+            gmcp_data={"Char.Vitals": {"hp": "20", "maxhp": "100"}}, captures={}, trigger_engine=None
         )
     )
     result = await dispatch_one("`when HP%>=50`", 0, 0, frozenset(), hooks)
@@ -1725,8 +1725,8 @@ async def test_send_chained_typescript_echo_on(tmp_path: Any, monkeypatch: pytes
     assert content == ""
 
 
-def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
-    """echo_autoreply writes the command to typescript_file."""
+def test_echo_trigger_writes_typescript(tmp_path: Any) -> None:
+    """echo_trigger writes the command to typescript_file."""
     pytest.importorskip("blessed")
 
     bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
@@ -1747,7 +1747,7 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0), password_mode=False, buf=[])
     repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
-    repl.echo_autoreply("look")
+    repl.echo_trigger("look")
     ts_file.close()
 
     with ts_path.open(encoding="utf-8", newline="") as fh:
@@ -1755,8 +1755,8 @@ def test_echo_autoreply_writes_typescript(tmp_path: Any) -> None:
     assert content == "look\r\n"
 
 
-def test_echo_autoreply_no_typescript() -> None:
-    """echo_autoreply with no typescript_file does not crash."""
+def test_echo_trigger_no_typescript() -> None:
+    """echo_trigger with no typescript_file does not crash."""
     pytest.importorskip("blessed")
 
     bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
@@ -1775,11 +1775,11 @@ def test_echo_autoreply_no_typescript() -> None:
     repl.editor = types.SimpleNamespace(display=types.SimpleNamespace(cursor=0), password_mode=False, buf=[])
     repl.telnet_writer = types.SimpleNamespace(will_echo=False)
 
-    repl.echo_autoreply("look")
+    repl.echo_trigger("look")
 
 
-def test_echo_autoreply_masks_when_will_echo(tmp_path: Any) -> None:
-    """echo_autoreply masks display and typescript when will_echo is True."""
+def test_echo_trigger_masks_when_will_echo(tmp_path: Any) -> None:
+    """echo_trigger masks display and typescript when will_echo is True."""
     pytest.importorskip("blessed")
 
     bt = types.SimpleNamespace(restore="", save="", cyan="", normal="", move_yx=lambda row, col: "")
@@ -1801,7 +1801,7 @@ def test_echo_autoreply_masks_when_will_echo(tmp_path: Any) -> None:
     repl.telnet_writer = types.SimpleNamespace(will_echo=True)
 
     cmd = "secret123"
-    repl.echo_autoreply(cmd)
+    repl.echo_trigger(cmd)
     ts_file.close()
 
     with ts_path.open(encoding="utf-8", newline="") as fh:
@@ -1866,12 +1866,12 @@ async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fas
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """``noreply=True`` disables autoreply engine during randomwalk and restores after."""
+    """``noreply=True`` disables trigger engine during randomwalk and restores after."""
 
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
-    engine = AutoreplyEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
-    writer.ctx.autoreply_engine = engine
+    engine = TriggerEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
+    writer.ctx.trigger_engine = engine
     assert engine.enabled is True
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=2, noreply=True)
@@ -1883,13 +1883,13 @@ async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_autodiscover_noreply_disables_engine(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """``noreply=True`` disables autoreply engine during autodiscover and restores after."""
+    """``noreply=True`` disables trigger engine during autodiscover and restores after."""
 
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.room_graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
-    engine = AutoreplyEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
-    writer.ctx.autoreply_engine = engine
+    engine = TriggerEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
+    writer.ctx.trigger_engine = engine
 
     async def noop_fast_travel(*args, **kwargs):
         pass
@@ -2024,7 +2024,7 @@ async def test_read_input_password_no_command_expansion(monkeypatch: pytest.Monk
     repl.mode_switched = False
     repl.ga_detected = False
     repl.mslp_index = None
-    repl.autoreply_engine = None
+    repl.trigger_engine = None
     repl.history_file = None
     repl.replay_buf = []
     repl.ctx = TelixSessionContext()
@@ -2125,22 +2125,22 @@ class TestRefreshHighlightEngineBuiltin:
             setattr(t, name, fmtstr(seq))
         return t
 
-    def make_repl(self, highlight_rules, autoreply_rules, term) -> ReplSession:
+    def make_repl(self, highlight_rules, trigger_rules, term) -> ReplSession:
         repl = object.__new__(ReplSession)
         ctx = TelixSessionContext()
         ctx.highlight_rules = highlight_rules
-        ctx.autoreply_rules = autoreply_rules
+        ctx.trigger_rules = trigger_rules
         ctx.highlight_engine = None
         repl.blessed_term = term
         repl.ctx = ctx
         return repl
 
     def test_uses_builtin_rule_highlight(self):
-        """Autoreply matches use the highlight style from the builtin rule, not the default."""
+        """Trigger matches use the highlight style from the builtin rule, not the default."""
         term = self.make_term({"black_on_peru": "\x1b[PERU]", "black_on_beige": "\x1b[BEIGE]"})
-        ar_rules = [AutoreplyRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
+        ar_rules = [TriggerRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
         builtin = HighlightRule(
-            pattern=re.compile(r"<Autoreply pattern>", RE_FLAGS), highlight="black_on_peru", enabled=True, builtin=True
+            pattern=re.compile(r"<Trigger pattern>", RE_FLAGS), highlight="black_on_peru", enabled=True, builtin=True
         )
         repl = self.make_repl([builtin], ar_rules, term)
 
@@ -2151,12 +2151,12 @@ class TestRefreshHighlightEngineBuiltin:
         assert "\x1b[PERU]" in result
         assert "\x1b[BEIGE]" not in result
 
-    def test_builtin_enabled_false_disables_autoreply_highlight(self):
-        """Autoreply matches are not highlighted when the builtin rule is disabled."""
+    def test_builtin_enabled_false_disables_trigger_highlight(self):
+        """Trigger matches are not highlighted when the builtin rule is disabled."""
         term = self.make_term({"black_on_peru": "\x1b[PERU]"})
-        ar_rules = [AutoreplyRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
+        ar_rules = [TriggerRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
         builtin = HighlightRule(
-            pattern=re.compile(r"<Autoreply pattern>", RE_FLAGS), highlight="black_on_peru", enabled=False, builtin=True
+            pattern=re.compile(r"<Trigger pattern>", RE_FLAGS), highlight="black_on_peru", enabled=False, builtin=True
         )
         repl = self.make_repl([builtin], ar_rules, term)
 
@@ -2210,20 +2210,20 @@ class TestWriteHint:
     def _output(self):
         return self.buf.getvalue().decode()
 
-    def test_no_autoreply_plain_uses_reverse(self):
-        """Non-autoreply plain hint uses bt.reverse, not on_color_rgb."""
+    def test_no_trigger_plain_uses_reverse(self):
+        """Non-trigger plain hint uses bt.reverse, not on_color_rgb."""
         from telix.client_repl_render import write_hint
 
-        write_hint("some hint", self.writer, self.bt, autoreply=False)
+        write_hint("some hint", self.writer, self.bt, trigger=False)
         out = self._output()
         assert str(self.bt.reverse) in out
         assert "some hint" in out
 
-    def test_no_autoreply_with_progress_uses_reverse(self):
-        """Non-autoreply hint with progress uses bt.reverse for the remaining portion."""
+    def test_no_trigger_with_progress_uses_reverse(self):
+        """Non-trigger hint with progress uses bt.reverse for the remaining portion."""
         from telix.client_repl_render import write_hint
 
-        write_hint("abcdef", self.writer, self.bt, progress=0.5, autoreply=False)
+        write_hint("abcdef", self.writer, self.bt, progress=0.5, trigger=False)
         out = self._output()
         assert str(self.bt.reverse) in out
 
@@ -2231,5 +2231,5 @@ class TestWriteHint:
         """Empty hint string produces no output."""
         from telix.client_repl_render import write_hint
 
-        write_hint("", self.writer, self.bt, autoreply=False)
+        write_hint("", self.writer, self.bt, trigger=False)
         assert self._output() == ""

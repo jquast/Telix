@@ -101,7 +101,7 @@ def compute_derived(palette: dict[str, str]) -> None:
     Compute contrast-derived palette entries in-place from ``input_ar_bg``.
 
     ``active_cmd``, ``pending_cmd``, and ``input_ar_suggestion`` are set to
-    blends of the autoreply background toward its RGB inverse so they are
+    blends of the trigger background toward its RGB inverse so they are
     always readable regardless of theme.
 
     :param palette: Partially-resolved palette dict; modified in place.

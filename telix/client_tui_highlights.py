@@ -150,16 +150,16 @@ class HighlightEditPane(client_tui_base.EditListPane):
         self.query_one("#highlight-form").display = False
         self.query_one("#highlight-capture-fields").display = False
 
-    AUTOREPLY_PATTERN = "<Autoreply pattern>"
+    TRIGGER_PATTERN = "<Trigger pattern>"
 
     def ensure_builtin(self) -> None:
-        """Ensure the builtin autoreply highlight rule exists."""
+        """Ensure the builtin trigger highlight rule exists."""
         if not any(r.builtin for r in self.rules):
             self.rules.insert(
                 0,
                 HighlightTuple(
-                    self.AUTOREPLY_PATTERN,
-                    highlighter.DEFAULT_AUTOREPLY_HIGHLIGHT,
+                    self.TRIGGER_PATTERN,
+                    highlighter.DEFAULT_TRIGGER_HIGHLIGHT,
                     enabled=True,
                     stop_movement=False,
                     builtin=True,
@@ -371,7 +371,7 @@ class HighlightEditPane(client_tui_base.EditListPane):
         if btn == "highlight-delete":
             idx = self.selected_idx()
             if idx is not None and idx < len(self.rules) and self.rules[idx].builtin:
-                self.notify("Cannot delete the builtin autoreply highlight rule.")
+                self.notify("Cannot delete the builtin trigger highlight rule.")
                 return
         if btn == "highlight-add-capture":
             container = self.query_one("#highlight-captures-container", textual.containers.Vertical)

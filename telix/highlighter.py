@@ -26,7 +26,7 @@ from . import paths
 if TYPE_CHECKING:
     import blessed
 
-    from .autoreply import AutoreplyRule
+    from .trigger import TriggerRule
     from .session_context import TelixSessionContext
 
 
@@ -45,7 +45,7 @@ class Span:
 __all__ = ("HighlightEngine", "HighlightRule", "load_highlights", "save_highlights", "validate_highlight")
 
 RE_FLAGS = re.IGNORECASE | re.MULTILINE | re.DOTALL
-DEFAULT_AUTOREPLY_HIGHLIGHT = "black_on_beige"
+DEFAULT_TRIGGER_HIGHLIGHT = "black_on_beige"
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class HighlightRule:
     :param highlight: Blessed compoundable name, e.g. ``"blink_black_on_yellow"``.
     :param enabled: Whether this rule is active.
     :param stop_movement: Cancel discover/randomwalk when matched.
-    :param builtin: ``True`` for the autoreply-pattern rule (undeletable).
+    :param builtin: ``True`` for the trigger-pattern rule (undeletable).
     """
 
     pattern: re.Pattern[str]
@@ -183,7 +183,7 @@ def save_highlights(path: str, rules: list[HighlightRule], session_key: str) -> 
 
 class CompiledRuleSet:
     """
-    A single combined regex built from all highlight + autoreply patterns.
+    A single combined regex built from all highlight + trigger patterns.
 
     Each source pattern becomes a named group ``hl0``, ``hl1``, etc.
     A single :meth:`finditer` call replaces N separate passes.
@@ -194,20 +194,20 @@ class CompiledRuleSet:
     def __init__(
         self,
         rules: list[HighlightRule],
-        autoreply_rules: list["AutoreplyRule"],
-        autoreply_highlight: str,
-        autoreply_enabled: bool,
+        trigger_rules: list["TriggerRule"],
+        trigger_highlight: str,
+        trigger_enabled: bool,
     ) -> None:
         parts: list[str] = []
         self.group_map: list[tuple[str, bool, int]] = []
 
-        if autoreply_enabled:
-            for ar in autoreply_rules:
+        if trigger_enabled:
+            for ar in trigger_rules:
                 if not ar.enabled:
                     continue
                 gname = f"hl{len(parts)}"
                 parts.append(f"(?P<{gname}>{ar.pattern.pattern})")
-                self.group_map.append((autoreply_highlight, False, -1))
+                self.group_map.append((trigger_highlight, False, -1))
 
         for rule_i, rule in enumerate(rules):
             if not rule.enabled:
@@ -250,34 +250,34 @@ class HighlightEngine:
     Applies highlight rules to output lines.
 
     Builds a single combined regex from all enabled highlight rules and
-    autoreply patterns at init time. Each :meth:`process_line` call runs
+    trigger patterns at init time. Each :meth:`process_line` call runs
     one :meth:`finditer` pass, not N separate ones.
 
     :param rules: User-defined highlight rules.
-    :param autoreply_rules: Current autoreply rules (for builtin highlight).
+    :param trigger_rules: Current trigger rules (for builtin highlight).
     :param term: Blessed terminal instance.
     :param ctx: Session context (for stop_movement cancellation).
-    :param autoreply_highlight: Blessed compoundable for autoreply pattern highlight.
-    :param autoreply_enabled: Whether the builtin autoreply highlight is enabled.
+    :param trigger_highlight: Blessed compoundable for trigger pattern highlight.
+    :param trigger_enabled: Whether the builtin trigger highlight is enabled.
     """
 
     def __init__(
         self,
         rules: list[HighlightRule],
-        autoreply_rules: list["AutoreplyRule"],
+        trigger_rules: list["TriggerRule"],
         term: "blessed.Terminal",
         ctx: "TelixSessionContext | None" = None,
-        autoreply_highlight: str = DEFAULT_AUTOREPLY_HIGHLIGHT,
-        autoreply_enabled: bool = True,
+        trigger_highlight: str = DEFAULT_TRIGGER_HIGHLIGHT,
+        trigger_enabled: bool = True,
     ) -> None:
-        """Initialize engine with highlight and autoreply *rules*."""
+        """Initialize engine with highlight and trigger *rules*."""
         self.term = term
         self.ctx = ctx
         self.rules = list(rules)
         sl_rules = [r for r in rules if not r.multiline]
         # Map single-line ruleset indices back to full rules indices.
         self.sl_indices = [i for i, r in enumerate(rules) if not r.multiline]
-        self.ruleset = CompiledRuleSet(sl_rules, autoreply_rules, autoreply_highlight, autoreply_enabled)
+        self.ruleset = CompiledRuleSet(sl_rules, trigger_rules, trigger_highlight, trigger_enabled)
         self.enabled = True
         self.highlight_cache: dict[str, str] = {}
 

@@ -49,7 +49,7 @@ Triggering scripts
 Scripts can be triggered from any command surface that supports backtick commands:
 
 - **REPL**: type `` `script module.fn` `` at the prompt.
-- **Autoreply reply field**: set the reply to `` `script module.fn` ``.
+- **Trigger reply field**: set the reply to `` `script module.fn` ``.
 - **Macro text**: include `` `script module.fn` `` in macro text.
 - **Chained command**: `` look;`script combat.hunt goblin`;north ``
 
@@ -85,7 +85,7 @@ Sending commands
     `` `until 10 pattern` ``       Wait up to 10 s.  Pattern is case-insensitive.
     `` `untils 2 DEAD` ``          Same as ``until`` but case-sensitive.
     `` `travel abc123` ``          Navigate to a room by GMCP room ID.
-    `` `travel abc123 noreply` ``  Travel with autoreplies disabled.
+    `` `travel abc123 noreply` ``  Travel with triggers disabled.
     `` `return` ``                 Return to the room where the current macro started.
     `` `home` ``                   Fast-travel to the home room of the current area.
     `` `autodiscover` ``           BFS-explore unvisited exits (add ``limit N``,
@@ -141,7 +141,7 @@ Terminal output
 
 ``ctx.print(text)``
     Write *text* to the terminal scroll region in cyan, using the same
-    mechanism as autoreply and travel notifications.
+    mechanism as trigger and travel notifications.
 
 ``ctx.log(msg)``
     Write *msg* to the telix log at INFO level.

@@ -17,7 +17,7 @@ from .client_repl_commands import TRAVEL_RE, COMMAND_DELAY
 
 if TYPE_CHECKING:
     from .rooms import RoomGraph
-    from .autoreply import AutoreplyEngine
+    from .trigger import TriggerEngine
     from .session_context import TelixSessionContext
 
 DEFAULT_WALK_LIMIT = 999
@@ -28,21 +28,21 @@ BOUNCE_THRESHOLD = 3
 MAX_STUCK_RETRIES = 3
 STUCK_RETRY_DELAY = 5.0
 # Delay after wait_fn() in settle loops to allow read_server to process
-# the prompt text and call on_prompt() before checking autoreply flags.
+# the prompt text and call on_prompt() before checking trigger flags.
 SETTLE_YIELD_DELAY = 0.05
 
 
-async def settle_autoreplies(
-    engine: "Optional[AutoreplyEngine]", wait_fn: Optional[Callable[[], Awaitable[Any]]], noreply: bool
+async def settle_triggers(
+    engine: "Optional[TriggerEngine]", wait_fn: Optional[Callable[[], Awaitable[Any]]], noreply: bool
 ) -> None:
     """
-    Wait for exclusive autoreplies to finish before moving.
+    Wait for exclusive triggers to finish before moving.
 
     When *noreply* is ``True`` or *engine* has nothing pending, returns
     immediately.  Otherwise loops until both ``exclusive_active`` and
     ``reply_pending`` clear, waiting for a fresh prompt between iterations.
 
-    :param engine: The autoreply engine (may be ``None``).
+    :param engine: The trigger engine (may be ``None``).
     :param wait_fn: Coroutine to wait for a server prompt (may be ``None``).
     :param noreply: Skip waiting entirely when ``True``.
     """
@@ -122,10 +122,10 @@ async def fast_travel(
     Execute travel by sending movement commands with GA/EOR pacing.
 
     Uses the same ``wait_for_prompt`` / ``echo_command`` functions that
-    the autoreply engine and manual input use, so commands are paced by
+    the trigger engine and manual input use, so commands are paced by
     the server's GA/EOR prompt signal and echoed visibly.
 
-    By default all autoreplies fire.  Travel waits for exclusive rules
+    By default all triggers fire.  Travel waits for exclusive rules
     (e.g. combat triggers) to finish in each room before moving.
     With ``noreply=True`` the engine is disabled entirely and the settle
     loop naturally does nothing.
@@ -141,14 +141,14 @@ async def fast_travel(
     :param correct_names: If ``True`` (default), rewrite graph edges when
         arriving at a same-name room with a different ID.  Set to ``False``
         when distinct room IDs must be preserved.
-    :param noreply: Completely disable the autoreply engine during travel.
+    :param noreply: Completely disable the trigger engine during travel.
     """
     wait_fn = ctx.wait_for_prompt
     echo_fn = ctx.echo_command
 
-    def get_engine() -> Optional["AutoreplyEngine"]:
-        """Find the active autoreply engine, if any."""
-        return ctx.autoreply_engine
+    def get_engine() -> Optional["TriggerEngine"]:
+        """Find the active trigger engine, if any."""
+        return ctx.trigger_engine
 
     engine = get_engine()
     engine_was_enabled = True
@@ -289,7 +289,7 @@ async def fast_travel(
                     await wait_fn()
 
                 # Yield to let read_server feed the room output to the
-                # autoreply engine before we check reply_pending.
+                # trigger engine before we check reply_pending.
                 await asyncio.sleep(0)
 
                 engine = get_engine()
@@ -300,12 +300,12 @@ async def fast_travel(
                     failed = engine.pop_condition_failed()
                     if failed is not None:
                         rule_idx, desc = failed
-                        msg = f"Travel mode cancelled - failed conditional in AUTOREPLY #{rule_idx} [{desc}]"
+                        msg = f"Travel mode cancelled - failed conditional in TRIGGER #{rule_idx} [{desc}]"
                         log.warning("%s", msg)
                         if echo_fn is not None:
                             echo_fn(msg)
                         cond_cancelled = True
-                    await settle_autoreplies(engine, wait_fn, noreply=False)
+                    await settle_triggers(engine, wait_fn, noreply=False)
                 if cond_cancelled:
                     break
 
@@ -441,9 +441,9 @@ async def autodiscover(
     :param limit: Maximum number of exits to explore.
     :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
         deepest-first ordering.
-    :param noreply: Completely disable the autoreply engine during the walk.
+    :param noreply: Completely disable the trigger engine during the walk.
     :param auto_search: Send ``search`` in each newly discovered room.
-    :param auto_evaluate: Enable consider-before-kill autoreply logic.
+    :param auto_evaluate: Enable consider-before-kill trigger logic.
     :param auto_survey: Send ``survey`` in each newly discovered room.
     """
     if ctx.discover_active:
@@ -471,7 +471,7 @@ async def autodiscover(
             echo_fn("AUTODISCOVER: no unvisited exits nearby")
         return
 
-    engine = ctx.autoreply_engine
+    engine = ctx.trigger_engine
     engine_was_enabled = True
     if noreply and engine is not None:
         engine_was_enabled = engine.enabled
@@ -597,8 +597,8 @@ async def autodiscover(
                 if echo_fn is not None:
                     echo_fn(f"AUTODISCOVER [{step_count}]: unexpected room {actual[:8]} (expected {target_num[:8]})")
 
-            # Wait for any autoreply to settle.
-            ar = ctx.autoreply_engine
+            # Wait for any trigger to settle.
+            ar = ctx.trigger_engine
             ar_fired = ar is not None and (ar.exclusive_active or ar.reply_pending)
             if ar is not None:
                 settle = 0
@@ -696,7 +696,7 @@ async def randomwalk(
     :param log: Logger.
     :param limit: Maximum number of steps.
     :param visit_level: Minimum visits per reachable room before stopping.
-    :param noreply: Completely disable the autoreply engine during the walk.
+    :param noreply: Completely disable the trigger engine during the walk.
     """
     if ctx.randomwalk_active:
         return
@@ -717,7 +717,7 @@ async def randomwalk(
             echo_fn("RANDOMWALK: no exits from current room")
         return
 
-    engine = ctx.autoreply_engine
+    engine = ctx.trigger_engine
     engine_was_enabled = True
     if noreply and engine is not None:
         engine_was_enabled = engine.enabled
@@ -965,14 +965,14 @@ async def randomwalk(
                 ctx.randomwalk_total = min(limit, expected_total)
 
             # Yield so on_prompt() (driven by GA/EOR already received
-            # with the room output) can queue autoreplies.
+            # with the room output) can queue triggers.
             await asyncio.sleep(0)
 
-            # Wait for autoreplies to settle.  Mirrors the slow-travel
+            # Wait for triggers to settle.  Mirrors the slow-travel
             # settle loop: after exclusive/reply_pending clear, wait for
-            # a fresh prompt so the server response to the last autoreply
+            # a fresh prompt so the server response to the last trigger
             # command is processed -- it may trigger cascading matches.
-            ar = ctx.autoreply_engine
+            ar = ctx.trigger_engine
             ar_fired = False
             if ar is not None:
                 settle = 0
@@ -1023,9 +1023,9 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
     Recognised commands (case-insensitive, enclosed in backticks):
 
     - ```travel <id>``` -- travel to room *id*
-    - ```travel <id> noreply``` -- travel with autoreplies disabled
+    - ```travel <id> noreply``` -- travel with triggers disabled
     - ```return``` -- travel back to the macro's starting room
-    - ```return noreply``` -- return with autoreplies disabled
+    - ```return noreply``` -- return with triggers disabled
     - ```autodiscover``` -- explore unvisited exits from nearby rooms
     - ```randomwalk``` -- random walk preferring unvisited rooms
 

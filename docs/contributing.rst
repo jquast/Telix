@@ -74,10 +74,10 @@ Telix code file overview::
     │
     ├── client_tui.py           Re-export hub (backwards compat)
     ├── client_tui_base.py      TUI foundation: sessions, base editors, app
-    ├── client_tui_editors.py   Macro/autoreply/highlight/bar editors
+    ├── client_tui_editors.py   Macro/trigger/highlight/bar editors
     ├── client_tui_dialogs.py   Rooms, caps, tabbed editor, dialogs
     │
-    ├── autoreply.py            Pattern-triggered automatic responses
+    ├── trigger.py            Pattern-triggered automatic responses
     ├── macros.py               Key-bound macro definitions
     ├── highlighter.py          Regex-based output highlighting + captures
     ├── rooms.py                GMCP Room.Info graph store (SQLite)
@@ -200,8 +200,8 @@ provides the attributes that ``telnetlib3.client_shell`` uses:
 - ``raw_mode`` -- ``None`` (auto-detect), ``True``, or ``False``
 - ``ascii_eol`` -- ``bool``
 - ``input_filter`` -- ``InputFilter`` or ``None``
-- ``autoreply_engine`` -- autoreply engine or ``None``
-- ``autoreply_wait_fn`` -- async callable or ``None``
+- ``trigger_engine`` -- trigger engine or ``None``
+- ``trigger_wait_fn`` -- async callable or ``None``
 - ``typescript_file`` -- open file handle or ``None``
 - ``gmcp_data`` -- ``dict[str, Any]`` of raw GMCP package data
 

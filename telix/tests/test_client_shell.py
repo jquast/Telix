@@ -74,13 +74,13 @@ class TestLoadConfigs:
         load_configs(ctx)
 
         assert ctx.macros_file.endswith("macros.json")
-        assert ctx.autoreplies_file.endswith("autoreplies.json")
+        assert ctx.triggers_file.endswith("triggers.json")
         assert ctx.highlights_file.endswith("highlights.json")
         assert ctx.history_file is not None
         assert ctx.rooms_file.endswith(".db")
         assert all(m.builtin for m in ctx.macro_defs)
         assert len(ctx.macro_defs) == 15
-        assert ctx.autoreply_rules == []
+        assert ctx.trigger_rules == []
         assert ctx.highlight_rules == []
 
     def test_loads_macros(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:

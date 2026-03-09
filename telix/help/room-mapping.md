@@ -40,9 +40,9 @@ before trying the next branch.
 |--------|---------|
 | **BFS** | Explore nearest exits first (breadth-first) |
 | **DFS** | Explore farthest exits first (depth-first) |
-| **noreply** | Disable autoreply processing during the walk |
+| **noreply** | Disable trigger processing during the walk |
 | **autosearch** | Send `search` in each new room |
-| **autoevaluate** | Enable consider-before-kill autoreply logic |
+| **autoevaluate** | Enable consider-before-kill trigger logic |
 | **autosurvey** | Send `survey` in each new room |
 
 **Warning:** Autodiscover can lead to dangerous areas, death traps, or
@@ -53,7 +53,7 @@ aggressive monsters.  Your character may die.
 **Default key:** F3 — **Command:** `` `randomwalk [limit] [visit_level] [options]` ``
 
 Random walk explores rooms by picking random exits, preferring unvisited
-rooms.  It never returns through the entrance you came from.  Autoreplies
+rooms.  It never returns through the entrance you came from.  Triggers
 fire in each room.  Stops when all reachable rooms are visited the
 required number of times.
 
@@ -61,9 +61,9 @@ required number of times.
 |--------|---------|
 | **Visit level** | Minimum visits per room before the walk stops (default 2) |
 | **autosearch** | Send `search` in each new room |
-| **autoevaluate** | Enable consider-before-kill autoreply logic |
+| **autoevaluate** | Enable consider-before-kill trigger logic |
 | **autosurvey** | Send `survey` in each new room |
-| **noreply** | Disable autoreply processing during the walk |
+| **noreply** | Disable trigger processing during the walk |
 
 ### Resume (F5)
 
@@ -77,7 +77,7 @@ same room.
 
 **Command:** `` `travel <room_id> [noreply]` ``
 
-Travel to a specific room by ID using BFS shortest-path.  Autoreplies
+Travel to a specific room by ID using BFS shortest-path.  Triggers
 fire in each room along the path unless `noreply` is given.
 
 Use `` `return [noreply]` `` to travel back to the room where the

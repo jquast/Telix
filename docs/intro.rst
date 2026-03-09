@@ -18,7 +18,7 @@ Features
 --------
 
 - **Session manager** with a bundled directory of 1000+ MUD and BBS servers
-- **Advanced MUD Features** like macros, autoreplies, highlights, room mapping, travel,
+- **Advanced MUD Features** like macros, triggers, highlights, room mapping, travel,
   random walk, autodiscover, progress bars, and chat
 - **Advanced Telnet** with SSL/TLS, NAWS, GMCP, MCCP, BINARY, SGA, ECHO, EOR, GA and more
 - **WebSocket** connections using the ``gmcp.mudstandards.org`` subprotocol

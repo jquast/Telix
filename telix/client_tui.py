@@ -5,7 +5,7 @@ Implementation is split across several sub-modules:
 
 - ``client_tui_base`` -- sessions, base editors, app foundation
 - ``client_tui_macros`` -- macro editor pane and screen
-- ``client_tui_autoreplies`` -- autoreply editor pane and screen
+- ``client_tui_triggers`` -- trigger editor pane and screen
 - ``client_tui_highlights`` -- highlight editor pane and screen
 - ``client_tui_bars`` -- progress bar and theme editor panes and screens
 - ``client_tui_editors`` -- shared helpers and standalone entry points
@@ -95,9 +95,9 @@ from .client_tui_editors import (  # noqa: F401
     show_help_main,
     edit_macros_main,
     edit_highlights_main,
-    edit_autoreplies_main,
+    edit_triggers_main,
     edit_progressbars_main,
 )
 from .client_tui_captures import CapsPane, CapsScreen, ChatViewerScreen, chat_viewer_main  # noqa: F401
 from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen  # noqa: F401
-from .client_tui_autoreplies import AutoreplyTuple, AutoreplyEditPane, AutoreplyEditScreen  # noqa: F401
+from .client_tui_triggers import TriggerTuple, TriggerEditPane, TriggerEditScreen  # noqa: F401

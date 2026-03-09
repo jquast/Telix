@@ -2,7 +2,7 @@
 Server output pattern matching and automatic reply engine.
 
 Provides :class:`SearchBuffer` for accumulating ANSI-stripped server output
-and :class:`AutoreplyEngine` for matching regex patterns and queuing replies
+and :class:`TriggerEngine` for matching regex patterns and queuing replies
 with delay/chaining support.
 """
 
@@ -29,12 +29,12 @@ if TYPE_CHECKING:
     from .session_context import TelixSessionContext
 
 __all__ = (
-    "AutoreplyEngine",
-    "AutoreplyRule",
+    "TriggerEngine",
+    "TriggerRule",
     "SearchBuffer",
     "check_condition",
-    "load_autoreplies",
-    "save_autoreplies",
+    "load_triggers",
+    "save_triggers",
 )
 
 GROUP_RE = re.compile(r"\\(\d+)")
@@ -206,9 +206,9 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
 
 
 @dataclasses.dataclass
-class AutoreplyRule:
+class TriggerRule:
     r"""
-    A single autoreply pattern-action rule.
+    A single trigger pattern-action rule.
 
     All rules are exclusive by default -- when a rule fires, no other
     non-``always`` rules fire until the reply chain completes.
@@ -234,9 +234,9 @@ class AutoreplyRule:
     case_sensitive: bool = False
 
 
-def parse_entries(entries: list[dict[str, str]]) -> list[AutoreplyRule]:
-    """Parse a list of autoreply entry dicts into :class:`AutoreplyRule` instances."""
-    rules: list[AutoreplyRule] = []
+def parse_entries(entries: list[dict[str, str]]) -> list[TriggerRule]:
+    """Parse a list of trigger entry dicts into :class:`TriggerRule` instances."""
+    rules: list[TriggerRule] = []
     for entry in entries:
         pattern_str = entry.get("pattern", "")
         reply = entry.get("reply", "")
@@ -255,9 +255,9 @@ def parse_entries(entries: list[dict[str, str]]) -> list[AutoreplyRule]:
         try:
             compiled = re.compile(pattern_str, flags)
         except re.error as exc:
-            raise ValueError(f"Invalid autoreply pattern {pattern_str!r}: {exc}") from exc
+            raise ValueError(f"Invalid trigger pattern {pattern_str!r}: {exc}") from exc
         rules.append(
-            AutoreplyRule(
+            TriggerRule(
                 pattern=compiled,
                 reply=reply,
                 always=always,
@@ -271,16 +271,16 @@ def parse_entries(entries: list[dict[str, str]]) -> list[AutoreplyRule]:
     return rules
 
 
-def load_autoreplies(path: str, session_key: str) -> list[AutoreplyRule]:
+def load_triggers(path: str, session_key: str) -> list[TriggerRule]:
     """
-    Load autoreply rules for a session from a JSON file.
+    Load trigger rules for a session from a JSON file.
 
     The file is keyed by session (``"host:port"``).  Each value is
-    an object with an ``"autoreplies"`` list.
+    an object with an ``"triggers"`` list.
 
-    :param path: Path to the autoreplies JSON file.
+    :param path: Path to the triggers JSON file.
     :param session_key: Session identifier (``"host:port"``).
-    :returns: List of :class:`AutoreplyRule` instances.
+    :returns: List of :class:`TriggerRule` instances.
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid or regex fails.
     """
@@ -288,18 +288,18 @@ def load_autoreplies(path: str, session_key: str) -> list[AutoreplyRule]:
         data: dict[str, typing.Any] = json.load(fh)
 
     session_data: dict[str, typing.Any] = data.get(session_key, {})
-    entries: list[dict[str, str]] = session_data.get("autoreplies", [])
+    entries: list[dict[str, str]] = session_data.get("triggers", [])
     return parse_entries(entries)
 
 
-def save_autoreplies(path: str, rules: list[AutoreplyRule], session_key: str) -> None:
+def save_triggers(path: str, rules: list[TriggerRule], session_key: str) -> None:
     """
-    Save autoreply rules for a session to a JSON file.
+    Save trigger rules for a session to a JSON file.
 
     Other sessions' data in the file is preserved.
 
-    :param path: Path to the autoreplies JSON file.
-    :param rules: List of :class:`AutoreplyRule` instances to save.
+    :param path: Path to the triggers JSON file.
+    :param rules: List of :class:`TriggerRule` instances to save.
     :param session_key: Session identifier (``"host:port"``).
     """
     data: dict[str, typing.Any] = {}
@@ -308,7 +308,7 @@ def save_autoreplies(path: str, rules: list[AutoreplyRule], session_key: str) ->
             data = json.load(fh)
 
     data[session_key] = {
-        "autoreplies": [
+        "triggers": [
             {
                 "pattern": r.pattern.pattern,
                 "reply": r.reply,
@@ -498,7 +498,7 @@ class SearchBuffer:
 
         Complete lines whose stripped content exactly matches an entry
         in *echo_filter* are silently dropped (and removed from the
-        set) so that echoed autoreply commands are never matched.
+        set) so that echoed trigger commands are never matched.
 
         :param text: Raw server output (may contain ANSI sequences).
         :param echo_filter: Set of sent command strings to suppress.
@@ -659,14 +659,14 @@ class ExclusiveState:
         self.rule_index = 0
 
 
-class AutoreplyEngine:
+class TriggerEngine:
     """
-    Matches server output against autoreply rules and queues replies.
+    Matches server output against trigger rules and queues replies.
 
     Replies are chained sequentially: if reply A has a 5s delay, reply B
     waits for A to complete before starting.
 
-    :param rules: Autoreply rules to match against.
+    :param rules: Trigger rules to match against.
     :param ctx: Session context (provides writer for sending and GMCP data).
     :param log: Logger instance.
     :param max_lines: SearchBuffer capacity.
@@ -674,7 +674,7 @@ class AutoreplyEngine:
 
     def __init__(
         self,
-        rules: list[AutoreplyRule],
+        rules: list[TriggerRule],
         ctx: "TelixSessionContext",
         log: logging.Logger,
         max_lines: int = 100,
@@ -682,7 +682,7 @@ class AutoreplyEngine:
         echo_fn: Callable[[str], None] | None = None,
         wait_fn: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
-        """Initialize AutoreplyEngine with rules and I/O handles."""
+        """Initialize TriggerEngine with rules and I/O handles."""
         self.rules = rules
         self.ctx = ctx
         self.log = log
@@ -843,7 +843,7 @@ class AutoreplyEngine:
                         ok, desc = check_condition(rule.when, self.ctx)
                         if not ok:
                             self.log.info(
-                                "autoreply: %s #%d skipped, condition failed: %s", log_prefix, rule_idx + 1, desc
+                                "trigger: %s #%d skipped, condition failed: %s", log_prefix, rule_idx + 1, desc
                             )
                             self.condition_failed = (rule_idx + 1, desc)
                             self.condition_blocked.add(rule_idx)
@@ -852,8 +852,8 @@ class AutoreplyEngine:
                     self._cycle_matched.add(rule_idx)
                     self._buffer.advance_match(match.start(), len(match.group(0)))
                     rule.last_fired = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    if hasattr(self.ctx, "mark_autoreplies_dirty"):
-                        self.ctx.mark_autoreplies_dirty()
+                    if hasattr(self.ctx, "mark_triggers_dirty"):
+                        self.ctx.mark_triggers_dirty()
                     reply = substitute_groups(rule.reply, match)
                     self.queue_reply(reply)
                     if not immediate_only:
@@ -879,8 +879,8 @@ class AutoreplyEngine:
                 self._cycle_matched.add(rule_idx)
                 self._buffer.advance_match(match.start(), len(match.group(0)))
                 rule.last_fired = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                if hasattr(self.ctx, "mark_autoreplies_dirty"):
-                    self.ctx.mark_autoreplies_dirty()
+                if hasattr(self.ctx, "mark_triggers_dirty"):
+                    self.ctx.mark_triggers_dirty()
                 reply = substitute_groups(rule.reply, match)
                 self.queue_reply(reply)
 
@@ -935,7 +935,7 @@ class AutoreplyEngine:
         expanded = client_repl_commands.expand_commands_ex(reply_text)
         writer = self.ctx.writer
         mask_send = writer is not None and getattr(writer, "will_echo", False)
-        activity_cb = getattr(self.ctx, "on_autoreply_activity", None)
+        activity_cb = getattr(self.ctx, "on_trigger_activity", None)
 
         hooks = client_repl_commands.DispatchHooks(
             ctx=self.ctx,
@@ -973,12 +973,12 @@ class AutoreplyEngine:
             m = KILL_RE.match(cmd)
             if m:
                 consider_cmd = f"consider {m.group(1)}"
-                self.log.info("autoreply: injecting %r before %r", consider_cmd, cmd)
+                self.log.info("trigger: injecting %r before %r", consider_cmd, cmd)
                 if self.echo_fn is not None:
                     self.echo_fn(consider_cmd)
                 assert self.ctx.writer is not None
                 self.ctx.writer.write(consider_cmd + "\r\n")
-        self.log.info("autoreply: sending %r", cmd)
+        self.log.info("trigger: sending %r", cmd)
         self.sent_commands.add(cmd.strip())
         if len(self.sent_commands) > self.sent_commands_max:
             self.sent_commands.clear()

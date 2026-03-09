@@ -41,10 +41,10 @@ Macros
 .. include:: ../telix/help/macros.md
    :parser: myst_parser.sphinx_
 
-Autoreplies
+Triggers
 -----------
 
-.. include:: ../telix/help/autoreplies.md
+.. include:: ../telix/help/triggers.md
    :parser: myst_parser.sphinx_
 
 Highlights

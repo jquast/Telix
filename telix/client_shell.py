@@ -4,7 +4,7 @@ Telix client shell -- wraps telnetlib3's terminal handling with REPL support.
 Provides :func:`telix_client_shell`, a drop-in replacement for
 :func:`telnetlib3.client_shell.telnet_client_shell` that creates a
 :class:`~telix.session_context.SessionContext`, loads per-session configs
-(macros, autoreplies, highlights, chat, rooms), and alternates between
+(macros, triggers, highlights, chat, rooms), and alternates between
 REPL and raw event loops based on telnet negotiation state.
 
 Also provides :func:`ws_client_shell` for WebSocket connections using
@@ -35,7 +35,7 @@ from . import (
     paths,
     rooms,
     macros,
-    autoreply,
+    trigger,
     client_repl,
     highlighter,
     progressbars,
@@ -53,7 +53,7 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     """
     Create config/data directories and load all per-session config files into *ctx*.
 
-    Handles macros, autoreplies, highlights, progress bars, GMCP snapshot, chat, rooms, and history.  Missing files are
+    Handles macros, triggers, highlights, progress bars, GMCP snapshot, chat, rooms, and history.  Missing files are
     silently skipped so first-time connections start with empty defaults.
 
     :param ctx: Session context to populate.
@@ -74,10 +74,10 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
         if seq is not None:
             ctx.keyboard_escape = seq
 
-    autoreplies_path = os.path.join(config_dir, "autoreplies.json")
-    ctx.autoreplies_file = autoreplies_path
-    if os.path.isfile(autoreplies_path):
-        ctx.autoreply_rules = autoreply.load_autoreplies(autoreplies_path, ctx.session_key)
+    triggers_path = os.path.join(config_dir, "triggers.json")
+    ctx.triggers_file = triggers_path
+    if os.path.isfile(triggers_path):
+        ctx.trigger_rules = trigger.load_triggers(triggers_path, ctx.session_key)
 
     highlights_path = os.path.join(config_dir, "highlights.json")
     ctx.highlights_file = highlights_path
@@ -386,7 +386,7 @@ async def telix_client_shell(
         stdout = await tty_shell.make_stdout()  # pylint: disable=no-member
         tty_shell.setup_winch()
 
-        # EOR/GA-based command pacing for raw-mode autoreplies.
+        # EOR/GA-based command pacing for raw-mode triggers.
         prompt_ready_raw = asyncio.Event()
         prompt_ready_raw.set()
         ga_detected_raw = False
@@ -395,7 +395,7 @@ async def telix_client_shell(
             nonlocal ga_detected_raw
             ga_detected_raw = True
             prompt_ready_raw.set()
-            ar = ctx.autoreply_engine
+            ar = ctx.trigger_engine
             if ar is not None:
                 ar.on_prompt()
 
@@ -411,6 +411,7 @@ async def telix_client_shell(
                 pass
             prompt_ready_raw.clear()
 
+        ctx.trigger_wait_fn = wait_for_prompt_raw
         ctx.autoreply_wait_fn = wait_for_prompt_raw
 
         escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)

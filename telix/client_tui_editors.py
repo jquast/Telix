@@ -2,9 +2,9 @@
 Standalone entry points for the Textual TUI editor panes.
 
 Contains the ``invert_ts`` helper and ``main()`` launcher functions for
-macros, autoreplies, highlights, progress bars, help, and theme editing.
+macros, triggers, highlights, progress bars, help, and theme editing.
 The concrete editor panes live in their own modules:
-``client_tui_macros``, ``client_tui_autoreplies``, ``client_tui_highlights``,
+``client_tui_macros``, ``client_tui_triggers``, ``client_tui_highlights``,
 and ``client_tui_bars``.
 """
 
@@ -13,7 +13,7 @@ from . import client_tui_base
 from .client_tui_bars import ThemeEditPane, ProgressBarTuple, ProgressBarEditPane, ProgressBarEditScreen  # noqa: F401
 from .client_tui_macros import MacroEditPane, MacroEditScreen  # noqa: F401
 from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen  # noqa: F401
-from .client_tui_autoreplies import AutoreplyTuple, AutoreplyEditPane, AutoreplyEditScreen  # noqa: F401
+from .client_tui_triggers import TriggerTuple, TriggerEditPane, TriggerEditScreen  # noqa: F401
 
 __all__ = [
     "ThemeEditPane",
@@ -25,9 +25,9 @@ __all__ = [
     "HighlightTuple",
     "HighlightEditPane",
     "HighlightEditScreen",
-    "AutoreplyTuple",
-    "AutoreplyEditPane",
-    "AutoreplyEditScreen",
+    "TriggerTuple",
+    "TriggerEditPane",
+    "TriggerEditScreen",
     "invert_ts",
 ]
 
@@ -55,12 +55,12 @@ def edit_macros_main(
     )
 
 
-def edit_autoreplies_main(
+def edit_triggers_main(
     path: str, session_key: str = "", select_pattern: str = "", gmcp_snapshot_path: str = "", logfile: str = ""
 ) -> None:
-    """Launch standalone autoreply editor TUI."""
+    """Launch standalone trigger editor TUI."""
     client_tui_base.launch_editor(
-        AutoreplyEditScreen(
+        TriggerEditScreen(
             path=path, session_key=session_key, select_pattern=select_pattern, gmcp_snapshot_path=gmcp_snapshot_path
         ),
         session_key=session_key,

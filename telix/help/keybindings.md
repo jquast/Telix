@@ -11,8 +11,8 @@ macro editor (Alt + M).
 | **Alt + H** | Edit highlights (TUI editor) |
 | **Alt + Shift + H** | Toggle highlights on/off |
 | **Alt + M** | Edit macros (TUI editor) |
-| **Alt + A** | Edit autoreplies (TUI editor) |
-| **Alt + Shift + A** | Toggle autoreplies on/off |
+| **Alt + A** | Edit triggers (TUI editor) |
+| **Alt + Shift + A** | Toggle triggers on/off |
 | **Alt + C** | Chat viewer / captures |
 | **Alt + B** | Edit progress bars (TUI editor) |
 | **Alt + T** | Edit theme |
@@ -54,5 +54,5 @@ sends "get all", waits for the prompt, then sends "drop sword".
 A repeat prefix like `3n;2e` expands to `n;n;n;e;e`.
 
 See the **Command Syntax** section (press F1 inside the macro or
-autoreply editor) for the full reference on backtick commands,
+trigger editor) for the full reference on backtick commands,
 condition gates, travel, and more.

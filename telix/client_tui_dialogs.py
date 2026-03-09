@@ -49,7 +49,7 @@ EDITOR_TABS: list[tuple[str, str]] = [
     ("Highlights", "highlights"),
     ("Rooms", "rooms"),
     ("Macros", "macros"),
-    ("Autoreplies", "autoreplies"),
+    ("Triggers", "triggers"),
     ("Chats", "captures"),
     ("Bars", "bars"),
     ("Theme", "theme"),
@@ -152,10 +152,10 @@ class TabbedEditorScreen(textual.screen.Screen[None]):
                 "current_room_file": "current_room_file",
             },
         ),
-        "autoreplies": (
-            client_tui_editors.AutoreplyEditPane,
+        "triggers": (
+            client_tui_editors.TriggerEditPane,
             {
-                "path": "autoreplies_file",
+                "path": "triggers_file",
                 "session_key": "session_key",
                 "select_pattern": "select_pattern",
                 "gmcp_snapshot_path": "gmcp_snapshot_file",
@@ -516,7 +516,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         default_auto_search: bool = False,
         default_auto_evaluate: bool = False,
         default_auto_survey: bool = False,
-        default_autoreplies: bool = True,
+        default_triggers: bool = True,
     ) -> None:
         super().__init__()
         self.result_file = result_file
@@ -524,7 +524,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         self.default_auto_search = default_auto_search
         self.default_auto_evaluate = default_auto_evaluate
         self.default_auto_survey = default_auto_survey
-        self.default_autoreplies = default_autoreplies
+        self.default_triggers = default_triggers
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Vertical(id="rw-dialog"):
@@ -534,7 +534,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                 "random exits, "
                 "preferring unvisited rooms. It never "
                 "returns through "
-                "the entrance you came from. Autoreplies "
+                "the entrance you came from. Triggers "
                 "fire in each "
                 "room. Stops when all reachable rooms are "
                 "visited the "
@@ -566,7 +566,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                         yield textual.widgets.Switch(
                             value=(self.default_auto_evaluate),
                             id="rw-auto-consider",
-                            disabled=(not self.default_autoreplies),
+                            disabled=(not self.default_triggers),
                         )
                 with textual.containers.Horizontal(classes="rw-switch-row"):
                     with textual.containers.Horizontal(classes="rw-switch-cell"):
@@ -574,11 +574,11 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                         yield textual.widgets.Switch(
                             value=(self.default_auto_survey),
                             id="rw-auto-survey",
-                            disabled=(not self.default_autoreplies),
+                            disabled=(not self.default_triggers),
                         )
                     with textual.containers.Horizontal(classes="rw-switch-cell"):
-                        yield textual.widgets.Label("Autoreplies:")
-                        yield textual.widgets.Switch(value=(self.default_autoreplies), id="rw-autoreplies")
+                        yield textual.widgets.Label("Triggers:")
+                        yield textual.widgets.Switch(value=(self.default_triggers), id="rw-triggers")
             yield textual.widgets.Static("", id="rw-error")
             with textual.containers.Horizontal(id="rw-buttons"):
                 yield textual.widgets.Button("Help", variant="primary", id="rw-help")
@@ -594,8 +594,8 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         self.app.push_screen(client_tui_base.CommandHelpScreen(topic="room-mapping"))
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
-        """Disable consider/survey switches when autoreplies is OFF."""
-        if event.switch.id == "rw-autoreplies":
+        """Disable consider/survey switches when triggers is OFF."""
+        if event.switch.id == "rw-triggers":
             self.query_one("#rw-auto-consider", textual.widgets.Switch).disabled = not event.value
             self.query_one("#rw-auto-survey", textual.widgets.Switch).disabled = not event.value
 
@@ -612,8 +612,8 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         auto_search = self.query_one("#rw-auto-search", textual.widgets.Switch).value
         auto_evaluate = self.query_one("#rw-auto-consider", textual.widgets.Switch).value
         auto_survey = self.query_one("#rw-auto-survey", textual.widgets.Switch).value
-        autoreplies = self.query_one("#rw-autoreplies", textual.widgets.Switch).value
-        self.write_result(True, level, auto_search, auto_evaluate, auto_survey, autoreplies)
+        triggers = self.query_one("#rw-triggers", textual.widgets.Switch).value
+        self.write_result(True, level, auto_search, auto_evaluate, auto_survey, triggers)
         self.dismiss(True)
 
     def on_button_pressed(self, event: textual.widgets.Button.Pressed) -> None:
@@ -629,7 +629,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                 self.default_auto_search,
                 self.default_auto_evaluate,
                 self.default_auto_survey,
-                self.default_autoreplies,
+                self.default_triggers,
             )
             self.dismiss(False)
 
@@ -641,7 +641,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
             self.default_auto_search,
             self.default_auto_evaluate,
             self.default_auto_survey,
-            self.default_autoreplies,
+            self.default_triggers,
         )
         self.dismiss(False)
 
@@ -652,7 +652,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         auto_search: bool = False,
         auto_evaluate: bool = False,
         auto_survey: bool = False,
-        autoreplies: bool = True,
+        triggers: bool = True,
     ) -> None:
         if not self.result_file:
             return
@@ -663,7 +663,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
             cmd += " autoevaluate"
         if auto_survey:
             cmd += " autosurvey"
-        if not autoreplies:
+        if not triggers:
             cmd += " noreply"
         cmd += "`"
         result = json.dumps(
@@ -673,7 +673,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                 "auto_search": auto_search,
                 "auto_evaluate": auto_evaluate,
                 "auto_survey": auto_survey,
-                "autoreplies": autoreplies,
+                "triggers": triggers,
                 "command": cmd,
             }
         )
@@ -687,7 +687,7 @@ def run_randomwalk_dialog(
     default_auto_search: bool = False,
     default_auto_evaluate: bool = False,
     default_auto_survey: bool = False,
-    default_autoreplies: bool = True,
+    default_triggers: bool = True,
 ) -> None:
     """
     Launch the random walk dialog in the current (worker) thread.
@@ -697,7 +697,7 @@ def run_randomwalk_dialog(
     :param default_auto_search: Initial auto-search toggle state.
     :param default_auto_evaluate: Initial auto-evaluate toggle state.
     :param default_auto_survey: Initial auto-survey toggle state.
-    :param default_autoreplies: Initial autoreplies toggle state.
+    :param default_triggers: Initial triggers toggle state.
     """
     client_tui_base.launch_editor_in_thread(
         RandomwalkDialogScreen(
@@ -706,7 +706,7 @@ def run_randomwalk_dialog(
             default_auto_search=default_auto_search,
             default_auto_evaluate=default_auto_evaluate,
             default_auto_survey=default_auto_survey,
-            default_autoreplies=default_autoreplies,
+            default_triggers=default_triggers,
         )
     )
 
@@ -717,7 +717,7 @@ def randomwalk_dialog_main(
     default_auto_search: str = "0",
     default_auto_evaluate: str = "0",
     default_auto_survey: str = "0",
-    default_autoreplies: str = "1",
+    default_triggers: str = "1",
     logfile: str = "",
 ) -> None:
     """Launch standalone random walk dialog TUI."""
@@ -730,7 +730,7 @@ def randomwalk_dialog_main(
         default_auto_search=(default_auto_search == "1"),
         default_auto_evaluate=(default_auto_evaluate == "1"),
         default_auto_survey=(default_auto_survey == "1"),
-        default_autoreplies=(default_autoreplies == "1"),
+        default_triggers=(default_triggers == "1"),
     )
     app = client_tui_base.EditorApp(screen)  # type: ignore[arg-type]
     app.run()
@@ -817,7 +817,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         default_auto_search: bool = False,
         default_auto_evaluate: bool = False,
         default_auto_survey: bool = False,
-        default_autoreplies: bool = True,
+        default_triggers: bool = True,
     ) -> None:
         super().__init__()
         self.result_file = result_file
@@ -825,7 +825,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         self.default_auto_search = default_auto_search
         self.default_auto_evaluate = default_auto_evaluate
         self.default_auto_survey = default_auto_survey
-        self.default_autoreplies = default_autoreplies
+        self.default_triggers = default_triggers
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Vertical(id="ad-dialog"):
@@ -868,7 +868,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
                         yield textual.widgets.Switch(
                             value=(self.default_auto_evaluate),
                             id="ad-auto-consider",
-                            disabled=(not self.default_autoreplies),
+                            disabled=(not self.default_triggers),
                         )
                 with textual.containers.Horizontal(classes="ad-switch-row"):
                     with textual.containers.Horizontal(classes="ad-switch-cell"):
@@ -876,11 +876,11 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
                         yield textual.widgets.Switch(
                             value=(self.default_auto_survey),
                             id="ad-auto-survey",
-                            disabled=(not self.default_autoreplies),
+                            disabled=(not self.default_triggers),
                         )
                     with textual.containers.Horizontal(classes="ad-switch-cell"):
-                        yield textual.widgets.Label("Autoreplies:")
-                        yield textual.widgets.Switch(value=(self.default_autoreplies), id="ad-autoreplies")
+                        yield textual.widgets.Label("Triggers:")
+                        yield textual.widgets.Switch(value=(self.default_triggers), id="ad-triggers")
             with textual.containers.Horizontal(id="ad-buttons"):
                 yield textual.widgets.Button("Help", variant="primary", id="ad-help")
                 yield textual.widgets.Button("Cancel", variant="error", id="ad-cancel")
@@ -901,8 +901,8 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         return "bfs"
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
-        """Disable consider/survey switches when autoreplies is OFF."""
-        if event.switch.id == "ad-autoreplies":
+        """Disable consider/survey switches when triggers is OFF."""
+        if event.switch.id == "ad-triggers":
             self.query_one("#ad-auto-consider", textual.widgets.Switch).disabled = not event.value
             self.query_one("#ad-auto-survey", textual.widgets.Switch).disabled = not event.value
 
@@ -914,8 +914,8 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
             auto_search = self.query_one("#ad-auto-search", textual.widgets.Switch).value
             auto_evaluate = self.query_one("#ad-auto-consider", textual.widgets.Switch).value
             auto_survey = self.query_one("#ad-auto-survey", textual.widgets.Switch).value
-            autoreplies = self.query_one("#ad-autoreplies", textual.widgets.Switch).value
-            self.write_result(True, self.get_strategy(), auto_search, auto_evaluate, auto_survey, autoreplies)
+            triggers = self.query_one("#ad-triggers", textual.widgets.Switch).value
+            self.write_result(True, self.get_strategy(), auto_search, auto_evaluate, auto_survey, triggers)
             self.dismiss(True)
         elif event.button.id == "ad-cancel":
             self.write_result(
@@ -924,7 +924,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
                 self.default_auto_search,
                 self.default_auto_evaluate,
                 self.default_auto_survey,
-                self.default_autoreplies,
+                self.default_triggers,
             )
             self.dismiss(False)
 
@@ -936,7 +936,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
             self.default_auto_search,
             self.default_auto_evaluate,
             self.default_auto_survey,
-            self.default_autoreplies,
+            self.default_triggers,
         )
         self.dismiss(False)
 
@@ -947,7 +947,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         auto_search: bool = False,
         auto_evaluate: bool = False,
         auto_survey: bool = False,
-        autoreplies: bool = True,
+        triggers: bool = True,
     ) -> None:
         """Write result JSON to disk for the parent process."""
         if not self.result_file:
@@ -959,7 +959,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
             cmd += " autoevaluate"
         if auto_survey:
             cmd += " autosurvey"
-        if not autoreplies:
+        if not triggers:
             cmd += " noreply"
         cmd += "`"
         result = json.dumps(
@@ -969,7 +969,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
                 "auto_search": auto_search,
                 "auto_evaluate": auto_evaluate,
                 "auto_survey": auto_survey,
-                "autoreplies": autoreplies,
+                "triggers": triggers,
                 "command": cmd,
             }
         )
@@ -983,7 +983,7 @@ def run_autodiscover_dialog(
     default_auto_search: bool = False,
     default_auto_evaluate: bool = False,
     default_auto_survey: bool = False,
-    default_autoreplies: bool = True,
+    default_triggers: bool = True,
 ) -> None:
     """
     Launch the autodiscover dialog in the current (worker) thread.
@@ -993,7 +993,7 @@ def run_autodiscover_dialog(
     :param default_auto_search: Initial auto-search toggle state.
     :param default_auto_evaluate: Initial auto-evaluate toggle state.
     :param default_auto_survey: Initial auto-survey toggle state.
-    :param default_autoreplies: Initial autoreplies toggle state.
+    :param default_triggers: Initial triggers toggle state.
     """
     client_tui_base.launch_editor_in_thread(
         AutodiscoverDialogScreen(
@@ -1002,7 +1002,7 @@ def run_autodiscover_dialog(
             default_auto_search=default_auto_search,
             default_auto_evaluate=default_auto_evaluate,
             default_auto_survey=default_auto_survey,
-            default_autoreplies=default_autoreplies,
+            default_triggers=default_triggers,
         )
     )
 
@@ -1013,7 +1013,7 @@ def autodiscover_dialog_main(
     default_auto_search: str = "0",
     default_auto_evaluate: str = "0",
     default_auto_survey: str = "0",
-    default_autoreplies: str = "1",
+    default_triggers: str = "1",
     logfile: str = "",
 ) -> None:
     """Launch standalone autodiscover dialog TUI."""
@@ -1026,7 +1026,7 @@ def autodiscover_dialog_main(
         default_auto_search=(default_auto_search == "1"),
         default_auto_evaluate=(default_auto_evaluate == "1"),
         default_auto_survey=(default_auto_survey == "1"),
-        default_autoreplies=(default_autoreplies == "1"),
+        default_triggers=(default_triggers == "1"),
     )
     app = client_tui_base.EditorApp(screen)  # type: ignore[arg-type]
     app.run()

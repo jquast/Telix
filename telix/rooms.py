@@ -565,7 +565,7 @@ def write_fasttravel(path: str, steps: list[tuple[str, str]], noreply: bool = Fa
 
     :param path: File path.
     :param steps: List of (direction, expected_room_num) pairs.
-    :param noreply: If ``True``, disable autoreplies during travel.
+    :param noreply: If ``True``, disable triggers during travel.
     """
     data = {"steps": steps, "noreply": noreply}
     paths.atomic_write(path, json.dumps(data))
@@ -578,7 +578,7 @@ def read_fasttravel(path: str) -> tuple[list[tuple[str, str]], bool]:
     :param path: File path written by :func:`write_fasttravel`.
     :returns: Tuple of ``(steps, noreply)`` where *steps* is a list of
         ``(direction, expected_room_num)`` pairs and *noreply* indicates
-        whether autoreplies should be disabled.
+        whether triggers should be disabled.
     """
     try:
         with open(path, encoding="utf-8") as f:

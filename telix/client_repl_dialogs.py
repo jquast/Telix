@@ -24,7 +24,7 @@ from .rooms import rooms_path as rooms_path_fn
 from .rooms import fasttravel_path as fasttravel_path_fn
 from .rooms import current_room_path as current_room_path_fn
 from .macros import load_macros
-from .autoreply import load_autoreplies
+from .trigger import load_triggers
 from .repl_theme import invalidate_cache as invalidate_theme_cache
 from .highlighter import load_highlights
 from .progressbars import load_progressbars
@@ -200,14 +200,14 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
     default_auto_search = False
     default_auto_evaluate = False
     default_auto_survey = False
-    default_autoreplies = True
+    default_triggers = True
     if session_key:
         prefs = load_prefs(session_key)
         default_visit_level = int(prefs.get("randomwalk_visit_level", 2))
         default_auto_search = bool(prefs.get("randomwalk_auto_search", False))
         default_auto_evaluate = bool(prefs.get("randomwalk_auto_evaluate", False))
         default_auto_survey = bool(prefs.get("randomwalk_auto_survey", False))
-        default_autoreplies = bool(prefs.get("randomwalk_autoreplies", True))
+        default_triggers = bool(prefs.get("randomwalk_triggers", True))
 
     from . import client_tui_dialogs
 
@@ -223,7 +223,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             default_auto_search,
             default_auto_evaluate,
             default_auto_survey,
-            default_autoreplies,
+            default_triggers,
         ),
         replay_buf=replay_buf,
     )
@@ -241,7 +241,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             save_data["randomwalk_auto_search"] = bool(data.get("auto_search", default_auto_search))
             save_data["randomwalk_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
             save_data["randomwalk_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
-            save_data["randomwalk_autoreplies"] = bool(data.get("autoreplies", default_autoreplies))
+            save_data["randomwalk_triggers"] = bool(data.get("triggers", default_triggers))
             save_prefs(session_key, save_data)
         return str(data.get("command", f"`randomwalk 999 {default_visit_level}`"))
     finally:
@@ -267,7 +267,7 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
     default_auto_search = False
     default_auto_evaluate = False
     default_auto_survey = False
-    default_autoreplies = True
+    default_triggers = True
     if session_key:
         prefs = load_prefs(session_key)
         saved = prefs.get("autodiscover_strategy", "bfs")
@@ -276,7 +276,7 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
         default_auto_search = bool(prefs.get("autodiscover_auto_search", False))
         default_auto_evaluate = bool(prefs.get("autodiscover_auto_evaluate", False))
         default_auto_survey = bool(prefs.get("autodiscover_auto_survey", False))
-        default_autoreplies = bool(prefs.get("autodiscover_autoreplies", True))
+        default_triggers = bool(prefs.get("autodiscover_triggers", True))
 
     from . import client_tui_dialogs
 
@@ -292,7 +292,7 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
             default_auto_search,
             default_auto_evaluate,
             default_auto_survey,
-            default_autoreplies,
+            default_triggers,
         ),
         replay_buf=replay_buf,
     )
@@ -308,7 +308,7 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
             save_data["autodiscover_auto_search"] = bool(data.get("auto_search", default_auto_search))
             save_data["autodiscover_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
             save_data["autodiscover_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
-            save_data["autodiscover_autoreplies"] = bool(data.get("autoreplies", default_autoreplies))
+            save_data["autodiscover_triggers"] = bool(data.get("triggers", default_triggers))
             save_prefs(session_key, save_data)
         return str(data.get("command", f"`autodiscover {default_strategy}`"))
     finally:
@@ -416,7 +416,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     # -- Gather all pane parameters --
     highlights_file = ctx.highlights_file or os.path.join(config_dir, "highlights.json")
     macros_file = ctx.macros_file or os.path.join(config_dir, "macros.json")
-    autoreplies_file = ctx.autoreplies_file or os.path.join(config_dir, "autoreplies.json")
+    triggers_file = ctx.triggers_file or os.path.join(config_dir, "triggers.json")
     progressbars_file = ctx.progressbars_file or os.path.join(config_dir, "progressbars.json")
     rooms_file = ctx.rooms_file or rooms_path_fn(session_key)
     current_room_file = ctx.current_room_file or current_room_path_fn(session_key)
@@ -428,8 +428,8 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
         save_gmcp_snapshot(gmcp_snapshot_file, session_key, ctx.gmcp_data)
         ctx.gmcp_dirty = False
 
-    # Autoreply select pattern.
-    engine = ctx.autoreply_engine
+    # Trigger select pattern.
+    engine = ctx.trigger_engine
     select_pattern = getattr(engine, "last_matched_pattern", "") if engine else ""
 
     # Chat / capture data.
@@ -451,7 +451,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
         "session_key": session_key,
         "highlights_file": highlights_file,
         "macros_file": macros_file,
-        "autoreplies_file": autoreplies_file,
+        "triggers_file": triggers_file,
         "progressbars_file": progressbars_file,
         "rooms_file": rooms_file,
         "current_room_file": current_room_file,
@@ -480,7 +480,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     # Reload all configs that may have been modified.
     reload_macros(ctx, macros_file, session_key, log)
     reload_highlights(ctx, highlights_file, session_key, log)
-    reload_autoreplies(ctx, autoreplies_file, session_key, log)
+    reload_triggers(ctx, triggers_file, session_key, log)
     reload_progressbars(ctx, progressbars_file, session_key, log)
 
     # Rebuild REPL color styles in case the theme was changed.
@@ -510,9 +510,9 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
 
 def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: Any | None = None) -> None:
     """
-    Launch a TUI editor for macros or autoreplies in a subprocess.
+    Launch a TUI editor for macros or triggers in a subprocess.
 
-    :param editor_type: ``"macros"``, ``"autoreplies"``, or ``"highlights"``.
+    :param editor_type: ``"macros"``, ``"triggers"``, or ``"highlights"``.
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """
@@ -546,15 +546,15 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
             session_key=session_key,
         )
     else:
-        path = ctx.autoreplies_file or os.path.join(config_dir, "autoreplies.json")
+        path = ctx.triggers_file or os.path.join(config_dir, "triggers.json")
         snap = ctx.gmcp_snapshot_file or ""
         if snap and ctx.gmcp_data:
             save_gmcp_snapshot(snap, session_key, ctx.gmcp_data)
             ctx.gmcp_dirty = False
-        engine = ctx.autoreply_engine
+        engine = ctx.trigger_engine
         select = getattr(engine, "last_matched_pattern", "") if engine else ""
         target = lambda: client_tui_base.launch_editor_in_thread(  # noqa: E731
-            client_tui_editors.AutoreplyEditScreen(
+            client_tui_editors.TriggerEditScreen(
                 path=path, session_key=session_key, select_pattern=select, gmcp_snapshot_path=snap
             ),
             session_key=session_key,
@@ -584,7 +584,7 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
     elif editor_type == "progressbars":
         reload_progressbars(ctx, path, session_key, log)
     else:
-        reload_autoreplies(ctx, path, session_key, log)
+        reload_triggers(ctx, path, session_key, log)
 
 
 def reload_macros(ctx: "TelixSessionContext", path: str, session_key: str, log: logging.Logger) -> None:
@@ -603,17 +603,17 @@ def reload_macros(ctx: "TelixSessionContext", path: str, session_key: str, log: 
         log.warning("failed to reload macros: %s", exc)
 
 
-def reload_autoreplies(ctx: "TelixSessionContext", path: str, session_key: str, log: logging.Logger) -> None:
-    """Reload autoreply rules from disk after editing."""
+def reload_triggers(ctx: "TelixSessionContext", path: str, session_key: str, log: logging.Logger) -> None:
+    """Reload trigger rules from disk after editing."""
     if not os.path.exists(path):
         return
     try:
-        ctx.autoreply_rules = load_autoreplies(path, session_key)
-        ctx.autoreplies_file = path
-        n_rules = len(ctx.autoreply_rules)
-        log.info("reloaded %d autoreplies from %s", n_rules, path)
+        ctx.trigger_rules = load_triggers(path, session_key)
+        ctx.triggers_file = path
+        n_rules = len(ctx.trigger_rules)
+        log.info("reloaded %d triggers from %s", n_rules, path)
     except ValueError as exc:
-        log.warning("failed to reload autoreplies: %s", exc)
+        log.warning("failed to reload triggers: %s", exc)
 
 
 def reload_progressbars(ctx: "TelixSessionContext", path: str, session_key: str, log: logging.Logger) -> None:

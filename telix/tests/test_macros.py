@@ -302,7 +302,7 @@ def test_repl_action_re(cmd, expected):
     [
         ("`edit macros`", "macros"),
         ("`edit highlights`", "highlights"),
-        ("`edit autoreplies`", "autoreplies"),
+        ("`edit triggers`", "triggers"),
         ("`edit rooms`", "rooms"),
         ("`edit captures`", "captures"),
         ("`edit bars`", "bars"),
@@ -320,7 +320,7 @@ def test_edit_re(cmd, expected_tab):
     "cmd, expected_name",
     [
         ("`toggle highlights`", "highlights"),
-        ("`toggle autoreplies`", "autoreplies"),
+        ("`toggle triggers`", "triggers"),
         ("`Toggle Highlights`", "highlights"),
     ],
 )

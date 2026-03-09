@@ -397,7 +397,7 @@ class ScriptContext:
         :param poll_interval: Seconds between polls.
         :returns: ``True`` when condition is met.
         """
-        from . import autoreply as ar_mod
+        from . import trigger as ar_mod
 
         cond = {key: f"{op}{threshold}"}
         while True:
@@ -410,7 +410,7 @@ class ScriptContext:
         """
         Write *text* to the terminal scroll region (cyan).
 
-        Uses the same echo mechanism as autoreply notifications.
+        Uses the same echo mechanism as trigger notifications.
 
         :param text: Text to display.
         """

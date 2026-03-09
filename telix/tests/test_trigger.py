@@ -1,4 +1,4 @@
-"""Tests for telix.autoreply module."""
+"""Tests for telix.trigger module."""
 
 from __future__ import annotations
 
@@ -13,16 +13,16 @@ import logging
 import pytest
 
 # local
-from telix.autoreply import (
+from telix.trigger import (
     SearchBuffer,
-    AutoreplyRule,
+    TriggerRule,
     ExclusiveState,
-    AutoreplyEngine,
+    TriggerEngine,
     compare,
     parse_entries,
     check_condition,
-    load_autoreplies,
-    save_autoreplies,
+    load_triggers,
+    save_triggers,
     substitute_groups,
     resolve_group_value,
     extract_group_source,
@@ -138,13 +138,13 @@ def test_search_buffer_advance_match():
 SK = "test.host:23"
 
 
-def test_load_autoreplies_valid(tmp_path):
-    fp = tmp_path / "autoreplies.json"
+def test_load_triggers_valid(tmp_path):
+    fp = tmp_path / "triggers.json"
     fp.write_text(
         json.dumps(
             {
                 SK: {
-                    "autoreplies": [
+                    "triggers": [
                         {"pattern": r"\d+ gold", "reply": "get gold;"},
                         {"pattern": r"(\w+) attacks", "reply": "kill \\1;"},
                     ]
@@ -152,81 +152,81 @@ def test_load_autoreplies_valid(tmp_path):
             }
         )
     )
-    rules = load_autoreplies(str(fp), SK)
+    rules = load_triggers(str(fp), SK)
     assert len(rules) == 2
     assert rules[0].pattern.pattern == r"\d+ gold"
     assert rules[0].reply == "get gold;"
     assert rules[1].reply == "kill \\1;"
 
 
-def test_load_autoreplies_missing_file():
+def test_load_triggers_missing_file():
     with pytest.raises(FileNotFoundError):
-        load_autoreplies("/nonexistent/path.json", SK)
+        load_triggers("/nonexistent/path.json", SK)
 
 
-def test_load_autoreplies_invalid_regex(tmp_path):
+def test_load_triggers_invalid_regex(tmp_path):
     fp = tmp_path / "bad.json"
-    fp.write_text(json.dumps({SK: {"autoreplies": [{"pattern": "[invalid", "reply": "x"}]}}))
-    with pytest.raises(ValueError, match="Invalid autoreply pattern"):
-        load_autoreplies(str(fp), SK)
+    fp.write_text(json.dumps({SK: {"triggers": [{"pattern": "[invalid", "reply": "x"}]}}))
+    with pytest.raises(ValueError, match="Invalid trigger pattern"):
+        load_triggers(str(fp), SK)
 
 
-def test_load_autoreplies_empty_pattern_skipped(tmp_path):
+def test_load_triggers_empty_pattern_skipped(tmp_path):
     fp = tmp_path / "empty.json"
     fp.write_text(
-        json.dumps({SK: {"autoreplies": [{"pattern": "", "reply": "x"}, {"pattern": "valid", "reply": "y"}]}})
+        json.dumps({SK: {"triggers": [{"pattern": "", "reply": "x"}, {"pattern": "valid", "reply": "y"}]}})
     )
-    rules = load_autoreplies(str(fp), SK)
+    rules = load_triggers(str(fp), SK)
     assert len(rules) == 1
 
 
-def test_load_autoreplies_empty_list(tmp_path):
+def test_load_triggers_empty_list(tmp_path):
     fp = tmp_path / "empty.json"
-    fp.write_text(json.dumps({SK: {"autoreplies": []}}))
-    assert not load_autoreplies(str(fp), SK)
+    fp.write_text(json.dumps({SK: {"triggers": []}}))
+    assert not load_triggers(str(fp), SK)
 
 
-def test_load_autoreplies_no_session(tmp_path):
-    fp = tmp_path / "autoreplies.json"
-    fp.write_text(json.dumps({"other:23": {"autoreplies": [{"pattern": "x", "reply": "y"}]}}))
-    assert not load_autoreplies(str(fp), SK)
+def test_load_triggers_no_session(tmp_path):
+    fp = tmp_path / "triggers.json"
+    fp.write_text(json.dumps({"other:23": {"triggers": [{"pattern": "x", "reply": "y"}]}}))
+    assert not load_triggers(str(fp), SK)
 
 
-def test_save_autoreplies_roundtrip(tmp_path):
-    fp = tmp_path / "autoreplies.json"
+def test_save_triggers_roundtrip(tmp_path):
+    fp = tmp_path / "triggers.json"
     original = [
-        AutoreplyRule(pattern=re.compile(r"\d+ gold"), reply="get gold;"),
-        AutoreplyRule(pattern=re.compile(r"(\w+) attacks", re.MULTILINE | re.DOTALL), reply="kill \\1;"),
+        TriggerRule(pattern=re.compile(r"\d+ gold"), reply="get gold;"),
+        TriggerRule(pattern=re.compile(r"(\w+) attacks", re.MULTILINE | re.DOTALL), reply="kill \\1;"),
     ]
-    save_autoreplies(str(fp), original, SK)
-    loaded = load_autoreplies(str(fp), SK)
+    save_triggers(str(fp), original, SK)
+    loaded = load_triggers(str(fp), SK)
     assert len(loaded) == len(original)
     for orig, restored in zip(original, loaded, strict=False):
         assert orig.pattern.pattern == restored.pattern.pattern
         assert orig.reply == restored.reply
 
 
-def test_save_autoreplies_preserves_other_sessions(tmp_path):
-    fp = tmp_path / "autoreplies.json"
-    r1 = [AutoreplyRule(pattern=re.compile("a"), reply="b")]
-    r2 = [AutoreplyRule(pattern=re.compile("c"), reply="d")]
-    save_autoreplies(str(fp), r1, "host1:23")
-    save_autoreplies(str(fp), r2, "host2:23")
-    assert len(load_autoreplies(str(fp), "host1:23")) == 1
-    assert len(load_autoreplies(str(fp), "host2:23")) == 1
+def test_save_triggers_preserves_other_sessions(tmp_path):
+    fp = tmp_path / "triggers.json"
+    r1 = [TriggerRule(pattern=re.compile("a"), reply="b")]
+    r2 = [TriggerRule(pattern=re.compile("c"), reply="d")]
+    save_triggers(str(fp), r1, "host1:23")
+    save_triggers(str(fp), r2, "host2:23")
+    assert len(load_triggers(str(fp), "host1:23")) == 1
+    assert len(load_triggers(str(fp), "host2:23")) == 1
 
 
-def test_save_autoreplies_empty(tmp_path):
-    fp = tmp_path / "autoreplies.json"
-    save_autoreplies(str(fp), [], SK)
-    assert not load_autoreplies(str(fp), SK)
+def test_save_triggers_empty(tmp_path):
+    fp = tmp_path / "triggers.json"
+    save_triggers(str(fp), [], SK)
+    assert not load_triggers(str(fp), SK)
 
 
-def test_save_autoreplies_unicode(tmp_path):
-    fp = tmp_path / "autoreplies.json"
-    rules = [AutoreplyRule(pattern=re.compile("héllo"), reply="bonjour;")]
-    save_autoreplies(str(fp), rules, SK)
-    loaded = load_autoreplies(str(fp), SK)
+def test_save_triggers_unicode(tmp_path):
+    fp = tmp_path / "triggers.json"
+    rules = [TriggerRule(pattern=re.compile("héllo"), reply="bonjour;")]
+    save_triggers(str(fp), rules, SK)
+    loaded = load_triggers(str(fp), SK)
     assert loaded[0].pattern.pattern == "héllo"
     assert loaded[0].reply == "bonjour;"
 
@@ -349,10 +349,10 @@ def mock_writer():
         (r"trigger", 0, "`delay 0ms`;fast;", "trigger\n", ["fast\r\n"]),
     ],
 )
-async def test_autoreply_engine_feed_and_match(pattern, flags, reply, feed_text, expected):
+async def test_trigger_engine_feed_and_match(pattern, flags, reply, feed_text, expected):
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(pattern, flags), reply=reply)]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(pattern, flags), reply=reply)]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed(feed_text)
     await asyncio.sleep(0.05)
     for exp in expected:
@@ -360,10 +360,10 @@ async def test_autoreply_engine_feed_and_match(pattern, flags, reply, feed_text,
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_mud_prompt_without_newline():
+async def test_trigger_engine_mud_prompt_without_newline():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"What is your name\?"), reply="dingo;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"What is your name\?"), reply="dingo;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("Welcome to the Mini-MUD!\n")
     await asyncio.sleep(0.05)
     assert not any("dingo" in w for w in written)
@@ -373,10 +373,10 @@ async def test_autoreply_engine_mud_prompt_without_newline():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_no_double_trigger():
+async def test_trigger_engine_no_double_trigger():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"hello"), reply="world;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"hello"), reply="world;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("hello\n")
     await asyncio.sleep(0.05)
     count1 = len(written)
@@ -386,10 +386,10 @@ async def test_autoreply_engine_no_double_trigger():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_delay_execution():
+async def test_trigger_engine_delay_execution():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"trigger"), reply="`delay 10ms`;delayed;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"trigger"), reply="`delay 10ms`;delayed;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("trigger\n")
     await asyncio.sleep(0.005)
     assert not any("delayed" in w for w in written)
@@ -398,13 +398,13 @@ async def test_autoreply_engine_delay_execution():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_reply_chaining():
+async def test_trigger_engine_reply_chaining():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"alpha"), reply="`delay 20ms`;first;"),
-        AutoreplyRule(pattern=re.compile(r"beta"), reply="second;"),
+        TriggerRule(pattern=re.compile(r"alpha"), reply="`delay 20ms`;first;"),
+        TriggerRule(pattern=re.compile(r"beta"), reply="second;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("alpha\n")
     await asyncio.sleep(0.005)
     assert not any("first" in w for w in written)
@@ -417,10 +417,10 @@ async def test_autoreply_engine_reply_chaining():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_cancel():
+async def test_trigger_engine_cancel():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"slow"), reply="`delay 1s`;result;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"slow"), reply="`delay 1s`;result;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("slow\n")
     await asyncio.sleep(0.01)
     engine.cancel()
@@ -429,10 +429,10 @@ async def test_autoreply_engine_cancel():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_repeat_expansion():
+async def test_trigger_engine_repeat_expansion():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="3e;2n;look;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="3e;2n;look;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("go\n")
     await asyncio.sleep(0.05)
     e_count = sum(1 for w in written if "e\r\n" in w)
@@ -442,30 +442,30 @@ async def test_autoreply_engine_repeat_expansion():
     assert any("look\r\n" in w for w in written)
 
 
-def test_autoreply_engine_cancel_when_idle():
+def test_trigger_engine_cancel_when_idle():
     writer, _ = mock_writer()
-    engine = AutoreplyEngine([], writer, writer.log)
+    engine = TriggerEngine([], writer, writer.log)
     engine.cancel()
     assert engine.reply_chain is None
 
 
 def test_send_command_empty_string():
     writer, written = mock_writer()
-    engine = AutoreplyEngine([], writer, writer.log)
+    engine = TriggerEngine([], writer, writer.log)
     engine.send_command("")
     assert not written
 
 
 def test_send_command_whitespace_only():
     writer, written = mock_writer()
-    engine = AutoreplyEngine([], writer, writer.log)
+    engine = TriggerEngine([], writer, writer.log)
     engine.send_command("   ")
     assert not written
 
 
 def test_send_command_valid():
     writer, written = mock_writer()
-    engine = AutoreplyEngine([], writer, writer.log)
+    engine = TriggerEngine([], writer, writer.log)
     engine.send_command("look")
     assert "look\r\n" in written
 
@@ -473,7 +473,7 @@ def test_send_command_valid():
 def test_sent_commands_bounded(monkeypatch):
     monkeypatch.setenv("TELNETLIB3_SENT_COMMANDS_MAX", "5")
     writer, _ = mock_writer()
-    engine = AutoreplyEngine([], writer, writer.log)
+    engine = TriggerEngine([], writer, writer.log)
     assert engine.sent_commands_max == 5
     for i in range(10):
         engine.send_command(f"cmd{i}")
@@ -481,11 +481,11 @@ def test_sent_commands_bounded(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_autoreply_reply_without_semicolon_still_sends():
+async def test_trigger_reply_without_semicolon_still_sends():
     writer, written = mock_writer()
     inserted: list[str] = []
-    rules = [AutoreplyRule(pattern=re.compile(r"Items here: (\w+)"), reply=r"pick up \1")]
-    engine = AutoreplyEngine(rules, writer, writer.log, insert_fn=inserted.append)
+    rules = [TriggerRule(pattern=re.compile(r"Items here: (\w+)"), reply=r"pick up \1")]
+    engine = TriggerEngine(rules, writer, writer.log, insert_fn=inserted.append)
     engine.feed("Items here: sword\n")
     await asyncio.sleep(0.05)
     assert any("pick up sword\r\n" in w for w in written)
@@ -493,11 +493,11 @@ async def test_autoreply_reply_without_semicolon_still_sends():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_insert_fn_with_cr_sends():
+async def test_trigger_insert_fn_with_cr_sends():
     writer, written = mock_writer()
     inserted: list[str] = []
-    rules = [AutoreplyRule(pattern=re.compile(r"hello"), reply="world;")]
-    engine = AutoreplyEngine(rules, writer, writer.log, insert_fn=inserted.append)
+    rules = [TriggerRule(pattern=re.compile(r"hello"), reply="world;")]
+    engine = TriggerEngine(rules, writer, writer.log, insert_fn=inserted.append)
     engine.feed("hello\n")
     await asyncio.sleep(0.05)
     assert any("world\r\n" in w for w in written)
@@ -505,17 +505,17 @@ async def test_autoreply_insert_fn_with_cr_sends():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_no_insert_fn_sends_without_cr():
+async def test_trigger_no_insert_fn_sends_without_cr():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"hello"), reply="world")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"hello"), reply="world")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("hello\n")
     await asyncio.sleep(0.05)
     assert any("world\r\n" in w for w in written)
 
 
 @pytest.mark.asyncio
-async def test_autoreply_wait_fn_called_before_send():
+async def test_trigger_wait_fn_called_before_send():
     """wait_fn is awaited before second command, first sends immediately."""
     writer, written = mock_writer()
     wait_calls: list[float] = []
@@ -523,8 +523,8 @@ async def test_autoreply_wait_fn_called_before_send():
     async def fake_wait() -> None:
         wait_calls.append(asyncio.get_event_loop().time())
 
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1;cmd2;")]
-    engine = AutoreplyEngine(rules, writer, writer.log, wait_fn=fake_wait)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;cmd2;")]
+    engine = TriggerEngine(rules, writer, writer.log, wait_fn=fake_wait)
     engine.feed("go\n")
     await asyncio.sleep(0.02)
     assert len(wait_calls) == 1
@@ -533,11 +533,11 @@ async def test_autoreply_wait_fn_called_before_send():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_wait_fn_none_no_pacing():
+async def test_trigger_wait_fn_none_no_pacing():
     """When wait_fn is None, commands send immediately without pacing."""
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1;cmd2;")]
-    engine = AutoreplyEngine(rules, writer, writer.log, wait_fn=None)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;cmd2;")]
+    engine = TriggerEngine(rules, writer, writer.log, wait_fn=None)
     engine.feed("go\n")
     await asyncio.sleep(0.05)
     assert any("cmd1\r\n" in w for w in written)
@@ -545,7 +545,7 @@ async def test_autoreply_wait_fn_none_no_pacing():
 
 
 @pytest.mark.asyncio
-async def test_autoreply_wait_fn_timeout_does_not_hang():
+async def test_trigger_wait_fn_timeout_does_not_hang():
     """wait_fn that blocks eventually times out and command still sends."""
     writer, written = mock_writer()
     never_set = asyncio.Event()
@@ -556,15 +556,15 @@ async def test_autoreply_wait_fn_timeout_does_not_hang():
         except asyncio.TimeoutError:
             pass
 
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd;")]
-    engine = AutoreplyEngine(rules, writer, writer.log, wait_fn=blocking_wait)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd;")]
+    engine = TriggerEngine(rules, writer, writer.log, wait_fn=blocking_wait)
     engine.feed("go\n")
     await asyncio.sleep(0.05)
     assert any("cmd\r\n" in w for w in written)
 
 
 @pytest.mark.asyncio
-async def test_autoreply_wait_fn_with_trailing_text():
+async def test_trigger_wait_fn_with_trailing_text():
     """First command sends immediately without wait_fn, even without ;."""
     writer, written = mock_writer()
     wait_calls: list[int] = []
@@ -572,8 +572,8 @@ async def test_autoreply_wait_fn_with_trailing_text():
     async def fake_wait() -> None:
         wait_calls.append(1)
 
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="trailing")]
-    engine = AutoreplyEngine(rules, writer, writer.log, wait_fn=fake_wait)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="trailing")]
+    engine = TriggerEngine(rules, writer, writer.log, wait_fn=fake_wait)
     engine.feed("go\n")
     await asyncio.sleep(0.02)
     assert len(wait_calls) == 0
@@ -584,11 +584,11 @@ async def test_autoreply_wait_fn_with_trailing_text():
 async def test_exclusive_rule_suppresses_later_matches():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
-        AutoreplyRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
-        AutoreplyRule(pattern=re.compile(r"A (\w+) mouse"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) mouse"), reply=r"kill \1;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A green pheasant\nA red rabbit\nA orange mouse\n")
     await asyncio.sleep(0.05)
     assert any("kill green\r\n" in w for w in written)
@@ -600,11 +600,11 @@ async def test_exclusive_rule_suppresses_later_matches():
 async def test_exclusive_rule_index_tracks_active_rule():
     writer, _ = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"alpha"), reply="`delay 20ms`;a;"),
-        AutoreplyRule(pattern=re.compile(r"beta"), reply="b;"),
-        AutoreplyRule(pattern=re.compile(r"gamma"), reply="`delay 20ms`;g;"),
+        TriggerRule(pattern=re.compile(r"alpha"), reply="`delay 20ms`;a;"),
+        TriggerRule(pattern=re.compile(r"beta"), reply="b;"),
+        TriggerRule(pattern=re.compile(r"gamma"), reply="`delay 20ms`;g;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     assert engine.exclusive_active is False
     assert engine.exclusive_rule_index == 0
 
@@ -628,10 +628,10 @@ async def test_exclusive_cleared_when_chain_completes():
     """Exclusive clears when the reply chain task completes."""
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
-        AutoreplyRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A green pheasant\nA red rabbit\n")
     await asyncio.sleep(0.05)
     assert any("kill green\r\n" in w for w in written)
@@ -651,10 +651,10 @@ async def test_exclusive_cleared_when_chain_completes():
 async def test_all_rules_exclusive_only_first_fires():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
-        AutoreplyRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"A (\w+) rabbit"), reply=r"kill \1;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A green pheasant\nA red rabbit\n")
     await asyncio.sleep(0.05)
     assert any("kill green\r\n" in w for w in written)
@@ -689,20 +689,20 @@ def test_parse_entries_field(entries, checks):
         ({"enabled": False}, "enabled", False, True, "enabled", False, True),
     ],
 )
-def test_save_autoreplies_field_roundtrip(tmp_path, rule_kwargs, field, exp0, exp1, json_key, json_in_0, json_absent_1):
-    fp = tmp_path / "autoreplies.json"
+def test_save_triggers_field_roundtrip(tmp_path, rule_kwargs, field, exp0, exp1, json_key, json_in_0, json_absent_1):
+    fp = tmp_path / "triggers.json"
     original = [
-        AutoreplyRule(pattern=re.compile(r"(\w+) attacks"), reply=r"kill \1;", **rule_kwargs),
-        AutoreplyRule(pattern=re.compile(r"foo"), reply="bar;"),
+        TriggerRule(pattern=re.compile(r"(\w+) attacks"), reply=r"kill \1;", **rule_kwargs),
+        TriggerRule(pattern=re.compile(r"foo"), reply="bar;"),
     ]
-    save_autoreplies(str(fp), original, SK)
-    loaded = load_autoreplies(str(fp), SK)
+    save_triggers(str(fp), original, SK)
+    loaded = load_triggers(str(fp), SK)
     assert getattr(loaded[0], field) == exp0
     assert getattr(loaded[1], field) == exp1
 
     with open(str(fp), encoding="utf-8") as fh:
         data = json.load(fh)
-    entries = data[SK]["autoreplies"]
+    entries = data[SK]["triggers"]
     assert entries[0][json_key] == json_in_0
     if json_absent_1:
         assert json_key not in entries[1]
@@ -711,8 +711,8 @@ def test_save_autoreplies_field_roundtrip(tmp_path, rule_kwargs, field, exp0, ex
 @pytest.mark.asyncio
 async def test_exclusive_suppresses_feed_while_chain_active():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"monster"), reply="`delay 20ms`;kill;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"monster"), reply="`delay 20ms`;kill;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("monster\n")
     await asyncio.sleep(0.01)
     assert engine.exclusive_active is True
@@ -732,10 +732,10 @@ async def test_exclusive_suppresses_feed_while_chain_active():
 async def test_always_rule_fires_during_exclusive():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
-        AutoreplyRule(pattern=re.compile(r"died\."), reply="look;", always=True),
+        TriggerRule(pattern=re.compile(r"A (\w+) pheasant"), reply=r"kill \1;"),
+        TriggerRule(pattern=re.compile(r"died\."), reply="look;", always=True),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A green pheasant\n")
     await asyncio.sleep(0.05)
     assert any("kill green\r\n" in w for w in written)
@@ -749,10 +749,10 @@ async def test_always_rule_fires_during_exclusive():
 async def test_disabled_rule_skipped_by_engine():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"hello"), reply="world;", enabled=False),
-        AutoreplyRule(pattern=re.compile(r"hello"), reply="backup;"),
+        TriggerRule(pattern=re.compile(r"hello"), reply="world;", enabled=False),
+        TriggerRule(pattern=re.compile(r"hello"), reply="backup;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("hello\n")
     await asyncio.sleep(0.05)
     assert not any("world\r\n" in w for w in written)
@@ -763,10 +763,10 @@ async def test_disabled_rule_skipped_by_engine():
 async def test_disabled_always_rule_skipped():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"monster"), reply="kill;"),
-        AutoreplyRule(pattern=re.compile(r"died\."), reply="look;", always=True, enabled=False),
+        TriggerRule(pattern=re.compile(r"monster"), reply="kill;"),
+        TriggerRule(pattern=re.compile(r"died\."), reply="look;", always=True, enabled=False),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("monster\n")
     await asyncio.sleep(0.05)
     engine.feed("pheasant died.\n")
@@ -779,9 +779,9 @@ async def test_prompt_cycle_dedup_blocks_same_rule():
     """Once on_prompt activates cycle tracking, a rule fires at most once per cycle."""
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"(^Corpse of|^\w+ times 'Corpse)", re.MULTILINE), reply="look in corpse;")
+        TriggerRule(pattern=re.compile(r"(^Corpse of|^\w+ times 'Corpse)", re.MULTILINE), reply="look in corpse;")
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("Corpse of Goldfish\n")
@@ -800,10 +800,10 @@ async def test_prompt_cycle_dedup_blocks_same_rule():
 async def test_prompt_cycle_dedup_different_rules_first_fires():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"gold"), reply="get gold;"),
-        AutoreplyRule(pattern=re.compile(r"corpse"), reply="look corpse;"),
+        TriggerRule(pattern=re.compile(r"gold"), reply="get gold;"),
+        TriggerRule(pattern=re.compile(r"corpse"), reply="look corpse;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("gold and corpse\n")
@@ -817,8 +817,8 @@ async def test_prompt_cycle_dedup_different_rules_first_fires():
 async def test_prompt_cycle_dedup_inactive_without_on_prompt():
     """Without on_prompt, cycle dedup is not active -- same rule fires twice."""
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"^trigger$", re.MULTILINE), reply="reply;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"^trigger$", re.MULTILINE), reply="reply;")]
+    engine = TriggerEngine(rules, writer, writer.log)
 
     engine.feed("trigger\n")
     await asyncio.sleep(0.05)
@@ -832,10 +832,10 @@ async def test_prompt_cycle_dedup_always_rule():
     """Cycle dedup applies to always=True rules during exclusive mode."""
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"monster"), reply="`delay 10ms`;kill;"),
-        AutoreplyRule(pattern=re.compile(r"corpse", re.MULTILINE), reply="loot;", always=True),
+        TriggerRule(pattern=re.compile(r"monster"), reply="`delay 10ms`;kill;"),
+        TriggerRule(pattern=re.compile(r"corpse", re.MULTILINE), reply="loot;", always=True),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("monster\n")
@@ -930,8 +930,8 @@ async def test_search_buffer_wait_for_pattern_case_sensitive():
 @pytest.mark.asyncio
 async def test_on_prompt_clears_buffer_prevents_stale_rematch():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"^Corpse of", re.MULTILINE), reply="look in corpse;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"^Corpse of", re.MULTILINE), reply="look in corpse;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("Corpse of Goldfish\n")
@@ -949,9 +949,9 @@ async def test_on_prompt_clears_buffer_prevents_stale_rematch():
 async def test_on_prompt_clears_buffer_dotall_no_cross_record():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"Corpse contains:.*?(\d+ solaris)", re.DOTALL), reply=r"get all solaris;")
+        TriggerRule(pattern=re.compile(r"Corpse contains:.*?(\d+ solaris)", re.DOTALL), reply=r"get all solaris;")
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("Corpse contains:\n   A Mini-Shield\n")
@@ -968,8 +968,8 @@ async def test_on_prompt_clears_buffer_dotall_no_cross_record():
 @pytest.mark.asyncio
 async def test_cancel_clears_exclusive():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"A (\w+) is here"), reply=r"`delay 20ms`;kill \1;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"A (\w+) is here"), reply=r"`delay 20ms`;kill \1;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A shark is here\n")
     await asyncio.sleep(0.01)
     assert engine.exclusive_active is True
@@ -982,8 +982,8 @@ async def test_cancel_clears_exclusive():
 @pytest.mark.asyncio
 async def test_sent_commands_not_matched_as_echo():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"corpse"), reply="look in corpse;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"corpse"), reply="look in corpse;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.send_command("look in corpse")
     await asyncio.sleep(0.05)
     written.clear()
@@ -1003,8 +1003,8 @@ async def test_sent_commands_not_matched_as_echo():
 @pytest.mark.asyncio
 async def test_reply_pending_tracks_chain():
     writer, _ = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"hello"), reply="world;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"hello"), reply="world;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     assert engine.reply_pending is False
 
     engine.feed("hello\n")
@@ -1015,8 +1015,8 @@ async def test_reply_pending_tracks_chain():
 @pytest.mark.asyncio
 async def test_cycle_matched_tracks_matches():
     writer, _ = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"hello"), reply="world;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"hello"), reply="world;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     assert engine.cycle_matched is False
 
     engine.feed("hello\n")
@@ -1142,69 +1142,69 @@ def test_check_condition_gmcp_arbitrary_key(when, gmcp_data, ok):
     assert result is ok
 
 
-def test_save_autoreplies_when_roundtrip(tmp_path):
+def test_save_triggers_when_roundtrip(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50", "MP%": ">30"})]
-    save_autoreplies(str(fp), rules, "test:23")
-    loaded = load_autoreplies(str(fp), "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50", "MP%": ">30"})]
+    save_triggers(str(fp), rules, "test:23")
+    loaded = load_triggers(str(fp), "test:23")
     assert loaded[0].when == {"HP%": ">50", "MP%": ">30"}
 
 
-def test_save_autoreplies_when_empty_not_saved(tmp_path):
+def test_save_triggers_when_empty_not_saved(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"x"), reply="y;")]
-    save_autoreplies(str(fp), rules, "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"x"), reply="y;")]
+    save_triggers(str(fp), rules, "test:23")
     raw = json.loads(fp.read_text())
-    assert "when" not in raw["test:23"]["autoreplies"][0]
+    assert "when" not in raw["test:23"]["triggers"][0]
 
 
-def test_save_autoreplies_immediate_roundtrip(tmp_path):
+def test_save_triggers_immediate_roundtrip(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"ship arrived"), reply="enter ship;", immediate=True)]
-    save_autoreplies(str(fp), rules, "test:23")
-    loaded = load_autoreplies(str(fp), "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"ship arrived"), reply="enter ship;", immediate=True)]
+    save_triggers(str(fp), rules, "test:23")
+    loaded = load_triggers(str(fp), "test:23")
     assert loaded[0].immediate is True
 
 
-def test_save_autoreplies_immediate_false_not_saved(tmp_path):
+def test_save_triggers_immediate_false_not_saved(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"x"), reply="y;")]
-    save_autoreplies(str(fp), rules, "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"x"), reply="y;")]
+    save_triggers(str(fp), rules, "test:23")
     raw = json.loads(fp.read_text())
-    assert "immediate" not in raw["test:23"]["autoreplies"][0]
+    assert "immediate" not in raw["test:23"]["triggers"][0]
 
 
-def test_save_autoreplies_case_sensitive_roundtrip(tmp_path):
+def test_save_triggers_case_sensitive_roundtrip(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"DEAD", re.MULTILINE | re.DOTALL), reply="loot;", case_sensitive=True)]
-    save_autoreplies(str(fp), rules, "test:23")
-    loaded = load_autoreplies(str(fp), "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"DEAD", re.MULTILINE | re.DOTALL), reply="loot;", case_sensitive=True)]
+    save_triggers(str(fp), rules, "test:23")
+    loaded = load_triggers(str(fp), "test:23")
     assert loaded[0].case_sensitive is True
     assert not (loaded[0].pattern.flags & re.IGNORECASE)
 
 
-def test_save_autoreplies_case_sensitive_false_not_saved(tmp_path):
+def test_save_triggers_case_sensitive_false_not_saved(tmp_path):
     fp = tmp_path / "ar.json"
-    rules = [AutoreplyRule(pattern=re.compile(r"x"), reply="y;")]
-    save_autoreplies(str(fp), rules, "test:23")
+    rules = [TriggerRule(pattern=re.compile(r"x"), reply="y;")]
+    save_triggers(str(fp), rules, "test:23")
     raw = json.loads(fp.read_text())
-    assert "case_sensitive" not in raw["test:23"]["autoreplies"][0]
+    assert "case_sensitive" not in raw["test:23"]["triggers"][0]
 
 
-def test_load_autoreplies_case_insensitive_by_default(tmp_path):
+def test_load_triggers_case_insensitive_by_default(tmp_path):
     fp = tmp_path / "ar.json"
-    fp.write_text(json.dumps({"test:23": {"autoreplies": [{"pattern": "hello", "reply": "world;"}]}}))
-    loaded = load_autoreplies(str(fp), "test:23")
+    fp.write_text(json.dumps({"test:23": {"triggers": [{"pattern": "hello", "reply": "world;"}]}}))
+    loaded = load_triggers(str(fp), "test:23")
     assert loaded[0].case_sensitive is False
     assert loaded[0].pattern.flags & re.IGNORECASE
 
 
-def test_load_autoreplies_case_sensitive_flag(tmp_path):
+def test_load_triggers_case_sensitive_flag(tmp_path):
     fp = tmp_path / "ar.json"
     fp.write_text(
-        json.dumps({"test:23": {"autoreplies": [{"pattern": "DEAD", "reply": "loot;", "case_sensitive": True}]}})
+        json.dumps({"test:23": {"triggers": [{"pattern": "DEAD", "reply": "loot;", "case_sensitive": True}]}})
     )
-    loaded = load_autoreplies(str(fp), "test:23")
+    loaded = load_triggers(str(fp), "test:23")
     assert loaded[0].case_sensitive is True
     assert not (loaded[0].pattern.flags & re.IGNORECASE)
     assert loaded[0].pattern.search("DEAD") is not None
@@ -1214,8 +1214,8 @@ def test_load_autoreplies_case_sensitive_flag(tmp_path):
 @pytest.mark.asyncio
 async def test_engine_skips_rule_on_condition_fail():
     writer, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert not any("kill bear" in w for w in written)
@@ -1228,8 +1228,8 @@ async def test_engine_skips_rule_on_condition_fail():
 @pytest.mark.asyncio
 async def test_engine_fires_rule_when_condition_passes():
     writer, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert any("kill bear" in w for w in written)
@@ -1239,8 +1239,8 @@ async def test_engine_fires_rule_when_condition_passes():
 @pytest.mark.asyncio
 async def test_condition_failed_clears_on_read():
     writer, _ = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert engine.pop_condition_failed() is not None
@@ -1251,8 +1251,8 @@ async def test_condition_failed_clears_on_read():
 async def test_condition_blocked_preserves_buffer_for_retry():
     """Buffer is retained when condition fails so rule can fire after HP heals."""
     writer, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"})]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("A bear appears.\n")
@@ -1272,10 +1272,10 @@ async def test_condition_blocked_clears_buffer_on_repeated_failure():
     """Buffer is cleared when the same condition fails twice to prevent loops."""
     writer, written = mock_writer_with_vitals(30, 100, 50, 100)
     rules = [
-        AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"}),
-        AutoreplyRule(pattern=re.compile(r"corpse"), reply="loot corpse;"),
+        TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;", when={"HP%": ">50"}),
+        TriggerRule(pattern=re.compile(r"corpse"), reply="loot corpse;"),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("A bear appears.\ncorpse of rat\n")
@@ -1296,10 +1296,10 @@ async def test_condition_blocked_clears_buffer_on_repeated_failure():
 async def test_immediate_rule_fires_in_prompt_based_mode():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"normal trigger"), reply="normal;"),
-        AutoreplyRule(pattern=re.compile(r"ship arrived"), reply="enter ship;", immediate=True),
+        TriggerRule(pattern=re.compile(r"normal trigger"), reply="normal;"),
+        TriggerRule(pattern=re.compile(r"ship arrived"), reply="enter ship;", immediate=True),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
     assert engine.prompt_based is True
 
@@ -1311,8 +1311,8 @@ async def test_immediate_rule_fires_in_prompt_based_mode():
 @pytest.mark.asyncio
 async def test_non_immediate_rule_deferred_in_prompt_based_mode():
     writer, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"normal trigger"), reply="normal;")]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    rules = [TriggerRule(pattern=re.compile(r"normal trigger"), reply="normal;")]
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
     assert engine.prompt_based is True
 
@@ -1329,10 +1329,10 @@ async def test_non_immediate_rule_deferred_in_prompt_based_mode():
 async def test_immediate_and_normal_rules_together():
     writer, written = mock_writer()
     rules = [
-        AutoreplyRule(pattern=re.compile(r"normal"), reply="deferred;"),
-        AutoreplyRule(pattern=re.compile(r"urgent"), reply="now;", immediate=True),
+        TriggerRule(pattern=re.compile(r"normal"), reply="deferred;"),
+        TriggerRule(pattern=re.compile(r"urgent"), reply="now;", immediate=True),
     ]
-    engine = AutoreplyEngine(rules, writer, writer.log)
+    engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
     engine.feed("urgent event\nnormal event\n")
@@ -1354,20 +1354,20 @@ def test_exclusive_state_clear():
     assert state.rule_index == 0
 
 
-def test_autoreply_last_fired_round_trip(tmp_path):
-    path = str(tmp_path / "autoreplies.json")
+def test_trigger_last_fired_round_trip(tmp_path):
+    path = str(tmp_path / "triggers.json")
     rules = [
-        AutoreplyRule(pattern=re.compile("hello"), reply="world", last_fired="2025-06-01T12:00:00+00:00"),
-        AutoreplyRule(pattern=re.compile("foo"), reply="bar"),
+        TriggerRule(pattern=re.compile("hello"), reply="world", last_fired="2025-06-01T12:00:00+00:00"),
+        TriggerRule(pattern=re.compile("foo"), reply="bar"),
     ]
-    save_autoreplies(path, rules, "localhost:23")
-    loaded = load_autoreplies(path, "localhost:23")
+    save_triggers(path, rules, "localhost:23")
+    loaded = load_triggers(path, "localhost:23")
     assert loaded[0].last_fired == "2025-06-01T12:00:00+00:00"
     assert loaded[1].last_fired == ""
 
 
 @pytest.mark.asyncio
-async def test_autoreply_engine_stamps_last_fired():
+async def test_trigger_engine_stamps_last_fired():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
@@ -1376,8 +1376,8 @@ async def test_autoreply_engine_stamps_last_fired():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rule = AutoreplyRule(pattern=re.compile("hello"), reply="world;")
-    engine = AutoreplyEngine(rules=[rule], ctx=ctx, log=logging.getLogger("test"))
+    rule = TriggerRule(pattern=re.compile("hello"), reply="world;")
+    engine = TriggerEngine(rules=[rule], ctx=ctx, log=logging.getLogger("test"))
     engine.feed("hello\n")
     assert rule.last_fired != ""
 
@@ -1385,8 +1385,8 @@ async def test_autoreply_engine_stamps_last_fired():
 @pytest.mark.asyncio
 async def test_inline_when_passes_fires_commands():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert any("kill bear" in w for w in written)
@@ -1395,8 +1395,8 @@ async def test_inline_when_passes_fires_commands():
 @pytest.mark.asyncio
 async def test_inline_when_fails_aborts_chain():
     ctx, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert not any("kill bear" in w for w in written)
@@ -1405,8 +1405,8 @@ async def test_inline_when_fails_aborts_chain():
 @pytest.mark.asyncio
 async def test_inline_when_raw_hp_passes():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert any("kill bear" in w for w in written)
@@ -1415,8 +1415,8 @@ async def test_inline_when_raw_hp_passes():
 @pytest.mark.asyncio
 async def test_inline_when_raw_hp_fails():
     ctx, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert not any("kill bear" in w for w in written)
@@ -1425,8 +1425,8 @@ async def test_inline_when_raw_hp_fails():
 @pytest.mark.asyncio
 async def test_inline_when_raw_mp_passes():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="`when MP>30`;kill bear;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when MP>30`;kill bear;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
     assert any("kill bear" in w for w in written)
@@ -1435,8 +1435,8 @@ async def test_inline_when_raw_mp_passes():
 @pytest.mark.asyncio
 async def test_inline_until_waits_for_match():
     ctx, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;`until 2 died\\.`;glance;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;`until 2 died\\.`;glance;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.05)
     assert any("kill bear" in w for w in written)
@@ -1450,8 +1450,8 @@ async def test_inline_until_waits_for_match():
 @pytest.mark.asyncio
 async def test_inline_until_matches_partial_line():
     ctx, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;`until 2 Password:`;secret;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;`until 2 Password:`;secret;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.05)
     assert any("kill bear" in w for w in written)
@@ -1465,8 +1465,8 @@ async def test_inline_until_matches_partial_line():
 @pytest.mark.asyncio
 async def test_inline_until_timeout_aborts():
     ctx, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"bear"), reply="kill bear;`until 0.02 died\\.`;glance;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="kill bear;`until 0.02 died\\.`;glance;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.05)
     assert any("kill bear" in w for w in written)
@@ -1476,8 +1476,8 @@ async def test_inline_until_timeout_aborts():
 @pytest.mark.asyncio
 async def test_inline_untils_case_sensitive():
     ctx, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"mob"), reply="attack;`untils 0.02 DEAD`;loot;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"mob"), reply="attack;`untils 0.02 DEAD`;loot;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A mob appears.\n")
     await asyncio.sleep(0.01)
     assert any("attack" in w for w in written)
@@ -1490,8 +1490,8 @@ async def test_inline_untils_case_sensitive():
 @pytest.mark.asyncio
 async def test_inline_untils_case_sensitive_matches():
     ctx, written = mock_writer()
-    rules = [AutoreplyRule(pattern=re.compile(r"mob"), reply="attack;`untils 2 DEAD`;loot;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log)
+    rules = [TriggerRule(pattern=re.compile(r"mob"), reply="attack;`untils 2 DEAD`;loot;")]
+    engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A mob appears.\n")
     await asyncio.sleep(0.05)
 
@@ -1508,8 +1508,8 @@ async def test_pipe_immediate_send_skips_wait_fn():
     async def fake_wait() -> None:
         wait_calls.append(asyncio.get_event_loop().time())
 
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1|cmd2;cmd3;")]
-    engine = AutoreplyEngine(rules, ctx, ctx.log, wait_fn=fake_wait)
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1|cmd2;cmd3;")]
+    engine = TriggerEngine(rules, ctx, ctx.log, wait_fn=fake_wait)
     engine.feed("go\n")
     await asyncio.sleep(0.02)
     assert any("cmd1" in w for w in written)
@@ -1527,7 +1527,7 @@ def test_status_text_initially_empty():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    engine = AutoreplyEngine(rules=[], ctx=ctx, log=logging.getLogger("test"))
+    engine = TriggerEngine(rules=[], ctx=ctx, log=logging.getLogger("test"))
     assert engine.status_text == ""
 
 
@@ -1541,8 +1541,8 @@ async def test_status_text_during_until():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("go\n")
     await asyncio.sleep(0.02)
     assert "until" in engine.status_text
@@ -1562,8 +1562,8 @@ async def test_status_text_during_delay():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("go\n")
     await asyncio.sleep(0.02)
     assert "delay" in engine.status_text
@@ -1583,8 +1583,8 @@ async def test_status_text_cleared_on_cancel():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("go\n")
     await asyncio.sleep(0.05)
     assert engine.status_text != ""
@@ -1602,8 +1602,8 @@ async def test_until_progress_tracks_elapsed():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     assert engine.until_progress is None
 
     engine.feed("go\n")
@@ -1627,8 +1627,8 @@ async def test_until_progress_cleared_on_timeout():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("go\n")
     await asyncio.sleep(0.01)
     assert engine.until_progress is not None
@@ -1648,8 +1648,8 @@ async def test_status_text_masks_send_when_will_echo():
         randomwalk_active=False,
         randomwalk_auto_evaluate=False,
     )
-    rules = [AutoreplyRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]
-    engine = AutoreplyEngine(rules, ctx, logging.getLogger("test"))
+    rules = [TriggerRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("Password:\n")
     await asyncio.sleep(0.05)
     assert "secret" not in engine.status_text

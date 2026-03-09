@@ -1,4 +1,4 @@
-"""Autoreply editor pane and screen for the telix TUI."""
+"""Trigger editor pane and screen for the telix TUI."""
 
 # std imports
 import os
@@ -13,11 +13,11 @@ import textual.widgets
 import textual.containers
 
 # local
-from . import autoreply, client_tui_base
+from . import trigger, client_tui_base
 
 
-class AutoreplyTuple(NamedTuple):
-    """Lightweight tuple for autoreply rules in the TUI editor."""
+class TriggerTuple(NamedTuple):
+    """Lightweight tuple for trigger rules in the TUI editor."""
 
     pattern: str
     reply: str
@@ -29,8 +29,8 @@ class AutoreplyTuple(NamedTuple):
     case_sensitive: bool = False
 
 
-class AutoreplyEditPane(client_tui_base.EditListPane):
-    """Pane widget for autoreply rule editing."""
+class TriggerEditPane(client_tui_base.EditListPane):
+    """Pane widget for trigger rule editing."""
 
     growable_keys: list[str] = ["pattern"]
 
@@ -45,15 +45,15 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
     DEFAULT_CSS = (
         client_tui_base.EditListPane.DEFAULT_CSS
         + """
-    #autoreply-form { padding: 0 0 0 4; }
-    #autoreply-form .form-label { width: 12; }
-    #autoreply-form .form-label-mid { width: 9; }
-    #autoreply-form .insert-btn { margin: 0; padding: 0 1; }
-    #autoreply-cond-source { width: 22; }
-    #autoreply-cond-vital { width: 23; }
-    #autoreply-cond-op { width: 8; }
-    #autoreply-cond-val { width: 9; border: tall grey; }
-    #autoreply-cond-val:focus { border: tall $accent; }
+    #trigger-form { padding: 0 0 0 4; }
+    #trigger-form .form-label { width: 12; }
+    #trigger-form .form-label-mid { width: 9; }
+    #trigger-form .insert-btn { margin: 0; padding: 0 1; }
+    #trigger-cond-source { width: 22; }
+    #trigger-cond-vital { width: 23; }
+    #trigger-cond-op { width: 8; }
+    #trigger-cond-val { width: 9; border: tall grey; }
+    #trigger-cond-val:focus { border: tall $accent; }
     .command-text-area { height: 1fr; min-height: 3; }
     """
     )
@@ -61,27 +61,27 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
     def __init__(
         self, path: str, session_key: str = "", select_pattern: str = "", gmcp_snapshot_path: str = ""
     ) -> None:
-        """Initialize autoreply editor with file path and session key."""
+        """Initialize trigger editor with file path and session key."""
         super().__init__()
         self.path = path
         self.session_key = session_key
         self.select_pattern = select_pattern
         self.gmcp_snapshot_path = gmcp_snapshot_path
-        self.rules: list[AutoreplyTuple] = []
+        self.rules: list[TriggerTuple] = []
         self.sort_mode: str = ""
         self.rooms_path = os.path.join(os.path.dirname(path), "rooms.json")
 
     @property
     def prefix(self) -> str:
-        return "autoreply"
+        return "trigger"
 
     @property
     def noun(self) -> str:
-        return "Autoreply"
+        return "Trigger"
 
     @property
     def noun_plural(self) -> str:
-        return "Autoreplies"
+        return "Triggers"
 
     @property
     def items(self) -> list[Any]:
@@ -89,85 +89,85 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
 
     @property
     def text_input_id(self) -> str:
-        return "autoreply-reply"
+        return "trigger-reply"
 
     def compose(self) -> textual.app.ComposeResult:
-        """Build the autoreply editor layout."""
-        with textual.containers.Vertical(id="autoreply-panel", classes="edit-panel"):
-            with textual.containers.Horizontal(id="autoreply-body", classes="edit-body"):
-                with textual.containers.Vertical(id="autoreply-button-col", classes="edit-button-col"):
-                    yield textual.widgets.Button("Add", variant="success", id="autoreply-add")
-                    yield textual.widgets.Button("Edit", variant="warning", id="autoreply-edit")
-                    yield textual.widgets.Button("Copy", id="autoreply-copy", classes="edit-copy")
-                    yield textual.widgets.Button("Delete", variant="error", id="autoreply-delete")
-                    yield textual.widgets.Button("Help", variant="success", id="autoreply-help")
-                    yield textual.widgets.Button("Save", variant="primary", id="autoreply-save")
-                    yield textual.widgets.Button("Cancel", id="autoreply-close")
-                with textual.containers.Vertical(id="autoreply-right", classes="edit-right"):
+        """Build the trigger editor layout."""
+        with textual.containers.Vertical(id="trigger-panel", classes="edit-panel"):
+            with textual.containers.Horizontal(id="trigger-body", classes="edit-body"):
+                with textual.containers.Vertical(id="trigger-button-col", classes="edit-button-col"):
+                    yield textual.widgets.Button("Add", variant="success", id="trigger-add")
+                    yield textual.widgets.Button("Edit", variant="warning", id="trigger-edit")
+                    yield textual.widgets.Button("Copy", id="trigger-copy", classes="edit-copy")
+                    yield textual.widgets.Button("Delete", variant="error", id="trigger-delete")
+                    yield textual.widgets.Button("Help", variant="success", id="trigger-help")
+                    yield textual.widgets.Button("Save", variant="primary", id="trigger-save")
+                    yield textual.widgets.Button("Cancel", id="trigger-close")
+                with textual.containers.Vertical(id="trigger-right", classes="edit-right"):
                     yield textual.widgets.Input(
-                        placeholder="Search autoreplies\u2026", id="autoreply-search", classes="edit-search"
+                        placeholder="Search triggers\u2026", id="trigger-search", classes="edit-search"
                     )
-                    yield textual.widgets.DataTable(id="autoreply-table", classes="edit-table")
-                    with textual.containers.Vertical(id="autoreply-form", classes="edit-form"):
+                    yield textual.widgets.DataTable(id="trigger-table", classes="edit-table")
+                    with textual.containers.Vertical(id="trigger-form", classes="edit-form"):
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Label("Enabled:", classes="toggle-label")
-                            yield textual.widgets.Switch(value=True, id="autoreply-enabled")
+                            yield textual.widgets.Switch(value=True, id="trigger-enabled")
                             yield textual.widgets.Label("", classes="toggle-gap")
-                            alw = textual.widgets.Switch(value=False, id="autoreply-always")
+                            alw = textual.widgets.Switch(value=False, id="trigger-always")
                             alw.tooltip = "Match even while another rule's chain is active"
                             yield textual.widgets.Label("Always:", classes="toggle-label")
                             yield alw
                             yield textual.widgets.Label("", classes="toggle-gap")
-                            imm = textual.widgets.Switch(value=False, id="autoreply-immediate")
+                            imm = textual.widgets.Switch(value=False, id="trigger-immediate")
                             imm.tooltip = "Reply immediately without waiting for prompt"
                             yield textual.widgets.Label("Immediate:", classes="toggle-label")
                             yield imm
                             yield textual.widgets.Label("", classes="toggle-gap")
-                            cs = textual.widgets.Switch(value=False, id="autoreply-case-sensitive")
+                            cs = textual.widgets.Switch(value=False, id="trigger-case-sensitive")
                             cs.tooltip = "Case-sensitive pattern matching"
                             yield textual.widgets.Label("Case Sensitive:", classes="toggle-label")
                             yield cs
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Label("Pattern", classes="form-label-short")
-                            yield textual.widgets.Input(placeholder="regex pattern", id="autoreply-pattern")
+                            yield textual.widgets.Input(placeholder="regex pattern", id="trigger-pattern")
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Label("Condition", classes="form-label-short")
                             yield textual.widgets.Select(
-                                [("(none)", "")], value="", allow_blank=False, id="autoreply-cond-source"
+                                [("(none)", "")], value="", allow_blank=False, id="trigger-cond-source"
                             )
                             yield textual.widgets.Select(
-                                [("(none)", "")], value="", allow_blank=False, id="autoreply-cond-vital", disabled=True
+                                [("(none)", "")], value="", allow_blank=False, id="trigger-cond-vital", disabled=True
                             )
                             yield textual.widgets.Select(
                                 [(">", ">"), ("<", "<"), (">=", ">="), ("<=", "<="), ("=", "=")],
                                 value=">",
                                 allow_blank=False,
-                                id="autoreply-cond-op",
+                                id="trigger-cond-op",
                             )
-                            yield textual.widgets.Input(value="99", placeholder="99", id="autoreply-cond-val")
+                            yield textual.widgets.Input(value="99", placeholder="99", id="trigger-cond-val")
                             yield textual.widgets.Label(
-                                "(as percent)", id="autoreply-cond-pct-label", classes="form-label-pct"
+                                "(as percent)", id="trigger-cond-pct-label", classes="form-label-pct"
                             )
                         with textual.containers.Horizontal(classes="field-row"):
-                            yield textual.widgets.Button("When", id="autoreply-btn-when", classes="insert-btn")
-                            yield textual.widgets.Button("Until", id="autoreply-btn-until", classes="insert-btn")
-                            yield textual.widgets.Button("Delay", id="autoreply-btn-delay", classes="insert-btn")
-                            yield textual.widgets.Button("Travel", id="autoreply-fast-travel", classes="insert-btn")
-                            yield textual.widgets.Button("Return", id="autoreply-return", classes="insert-btn")
+                            yield textual.widgets.Button("When", id="trigger-btn-when", classes="insert-btn")
+                            yield textual.widgets.Button("Until", id="trigger-btn-until", classes="insert-btn")
+                            yield textual.widgets.Button("Delay", id="trigger-btn-delay", classes="insert-btn")
+                            yield textual.widgets.Button("Travel", id="trigger-fast-travel", classes="insert-btn")
+                            yield textual.widgets.Button("Return", id="trigger-return", classes="insert-btn")
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Button(
-                                "Autodiscover", id="autoreply-autodiscover", classes="insert-btn"
+                                "Autodiscover", id="trigger-autodiscover", classes="insert-btn"
                             )
                             yield textual.widgets.Button(
-                                "Random Walk", id="autoreply-btn-randomwalk", classes="insert-btn"
+                                "Random Walk", id="trigger-btn-randomwalk", classes="insert-btn"
                             )
                         yield textual.widgets.Label("Command Text", classes="form-label-short")
-                        yield textual.widgets.TextArea(id="autoreply-reply", classes="command-text-area")
-                        with textual.containers.Horizontal(id="autoreply-form-buttons", classes="edit-form-buttons"):
+                        yield textual.widgets.TextArea(id="trigger-reply", classes="command-text-area")
+                        with textual.containers.Horizontal(id="trigger-form-buttons", classes="edit-form-buttons"):
                             yield textual.widgets.Label(" ", classes="form-btn-spacer")
-                            yield textual.widgets.Button("Cancel", variant="default", id="autoreply-cancel-form")
-                            yield textual.widgets.Button("OK", variant="success", id="autoreply-ok")
-                    yield textual.widgets.Static("", id="autoreply-count")
+                            yield textual.widgets.Button("Cancel", variant="default", id="trigger-cancel-form")
+                            yield textual.widgets.Button("OK", variant="success", id="trigger-ok")
+                    yield textual.widgets.Static("", id="trigger-count")
 
     def gmcp_source_choices(self) -> list[tuple[str, str]]:
         """Build Select choices for the GMCP source dropdown."""
@@ -225,8 +225,8 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         return ""
 
     def on_mount(self) -> None:
-        """Load autoreplies from file and populate table."""
-        table = self.query_one("#autoreply-table", textual.widgets.DataTable)
+        """Load triggers from file and populate table."""
+        table = self.query_one("#trigger-table", textual.widgets.DataTable)
         table.cursor_type = "row"
         term_w = self.app.size.width
         col_w = max(15, 15 + (term_w - 80) // 2) if term_w > 80 else 15
@@ -235,10 +235,10 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         table.add_column("Reply", width=col_w, key="reply")
         table.add_column("Flags", width=8, key="flags")
         table.add_column("Last", width=8, key="last")
-        self.query_one("#autoreply-cond-source", textual.widgets.Select).set_options(self.gmcp_source_choices())
+        self.query_one("#trigger-cond-source", textual.widgets.Select).set_options(self.gmcp_source_choices())
         self.load_from_file()
         self.refresh_table()
-        self.query_one("#autoreply-form").display = False
+        self.query_one("#trigger-form").display = False
         if self.select_pattern:
             for i, (pattern, *rest) in enumerate(self.rules):
                 if pattern == self.select_pattern:
@@ -249,9 +249,9 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         if not os.path.exists(self.path):
             return
         try:
-            rules = autoreply.load_autoreplies(self.path, self.session_key)
+            rules = trigger.load_triggers(self.path, self.session_key)
             self.rules = [
-                AutoreplyTuple(
+                TriggerTuple(
                     r.pattern.pattern,
                     r.reply,
                     r.always,
@@ -267,7 +267,7 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
             pass
 
     def matches_search(self, idx: int, query: str) -> bool:
-        """Match autoreply pattern or reply against search query."""
+        """Match trigger pattern or reply against search query."""
         rule = self.rules[idx]
         q = query.lower()
         return q in rule.pattern.lower() or q in rule.reply.lower()
@@ -275,7 +275,7 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
     def refresh_table(self) -> None:
         from . import client_tui_editors
 
-        table = self.query_one("#autoreply-table", textual.widgets.DataTable)
+        table = self.query_one("#trigger-table", textual.widgets.DataTable)
         table.clear()
         q = self.search_query
         self.filtered_indices = []
@@ -305,7 +305,7 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         self.update_count_label()
 
     def action_sort_last(self) -> None:
-        """Toggle sorting autoreplies by last fired time."""
+        """Toggle sorting triggers by last fired time."""
         self.sort_mode = "last_fired" if self.sort_mode != "last_fired" else ""
         self.refresh_table()
 
@@ -320,12 +320,12 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
         last_fired: str = "",
         case_sensitive: bool = False,
     ) -> None:
-        self.query_one("#autoreply-pattern", textual.widgets.Input).value = pattern_val
-        self.query_one("#autoreply-reply", textual.widgets.TextArea).text = reply_val
-        self.query_one("#autoreply-always", textual.widgets.Switch).value = always
-        self.query_one("#autoreply-enabled", textual.widgets.Switch).value = enabled
-        self.query_one("#autoreply-immediate", textual.widgets.Switch).value = immediate
-        self.query_one("#autoreply-case-sensitive", textual.widgets.Switch).value = case_sensitive
+        self.query_one("#trigger-pattern", textual.widgets.Input).value = pattern_val
+        self.query_one("#trigger-reply", textual.widgets.TextArea).text = reply_val
+        self.query_one("#trigger-always", textual.widgets.Switch).value = always
+        self.query_one("#trigger-enabled", textual.widgets.Switch).value = enabled
+        self.query_one("#trigger-immediate", textual.widgets.Switch).value = immediate
+        self.query_one("#trigger-case-sensitive", textual.widgets.Switch).value = case_sensitive
         cond_source, cond_vital, cond_op, cond_val = "", "", ">", "99"
         if when:
             vital = next(iter(when), "")
@@ -340,37 +340,37 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                 fields = [v for _, v in self.gmcp_field_choices(cond_source) if v]
                 if "hp%" in fields:
                     cond_vital = "hp%"
-        source_sel = self.query_one("#autoreply-cond-source", textual.widgets.Select)
-        field_sel = self.query_one("#autoreply-cond-vital", textual.widgets.Select)
+        source_sel = self.query_one("#trigger-cond-source", textual.widgets.Select)
+        field_sel = self.query_one("#trigger-cond-vital", textual.widgets.Select)
         with self.prevent(textual.widgets.Select.Changed):
             source_sel.value = cond_source
             field_sel.set_options(self.gmcp_field_choices(cond_source))
             field_sel.value = cond_vital
             field_sel.disabled = not cond_source
-            self.query_one("#autoreply-cond-op", textual.widgets.Select).value = cond_op
-            self.query_one("#autoreply-cond-val", textual.widgets.Input).value = cond_val
+            self.query_one("#trigger-cond-op", textual.widgets.Select).value = cond_op
+            self.query_one("#trigger-cond-val", textual.widgets.Input).value = cond_val
         cond_none = not cond_vital
-        self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = cond_none
-        self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = cond_none
+        self.query_one("#trigger-cond-op", textual.widgets.Select).disabled = cond_none
+        self.query_one("#trigger-cond-val", textual.widgets.Input).disabled = cond_none
         is_pct = cond_vital.endswith("%")
-        self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = is_pct
-        self.query_one("#autoreply-search", textual.widgets.Input).display = False
-        self.query_one("#autoreply-table").display = False
-        self.query_one("#autoreply-form").display = True
+        self.query_one("#trigger-cond-pct-label", textual.widgets.Label).display = is_pct
+        self.query_one("#trigger-search", textual.widgets.Input).display = False
+        self.query_one("#trigger-table").display = False
+        self.query_one("#trigger-form").display = True
         self.set_action_buttons_disabled(True)
-        self.query_one("#autoreply-pattern", textual.widgets.Input).focus()
+        self.query_one("#trigger-pattern", textual.widgets.Input).focus()
 
     def submit_form(self) -> None:
         """Accept the current inline form values."""
-        pattern_val = self.query_one("#autoreply-pattern", textual.widgets.Input).value.strip()
-        reply_val = self.query_one("#autoreply-reply", textual.widgets.TextArea).text
-        always = self.query_one("#autoreply-always", textual.widgets.Switch).value
-        enabled = self.query_one("#autoreply-enabled", textual.widgets.Switch).value
-        immediate = self.query_one("#autoreply-immediate", textual.widgets.Switch).value
-        case_sensitive = self.query_one("#autoreply-case-sensitive", textual.widgets.Switch).value
-        cond_vital = self.query_one("#autoreply-cond-vital", textual.widgets.Select).value
-        cond_op = self.query_one("#autoreply-cond-op", textual.widgets.Select).value
-        cond_val = self.query_one("#autoreply-cond-val", textual.widgets.Input).value.strip()
+        pattern_val = self.query_one("#trigger-pattern", textual.widgets.Input).value.strip()
+        reply_val = self.query_one("#trigger-reply", textual.widgets.TextArea).text
+        always = self.query_one("#trigger-always", textual.widgets.Switch).value
+        enabled = self.query_one("#trigger-enabled", textual.widgets.Switch).value
+        immediate = self.query_one("#trigger-immediate", textual.widgets.Switch).value
+        case_sensitive = self.query_one("#trigger-case-sensitive", textual.widgets.Switch).value
+        cond_vital = self.query_one("#trigger-cond-vital", textual.widgets.Select).value
+        cond_op = self.query_one("#trigger-cond-op", textual.widgets.Select).value
+        cond_val = self.query_one("#trigger-cond-val", textual.widgets.Input).value.strip()
         when: dict[str, str] | None = None
         if cond_vital and isinstance(cond_vital, str):
             try:
@@ -385,29 +385,29 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                 self.notify(f"Invalid regex: {exc}", severity="error")
                 return
         lf = self.rules[self.editing_idx].last_fired if self.editing_idx is not None else ""
-        entry = AutoreplyTuple(pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive)
+        entry = TriggerTuple(pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive)
         self.finalize_edit(entry, bool(pattern_val))
 
     def on_select_changed(self, event: textual.widgets.Select.Changed) -> None:
         """Update field/operator/value dropdowns when source or field changes."""
-        if event.select.id == "autoreply-cond-source":
+        if event.select.id == "trigger-cond-source":
             source = event.value if isinstance(event.value, str) else ""
-            field_sel = self.query_one("#autoreply-cond-vital", textual.widgets.Select)
+            field_sel = self.query_one("#trigger-cond-vital", textual.widgets.Select)
             field_sel.set_options(self.gmcp_field_choices(source))
             field_sel.value = ""
             field_sel.disabled = not source
-            self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = True
-            self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = True
-            self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = False
-        elif event.select.id == "autoreply-cond-vital":
+            self.query_one("#trigger-cond-op", textual.widgets.Select).disabled = True
+            self.query_one("#trigger-cond-val", textual.widgets.Input).disabled = True
+            self.query_one("#trigger-cond-pct-label", textual.widgets.Label).display = False
+        elif event.select.id == "trigger-cond-vital":
             disabled = not event.value or event.value is textual.widgets.Select.BLANK
-            self.query_one("#autoreply-cond-op", textual.widgets.Select).disabled = disabled
-            self.query_one("#autoreply-cond-val", textual.widgets.Input).disabled = disabled
+            self.query_one("#trigger-cond-op", textual.widgets.Select).disabled = disabled
+            self.query_one("#trigger-cond-val", textual.widgets.Input).disabled = disabled
             is_pct = isinstance(event.value, str) and event.value.endswith("%")
-            self.query_one("#autoreply-cond-pct-label", textual.widgets.Label).display = is_pct
+            self.query_one("#trigger-cond-pct-label", textual.widgets.Label).display = is_pct
 
     def do_extra_button(self, suffix: str, btn: str) -> None:
-        """Handle autoreply-specific buttons (travel, etc.)."""
+        """Handle trigger-specific buttons (travel, etc.)."""
         if suffix == "fast-travel":
             self.pick_room_for_travel()
         else:
@@ -421,7 +421,7 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
             if not t.case_sensitive:
                 flags |= re.IGNORECASE
             rules.append(
-                autoreply.AutoreplyRule(
+                trigger.TriggerRule(
                     pattern=re.compile(t.pattern, flags),
                     reply=t.reply,
                     always=t.always,
@@ -432,16 +432,16 @@ class AutoreplyEditPane(client_tui_base.EditListPane):
                     case_sensitive=t.case_sensitive,
                 )
             )
-        autoreply.save_autoreplies(self.path, rules, self.session_key)
+        trigger.save_triggers(self.path, rules, self.session_key)
 
 
-class AutoreplyEditScreen(client_tui_base.EditListScreen):
-    """Thin screen wrapper for the autoreply editor."""
+class TriggerEditScreen(client_tui_base.EditListScreen):
+    """Thin screen wrapper for the trigger editor."""
 
     def __init__(
         self, path: str, session_key: str = "", select_pattern: str = "", gmcp_snapshot_path: str = ""
     ) -> None:
         super().__init__()
-        self.pane = AutoreplyEditPane(
+        self.pane = TriggerEditPane(
             path=path, session_key=session_key, select_pattern=select_pattern, gmcp_snapshot_path=gmcp_snapshot_path
         )

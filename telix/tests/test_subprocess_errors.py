@@ -31,7 +31,7 @@ def stub_terminal(monkeypatch):
 def make_ctx():
     ctx = TelixSessionContext(session_key="host:1234")
     ctx.macros_file = "/tmp/macros.json"
-    ctx.autoreplies_file = "/tmp/autoreplies.json"
+    ctx.triggers_file = "/tmp/triggers.json"
     ctx.highlights_file = "/tmp/highlights.json"
     ctx.chat_file = "/tmp/chat.json"
     ctx.chat_messages = [{"channel": "ooc", "text": "hi"}]

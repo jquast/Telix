@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # local
-from telix.autoreply import AutoreplyRule, parse_entries
+from telix.trigger import TriggerRule, parse_entries
 from telix.highlighter import (
     RE_FLAGS,
     HighlightRule,
@@ -106,7 +106,7 @@ class TestHighlightRuleLoadSave:
 
     def test_builtin_flag_roundtrip(self, tmp_path):
         path = str(tmp_path / "highlights.json")
-        rules = [make_rule("autoreply", "black_on_beige", builtin=True)]
+        rules = [make_rule("trigger", "black_on_beige", builtin=True)]
         save_highlights(path, rules, "test:23")
         loaded = load_highlights(path, "test:23")
         assert loaded[0].builtin is True
@@ -123,11 +123,11 @@ class TestValidateHighlight:
 
 
 class TestCompiledRuleSet:
-    def test_combines_enabled_autoreply_rules(self):
+    def test_combines_enabled_trigger_rules(self):
         ar_rules = [
-            AutoreplyRule(pattern=re.compile("foo", RE_FLAGS), reply="bar", enabled=True),
-            AutoreplyRule(pattern=re.compile("baz", RE_FLAGS), reply="qux", enabled=False),
-            AutoreplyRule(pattern=re.compile("quux", RE_FLAGS), reply="x", enabled=True),
+            TriggerRule(pattern=re.compile("foo", RE_FLAGS), reply="bar", enabled=True),
+            TriggerRule(pattern=re.compile("baz", RE_FLAGS), reply="qux", enabled=False),
+            TriggerRule(pattern=re.compile("quux", RE_FLAGS), reply="x", enabled=True),
         ]
         rs = CompiledRuleSet([], ar_rules, "black_on_beige", True)
         spans = rs.finditer("foo and quux but not baz")
@@ -142,12 +142,12 @@ class TestCompiledRuleSet:
         assert rs.finditer("anything") == []
 
     def test_all_disabled(self):
-        ar_rules = [AutoreplyRule(pattern=re.compile("foo", RE_FLAGS), reply="bar", enabled=False)]
+        ar_rules = [TriggerRule(pattern=re.compile("foo", RE_FLAGS), reply="bar", enabled=False)]
         rs = CompiledRuleSet([], ar_rules, "black_on_beige", True)
         assert rs.finditer("foo") == []
 
-    def test_combines_highlight_and_autoreply(self):
-        ar_rules = [AutoreplyRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
+    def test_combines_highlight_and_trigger(self):
+        ar_rules = [TriggerRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
         hl_rules = [make_rule("dynamite", "bold_red")]
         rs = CompiledRuleSet(hl_rules, ar_rules, "black_on_beige", True)
         spans = rs.finditer("a monster has dynamite")
@@ -236,9 +236,9 @@ class TestHighlightEngineProcessLine:
         assert "\x1b[1;31m" in result
         assert "Operation controller" in result
 
-    def test_anchored_autoreply_pattern_matches_line_with_trailing_cr(self):
-        """Autoreply patterns with $ also highlight despite the trailing \\r on the line."""
-        ar = AutoreplyRule(
+    def test_anchored_trigger_pattern_matches_line_with_trailing_cr(self):
+        """Trigger patterns with $ also highlight despite the trailing \\r on the line."""
+        ar = TriggerRule(
             pattern=re.compile("^Operation controller$", re.MULTILINE | re.DOTALL),
             reply="kill controller",
             enabled=True,
@@ -281,24 +281,24 @@ class TestHighlightEngineStopMovement:
         ctx.discover_task.cancel.assert_not_called()
 
 
-class TestHighlightEngineAutoreplyBuiltin:
-    def test_builtin_autoreply_highlight(self):
-        ar_rules = [AutoreplyRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
-        engine = HighlightEngine([], ar_rules, mock_term(), autoreply_highlight="black_on_beige")
+class TestHighlightEngineTriggerBuiltin:
+    def test_builtin_trigger_highlight(self):
+        ar_rules = [TriggerRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
+        engine = HighlightEngine([], ar_rules, mock_term(), trigger_highlight="black_on_beige")
         line = "A monster appears!"
         result, matched = engine.process_line(line)
         assert matched is True
         assert "\x1b[30;43m" in result
 
     def test_builtin_disabled(self):
-        ar_rules = [AutoreplyRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
-        engine = HighlightEngine([], ar_rules, mock_term(), autoreply_enabled=False)
+        ar_rules = [TriggerRule(pattern=re.compile("monster", RE_FLAGS), reply="flee", enabled=True)]
+        engine = HighlightEngine([], ar_rules, mock_term(), trigger_enabled=False)
         line = "A monster appears!"
         result, matched = engine.process_line(line)
         assert matched is False
 
 
-class TestAutoreplyCaseInsensitive:
+class TestTriggerCaseInsensitive:
     def test_case_insensitive_matching(self):
         entries = [{"pattern": "DANGER", "reply": "flee"}]
         rules = parse_entries(entries)
