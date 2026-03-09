@@ -98,6 +98,8 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
     BACKTICK_RE,
     COMMAND_DELAY,
     MOVE_MAX_RETRIES,
+    SCRIPT_CMD_RE,
+    STOPSCRIPT_CMD_RE,
     send_chained,
     collapse_runs,
     clear_command_queue,
@@ -1399,6 +1401,8 @@ class ReplSession:
                     self.prompt_pending = False
                     if self.autoreply_engine is not None:
                         self.autoreply_engine.on_prompt()
+                    if self.ctx.script_manager is not None:
+                        self.ctx.script_manager.on_prompt()
                     self.update_input_style()
                 continue
             if isinstance(out, bytes):
@@ -1450,6 +1454,10 @@ class ReplSession:
                 if is_prompt:
                     self.autoreply_engine.on_prompt()
                     self.prompt_pending = False
+            if self.ctx.script_manager is not None:
+                self.ctx.script_manager.feed(emit_now)
+                if is_prompt:
+                    self.ctx.script_manager.on_prompt()
             cq_s = self.ctx.command_queue
             ac_s = self.ctx.active_command
             ac_elapsed = time.monotonic() - self.ctx.active_command_time
@@ -1680,6 +1688,27 @@ class ReplSession:
 
                         if parts and EDIT_THEME_RE.match(parts[0]):
                             launch_unified_editor("theme", self.ctx, self.replay_buf)
+                            parts = parts[1:]
+                        elif parts and SCRIPT_CMD_RE.match(parts[0]):
+                            sm = SCRIPT_CMD_RE.match(parts[0])
+                            assert sm is not None
+                            mgr = self.ctx.script_manager
+                            if mgr is not None:
+                                try:
+                                    mgr.start_script(self.ctx, sm.group(1))
+                                except Exception as exc:
+                                    self.telnet_writer.log.error("script error: %s", exc)
+                            parts = parts[1:]
+                        elif parts and STOPSCRIPT_CMD_RE.match(parts[0]):
+                            ss = STOPSCRIPT_CMD_RE.match(parts[0])
+                            assert ss is not None
+                            mgr = self.ctx.script_manager
+                            if mgr is not None:
+                                stopped = mgr.stop_script(ss.group(1))
+                                echo = self.ctx.echo_command
+                                if echo is not None:
+                                    for sname in stopped:
+                                        echo(f"[stopscript] stopped: {sname}")
                             parts = parts[1:]
                         elif parts and TRAVEL_RE.match(parts[0]):
                             remainder = await handle_travel_commands(parts, self.ctx, self.telnet_writer.log)

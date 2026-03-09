@@ -9,6 +9,7 @@ Telix
    intro
    user-manual
    files
+   scripting
    contributing
    protocols
    history

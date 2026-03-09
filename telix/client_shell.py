@@ -115,6 +115,11 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     ctx.on_room_info = on_room_info
     ctx.history_file = paths.history_path(ctx.session_key)
 
+    from . import scripts as scripts_mod
+    scripts_dir = str(paths.xdg_config_dir() / "scripts")
+    os.makedirs(scripts_dir, exist_ok=True)
+    ctx.script_manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
+
 
 class ColorFilteredWriter:
     """

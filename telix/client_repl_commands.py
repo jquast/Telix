@@ -33,6 +33,8 @@ UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 
 REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint)`$", re.IGNORECASE)
+SCRIPT_CMD_RE = re.compile(r"^`script\s+(.+)`$", re.IGNORECASE)
+STOPSCRIPT_CMD_RE = re.compile(r"^`stopscript(?:\s+(\S+))?`$", re.IGNORECASE)
 EDIT_RE = re.compile(r"^`edit\s+(\w+)`$", re.IGNORECASE)
 TOGGLE_RE = re.compile(r"^`toggle\s+(\w+)`$", re.IGNORECASE)
 WALK_DIALOG_RE = re.compile(r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE)
@@ -311,6 +313,27 @@ async def dispatch_one(
                 if hooks.on_status is not None:
                     hooks.on_status("")
                 return StepResult.ABORT
+        return StepResult.HANDLED
+
+    sm = SCRIPT_CMD_RE.match(cmd)
+    if sm:
+        mgr = hooks.ctx.script_manager
+        if mgr is not None:
+            try:
+                mgr.start_script(hooks.ctx, sm.group(1))
+            except Exception as exc:
+                hooks.log.error("script error: %s", exc)
+        return StepResult.HANDLED
+
+    ss = STOPSCRIPT_CMD_RE.match(cmd)
+    if ss:
+        mgr = hooks.ctx.script_manager
+        if mgr is not None:
+            stopped = mgr.stop_script(ss.group(1))
+            echo = hooks.echo_fn or hooks.ctx.echo_command
+            if echo is not None:
+                for sname in stopped:
+                    echo(f"[stopscript] stopped: {sname}")
         return StepResult.HANDLED
 
     if sent_count > 0 and idx not in immediate_set:
