@@ -54,6 +54,7 @@ class WalkState:
     randomwalk_task: "asyncio.Task[None] | None" = None
     randomwalk_room_change_cmd: str = ""
     travel_task: "asyncio.Task[None] | None" = None
+    await_script: str = ""
     active_command: str | None = None
     active_command_time: float = 0.0
     blocked_exits: set[tuple[str, str]] = dataclasses.field(default_factory=set)

@@ -692,6 +692,43 @@ class TestAwaitDispatch:
         result = await dispatch_one("`await some_script`", 0, 0, frozenset(), hooks)
         assert result is StepResult.HANDLED
 
+    @pytest.mark.asyncio
+    async def test_await_sets_await_script_during_run(self):
+        """await_script on ctx.walk is set while the script runs and cleared after."""
+        observed = []
+        mod = make_fake_module("run", "observed.append(ctx._ctx.walk.await_script)")
+        mod.__dict__["observed"] = observed
+        mgr = scripts.ScriptManager()
+        echoed = []
+        hooks = make_dispatch_hooks(mgr, echoed)
+
+        with patch.dict(sys.modules, {"obs_script": mod}):
+            await dispatch_one("`await obs_script`", 0, 0, frozenset(), hooks)
+
+        assert observed == ["obs_script"]
+        assert hooks.ctx.walk.await_script == ""
+
+    @pytest.mark.asyncio
+    async def test_await_clears_await_script_on_cancel(self):
+        """await_script is cleared even when the enclosing task is cancelled."""
+        mod = make_fake_module("run", "await asyncio.sleep(10)")
+        mgr = scripts.ScriptManager()
+        echoed = []
+        hooks = make_dispatch_hooks(mgr, echoed)
+
+        with patch.dict(sys.modules, {"slow_script": mod}):
+            outer = asyncio.ensure_future(
+                dispatch_one("`await slow_script`", 0, 0, frozenset(), hooks)
+            )
+            await asyncio.sleep(0)
+            outer.cancel()
+            try:
+                await outer
+            except asyncio.CancelledError:
+                pass
+
+        assert hooks.ctx.walk.await_script == ""
+
 
 class TestScriptManagerExceptionReporting:
     """ScriptManager reports script exceptions via ctx.print."""

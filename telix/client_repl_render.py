@@ -766,7 +766,7 @@ class ToolbarRenderer:
     def is_trigger_bg(self, engine: "trigger_mod.TriggerEngine | None") -> bool:
         """Return whether the input row should use the trigger background."""
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or ar
+        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
 
     def render(self, trigger_engine: "trigger_mod.TriggerEngine | None") -> bool:
         """
@@ -783,11 +783,12 @@ class ToolbarRenderer:
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
         discover_active = self.ctx.walk.discover_active
         randomwalk_active = self.ctx.walk.randomwalk_active
+        await_script = self.ctx.walk.await_script
 
         now = time.monotonic()
         is_ar = self.is_trigger_bg(engine)
         slots, needs_reflash = self.build_slots(
-            engine, ar_active, discover_active, randomwalk_active, now, is_ar_bg=is_ar
+            engine, ar_active, discover_active, randomwalk_active, await_script, now, is_ar_bg=is_ar
         )
         return self.paint(slots, is_ar, needs_reflash)
 
@@ -812,6 +813,7 @@ class ToolbarRenderer:
         ar_active: bool,
         discover_active: bool,
         randomwalk_active: bool,
+        await_script: str,
         now: float,
         is_ar_bg: bool = False,
     ) -> tuple[list[ToolbarSlot], bool]:
@@ -855,7 +857,7 @@ class ToolbarRenderer:
                 )
             )
 
-        self.right_slot(engine, ar_active, discover_active, randomwalk_active, slots)
+        self.right_slot(engine, ar_active, discover_active, randomwalk_active, await_script, slots)
         return slots, needs_reflash
 
     def default_bars(self, gmcp_data: dict[str, typing.Any], now: float, slots: list[ToolbarSlot]) -> bool:
@@ -1069,10 +1071,24 @@ class ToolbarRenderer:
         ar_active: bool,
         discover_active: bool,
         randomwalk_active: bool,
+        await_script: str,
         slots: list[ToolbarSlot],
     ) -> None:
         """Append the right-side slot (walk mode, trigger, or room name)."""
-        if randomwalk_active:
+        if await_script:
+            text = f" await {await_script}"
+            slots.append(
+                ToolbarSlot(
+                    priority=3,
+                    display_order=10,
+                    width=len(text),
+                    fragments=[("", text)],
+                    side="right",
+                    min_width=0,
+                    label="",
+                )
+            )
+        elif randomwalk_active:
             self.travel_bar_slot(
                 self.ctx.walk.randomwalk_current, self.ctx.walk.randomwalk_total, 24, "randomwalk", slots
             )

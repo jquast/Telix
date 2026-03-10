@@ -333,9 +333,16 @@ async def dispatch_one(
         if mgr is not None:
             try:
                 task = mgr.start_script(hooks.ctx, aw.group(1))
-                await task
             except Exception as exc:
                 hooks.log.error("script error: %s", exc)
+            else:
+                hooks.ctx.walk.await_script = aw.group(1)
+                try:
+                    await task
+                finally:
+                    hooks.ctx.walk.await_script = ""
+                    if not task.done():
+                        task.cancel()
         return StepResult.HANDLED
 
     ss = STOPSCRIPT_CMD_RE.match(cmd)

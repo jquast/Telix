@@ -1719,9 +1719,16 @@ class ReplSession:
                             if mgr is not None:
                                 try:
                                     task = mgr.start_script(self.ctx, aw.group(1))
-                                    await task
                                 except Exception as exc:
                                     self.telnet_writer.log.error("script error: %s", exc)
+                                else:
+                                    self.ctx.walk.await_script = aw.group(1)
+                                    try:
+                                        await task
+                                    finally:
+                                        self.ctx.walk.await_script = ""
+                                        if not task.done():
+                                            task.cancel()
                             parts = parts[1:]
                         elif parts and STOPSCRIPT_CMD_RE.match(parts[0]):
                             ss = STOPSCRIPT_CMD_RE.match(parts[0])
