@@ -11,8 +11,6 @@ and ``str(keystroke)`` respectively.
 """
 
 # std imports
-import os
-import json
 import typing
 import asyncio
 import logging
@@ -22,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import blessed.line_editor
 
-from . import paths
+from . import util
 
 if TYPE_CHECKING:
     from .session_context import TelixSessionContext
@@ -105,11 +103,7 @@ def load_macros(path: str, session_key: str) -> list[Macro]:
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid.
     """
-    with open(path, encoding="utf-8") as fh:
-        data: dict[str, typing.Any] = json.load(fh)
-
-    session_data: dict[str, typing.Any] = data.get(session_key, {})
-    entries: list[dict[str, str]] = session_data.get("macros", [])
+    entries = util.load_json_entries(path, session_key, "macros")
     return parse_entries(entries)
 
 
@@ -123,27 +117,18 @@ def save_macros(path: str, macros: list[Macro], session_key: str) -> None:
     :param macros: List of :class:`Macro` instances to save.
     :param session_key: Session identifier (``"host:port"``).
     """
-    data: dict[str, typing.Any] = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-
-    data[session_key] = {
-        "macros": [
-            {
-                "key": m.key,
-                "text": m.text,
-                **({"enabled": False} if not m.enabled else {}),
-                **({"last_used": m.last_used} if m.last_used else {}),
-                **({"toggle": True, "toggle_text": m.toggle_text} if m.toggle else {}),
-                **({"builtin": True, "builtin_name": m.builtin_name} if m.builtin else {}),
-            }
-            for m in macros
-        ]
-    }
-
-    content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    paths.atomic_write(path, content)
+    entries = [
+        {
+            "key": m.key,
+            "text": m.text,
+            **({"enabled": False} if not m.enabled else {}),
+            **({"last_used": m.last_used} if m.last_used else {}),
+            **({"toggle": True, "toggle_text": m.toggle_text} if m.toggle else {}),
+            **({"builtin": True, "builtin_name": m.builtin_name} if m.builtin else {}),
+        }
+        for m in macros
+    ]
+    util.save_json_entries(path, session_key, "macros", entries)
 
 
 # Blessed key name to VT100/xterm ANSI escape sequence, for ansi_keys mode.
@@ -255,13 +240,14 @@ BUILTIN_MACROS: list[Macro] = [
     Macro(key="KEY_F5", text="`resume walk`", builtin=True, builtin_name="resume_walk"),
     Macro(key="KEY_ALT_H", text="`edit highlights`", builtin=True, builtin_name="edit_highlights"),
     Macro(key="KEY_ALT_M", text="`edit macros`", builtin=True, builtin_name="edit_macros"),
-    Macro(key="KEY_ALT_A", text="`edit triggers`", builtin=True, builtin_name="edit_triggers"),
+    Macro(key="KEY_ALT_T", text="`edit triggers`", builtin=True, builtin_name="edit_triggers"),
     Macro(key="KEY_ALT_R", text="`edit rooms`", builtin=True, builtin_name="edit_rooms"),
-    Macro(key="KEY_ALT_C", text="`edit captures`", builtin=True, builtin_name="edit_captures"),
+    Macro(key="KEY_ALT_C", text="`captures`", builtin=True, builtin_name="edit_captures"),
     Macro(key="KEY_ALT_B", text="`edit bars`", builtin=True, builtin_name="edit_bars"),
-    Macro(key="KEY_ALT_T", text="`edit theme`", builtin=True, builtin_name="edit_theme"),
+    Macro(key="KEY_ALT_E", text="`edit theme`", builtin=True, builtin_name="edit_theme"),
     Macro(key="KEY_ALT_SHIFT_H", text="`toggle highlights`", builtin=True, builtin_name="toggle_highlights"),
     Macro(key="KEY_ALT_SHIFT_A", text="`toggle triggers`", builtin=True, builtin_name="toggle_triggers"),
+    Macro(key="KEY_ALT_Q", text="`stopscript`", builtin=True, builtin_name="stopscript"),
     Macro(key="KEY_CTRL_L", text="`repaint`", builtin=True, builtin_name="repaint"),
     Macro(key="KEY_CTRL_CLOSE_BRACKET", text="`disconnect`", builtin=True, builtin_name="disconnect"),
 ]

@@ -491,12 +491,13 @@ class TestWsClientParser:
         assert args.encoding_errors == "replace"
 
     def test_subprotocols_list(self) -> None:
-        """WS_SUBPROTOCOLS contains both protocols in correct order."""
+        """WS_SUBPROTOCOLS contains all three protocols in correct order."""
         from telix.ws_client import WS_SUBPROTOCOLS
 
-        assert len(WS_SUBPROTOCOLS) == 2
+        assert len(WS_SUBPROTOCOLS) == 3
         assert WS_SUBPROTOCOLS[0] == "gmcp.mudstandards.org"
         assert WS_SUBPROTOCOLS[1] == "telnet.mudstandards.org"
+        assert WS_SUBPROTOCOLS[2] == "terminal.mudstandards.org"
 
     def test_colormatch_flag_accepted(self) -> None:
         from telix.ws_client import build_parser

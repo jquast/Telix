@@ -14,7 +14,7 @@ if os.environ.get("COVERAGE_PROCESS_START"):
 import telnetlib3.client
 
 # local
-from . import mtts, directory, ws_client, client_tui_base, client_tui_dialogs
+from . import mtts, directory, ws_client, ssh_client, client_tui_dialogs, client_tui_session_manager
 
 
 def _parse_option_list(values: list[str]) -> set[bytes]:
@@ -37,12 +37,8 @@ def _parse_option_list(values: list[str]) -> set[bytes]:
 # telnetlib3 starts the shell.  Read by client_shell._setup_color_filter().
 _color_args: argparse.Namespace | None = None
 
-# Detected terminal software name, set by _detect_terminal_colors() for use
-# in MTTS negotiation within the same main() call.
-_detected_sw_name: str | None = None
 
-
-def _detect_terminal_colors() -> None:
+def _detect_terminal_colors() -> "str | None":
     """
     Query the terminal for background/foreground colors and software name.
 
@@ -50,10 +46,10 @@ def _detect_terminal_colors() -> None:
     otherwise the OSC/XTVERSION responses are consumed by the framework.
     Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and
     :envvar:`TELIX_DETECTED_FG` (format ``R,G,B``) so subprocess connections
-    inherit them without re-querying.  Software name is stored in
-    :data:`_detected_sw_name` for MTTS negotiation.
+    inherit them without re-querying.
+
+    :returns: Detected terminal software name, or ``None`` if not detected.
     """
-    global _detected_sw_name
     import blessed
 
     term = blessed.Terminal()
@@ -69,7 +65,7 @@ def _detect_terminal_colors() -> None:
         os.environ["TELIX_DETECTED_FG"] = f"{fg[0]},{fg[1]},{fg[2]}"
     else:
         os.environ.pop("TELIX_DETECTED_FG", None)
-    _detected_sw_name = sw.name if sw is not None else None
+    return sw.name if sw is not None else None
 
 
 def _build_telix_parser() -> argparse.ArgumentParser:
@@ -101,17 +97,24 @@ def _strip_telix_args() -> argparse.Namespace:
     return telix_args
 
 
-DAGGER = "\u2020"
-
-
 def _build_help_parser() -> argparse.ArgumentParser:
     """
     Build a unified help-only parser showing all telix options.
 
-    Groups connection and telix-specific options alphabetically, marking telnet-only options with a dagger.
+    Groups connection and telix-specific options alphabetically, marking telnet-only options.
     """
     parser = argparse.ArgumentParser(
-        prog="telix", usage="telix [options] {host [port] | ws-url}", description="Telnet and WebSocket MUD/BBS client."
+        prog="telix",
+        description=(
+            "Telnet, WebSocket, and SSH MUD/BBS client.\n\n"
+            "  telix host [port]                 -- Telnet\n"
+            "  telix telnet://host[:port]        -- Telnet\n"
+            "  telix telnets://host[:port]       -- Telnet with SSL\n"
+            "  telix ws://host[:port][/path]     -- WebSocket\n"
+            "  telix wss://host[:port][/path]    -- WebSocket with SSL\n"
+            "  telix ssh://[user@]host[:port]    -- SSH"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     conn = parser.add_argument_group("Connection options")
@@ -153,14 +156,18 @@ def _build_help_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--shell", metavar="SHELL", help="dotted path to shell coroutine")
     conn.add_argument("--speed", metavar="N", type=int, help="terminal speed to report (default: 38400)")
-    conn.add_argument("--ssl", action="store_true", help=f"enable SSL/TLS {DAGGER}")
-    conn.add_argument("--ssl-cafile", metavar="PATH", help=f"CA bundle for SSL verification {DAGGER}")
-    conn.add_argument("--ssl-no-verify", action="store_true", help=f"disable SSL certificate verification {DAGGER}")
+    conn.add_argument("--ssl", action="store_true", help="enable SSL/TLS (telnet only)")
+    conn.add_argument("--ssl-cafile", metavar="PATH", help="CA bundle for SSL verification (telnet only)")
+    conn.add_argument("--ssl-no-verify", action="store_true", help="disable SSL certificate verification (telnet only)")
     conn.add_argument("--term", metavar="TERM", help="terminal type to negotiate (default: $TERM)")
     conn.add_argument("--typescript", metavar="FILE", help="record session to FILE")
     conn.add_argument(
         "--typescript-mode", choices=["append", "rewrite"], help="typescript write mode (default: append)"
     )
+
+    ssh = parser.add_argument_group("SSH options (ssh://[user@]host[:port] connections)")
+    ssh.add_argument("--key-file", metavar="FILE", help="path to private key file")
+    ssh.add_argument("--username", metavar="USER", help="login username (default: system login)")
 
     telix = parser.add_argument_group("Telix options")
     telix.add_argument(
@@ -177,15 +184,13 @@ def _build_help_parser() -> argparse.ArgumentParser:
         "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
     )
 
-    parser.epilog = f"{DAGGER} telnet-only; for WebSocket connections use wss:// for SSL instead"
-
     return parser
 
 
 def reinit() -> None:
     """Overwrite sessions.json with the bundled directory."""
     sessions = directory.directory_to_sessions()
-    client_tui_base.save_sessions(sessions)
+    client_tui_session_manager.save_sessions(sessions)
     print(f"Loaded {len(sessions)} sessions from directory.")
 
 
@@ -255,10 +260,26 @@ def main() -> None:
         _build_help_parser().parse_args(["--help"])
         return
 
-    _detect_terminal_colors()
+    detected_sw_name = _detect_terminal_colors()
 
     server_type = pop_server_type()
 
+    # Rewrite telnet:// and telnets:// URLs to bare host/port argv so the
+    # standard telnet path handles them.  telnets:// also injects --ssl.
+    telnet_url = next((a for a in sys.argv[1:] if a.startswith(("telnet://", "telnets://"))), None)
+    if telnet_url is not None:
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(telnet_url)
+        idx = sys.argv.index(telnet_url)
+        replacement = [parsed.hostname or ""]
+        if parsed.port:
+            replacement.append(str(parsed.port))
+        sys.argv[idx : idx + 1] = replacement
+        if telnet_url.startswith("telnets://") and "--ssl" not in sys.argv:
+            sys.argv.append("--ssl")
+
+    has_ssh_url = any(arg.startswith("ssh://") for arg in sys.argv[1:])
     has_ws_url = any(arg.startswith(("ws://", "wss://")) for arg in sys.argv[1:])
 
     if has_ws_url:
@@ -310,6 +331,51 @@ def main() -> None:
                     connect_maxwait=args.connect_maxwait,
                     connect_timeout=args.connect_timeout,
                     compression=compression,
+                    color_args=_color_args,
+                )
+            )
+        except KeyboardInterrupt:
+            pass
+        except OSError as err:
+            print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if has_ssh_url:
+        import urllib.parse
+
+        from .client_shell import ssh_client_shell
+
+        ssh_url = next(arg for arg in sys.argv[1:] if arg.startswith("ssh://"))
+        parsed = urllib.parse.urlparse(ssh_url)
+        host = parsed.hostname or ""
+        # Build an argv for ssh_client.build_parser(): positional host plus optional flags.
+        # URL-encoded username and port are injected as flags unless already supplied.
+        argv = [a for a in sys.argv[1:] if a != ssh_url]
+        argv.insert(0, host)
+        if parsed.port and "--port" not in argv:
+            argv[1:1] = ["--port", str(parsed.port)]
+        if parsed.username and "--username" not in argv:
+            argv += ["--username", parsed.username]
+        args = ssh_client.build_parser().parse_args(argv)
+        term_type = args.term or os.environ.get("TERM", "xterm-256color")
+        _color_args = argparse.Namespace(
+            colormatch=args.colormatch,
+            color_brightness=args.color_brightness,
+            color_contrast=args.color_contrast,
+            background_color=args.background_color,
+            no_ice_colors=args.no_ice_colors,
+        )
+        try:
+            asyncio.run(
+                ssh_client.run_ssh_client(
+                    host=args.host,
+                    port=args.port,
+                    username=args.username,
+                    key_file=args.key_file,
+                    term_type=term_type,
+                    shell=ssh_client_shell,
+                    color_args=_color_args,
                 )
             )
         except KeyboardInterrupt:
@@ -349,7 +415,7 @@ def main() -> None:
     if server_type != "bbs":
         is_ssl = "--ssl" in sys.argv or "--ssl-no-verify" in sys.argv
         mtts.install_mtts(
-            _get_term_value(), ssl=is_ssl, sw_name=_detected_sw_name, encoding=_get_argv_value("--encoding", "utf-8")
+            _get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=_get_argv_value("--encoding", "utf-8")
         )
 
     try:

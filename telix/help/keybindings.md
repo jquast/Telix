@@ -1,5 +1,7 @@
 ## Keybindings
 
+**Default key:** F1 (in-session)
+
 All default key bindings are builtin macros and can be rebound in the
 macro editor (Alt + M).
 
@@ -11,11 +13,12 @@ macro editor (Alt + M).
 | **Alt + H** | Edit highlights (TUI editor) |
 | **Alt + Shift + H** | Toggle highlights on/off |
 | **Alt + M** | Edit macros (TUI editor) |
-| **Alt + A** | Edit triggers (TUI editor) |
+| **Alt + T** | Edit triggers (TUI editor) |
 | **Alt + Shift + A** | Toggle triggers on/off |
 | **Alt + C** | Chat viewer / captures |
 | **Alt + B** | Edit progress bars (TUI editor) |
-| **Alt + T** | Edit theme |
+| **Alt + E** | Edit theme |
+| **Alt + Q** | Stop all running scripts |
 | **Ctrl + L** | Repaint screen |
 | **Ctrl + ]** | Disconnect |
 

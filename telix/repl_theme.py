@@ -2,7 +2,7 @@
 
 import textual.theme
 
-from . import rooms, client_tui_base
+from . import rooms, client_tui_session_manager
 
 DEFAULT_THEME = "gruvbox"
 
@@ -141,7 +141,7 @@ def saved_theme_name(session_key: str) -> str:
         name = prefs.get("tui_theme", "")
         if isinstance(name, str) and name:
             return name
-    prefs = rooms.load_prefs(client_tui_base.DEFAULTS_KEY)
+    prefs = rooms.load_prefs(client_tui_session_manager.DEFAULTS_KEY)
     name = prefs.get("tui_theme", "")
     return name if isinstance(name, str) else ""
 

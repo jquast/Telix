@@ -252,33 +252,33 @@ class TestHighlightEngineProcessLine:
 class TestHighlightEngineStopMovement:
     def test_cancels_discover(self):
         ctx = MagicMock()
-        ctx.discover_active = True
-        ctx.discover_task = MagicMock()
-        ctx.randomwalk_active = False
+        ctx.walk.discover_active = True
+        ctx.walk.discover_task = MagicMock()
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([make_rule("danger", stop_movement=True)], [], mock_term(), ctx=ctx)
         result, _ = engine.process_line("there is danger ahead")
-        ctx.discover_task.cancel.assert_called_once()
-        assert ctx.discover_active is False
+        ctx.walk.discover_task.cancel.assert_called_once()
+        assert ctx.walk.discover_active is False
         assert "[stop: discover cancelled]" in result
 
     def test_cancels_randomwalk(self):
         ctx = MagicMock()
-        ctx.discover_active = False
-        ctx.randomwalk_active = True
-        ctx.randomwalk_task = MagicMock()
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = True
+        ctx.walk.randomwalk_task = MagicMock()
         engine = HighlightEngine([make_rule("danger", stop_movement=True)], [], mock_term(), ctx=ctx)
         result, _ = engine.process_line("there is danger ahead")
-        ctx.randomwalk_task.cancel.assert_called_once()
-        assert ctx.randomwalk_active is False
+        ctx.walk.randomwalk_task.cancel.assert_called_once()
+        assert ctx.walk.randomwalk_active is False
         assert "[stop: random walk cancelled]" in result
 
     def test_no_stop_without_flag(self):
         ctx = MagicMock()
-        ctx.discover_active = True
-        ctx.discover_task = MagicMock()
+        ctx.walk.discover_active = True
+        ctx.walk.discover_task = MagicMock()
         engine = HighlightEngine([make_rule("danger", stop_movement=False)], [], mock_term(), ctx=ctx)
         engine.process_line("there is danger ahead")
-        ctx.discover_task.cancel.assert_not_called()
+        ctx.walk.discover_task.cancel.assert_not_called()
 
 
 class TestHighlightEngineTriggerBuiltin:
@@ -395,16 +395,16 @@ class TestMultilineHighlight:
             capture_name="captures",
         )
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         text = "The hearer echoes:\nLytol hijacked the spire\n"
         result, matched = engine.process_block(text)
         assert matched is True
-        assert "captures" in ctx.capture_log
-        assert len(ctx.capture_log["captures"]) == 1
+        assert "captures" in ctx.highlights.capture_log
+        assert len(ctx.highlights.capture_log["captures"]) == 1
 
 
 class TestHighlightCaptures:
@@ -414,51 +414,51 @@ class TestHighlightCaptures:
             captures=[{"key": "Adrenaline", "value": r"\1"}, {"key": "MaxAdrenaline", "value": r"\2"}],
         )
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Adrenaline: 442/500")
-        assert ctx.captures["Adrenaline"] == 442
-        assert ctx.captures["MaxAdrenaline"] == 500
+        assert ctx.highlights.captures["Adrenaline"] == 442
+        assert ctx.highlights.captures["MaxAdrenaline"] == 500
 
     def test_capture_disabled(self):
         rule = make_capture_rule(
             r"Adrenaline: (\d+)/(\d+)", captured=False, captures=[{"key": "Adrenaline", "value": r"\1"}]
         )
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Adrenaline: 442/500")
-        assert ctx.captures == {}
+        assert ctx.highlights.captures == {}
 
     def test_capture_non_integer_skipped(self):
         rule = make_capture_rule(r"Name: (\w+)", captures=[{"key": "Name", "value": r"\1"}])
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Name: Bob")
-        assert "Name" not in ctx.captures
+        assert "Name" not in ctx.highlights.captures
 
     def test_capture_line_logged(self):
         rule = make_capture_rule(r"tells you", capture_name="tells")
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Bob tells you: hello")
-        assert "tells" in ctx.capture_log
-        assert len(ctx.capture_log["tells"]) == 1
-        assert ctx.capture_log["tells"][0]["line"] == "Bob tells you: hello"
+        assert "tells" in ctx.highlights.capture_log
+        assert len(ctx.highlights.capture_log["tells"]) == 1
+        assert ctx.highlights.capture_log["tells"][0]["line"] == "Bob tells you: hello"
 
     def test_capture_json_roundtrip(self, tmp_path):
         path = str(tmp_path / "highlights.json")
@@ -480,27 +480,27 @@ class TestHighlightCaptures:
     def test_capture_custom_channel(self):
         rule = make_capture_rule(r"(\w+) tells you: (.+)", capture_name="tells")
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Bob tells you: hello there")
         engine.process_line("Alice tells you: hi")
-        assert len(ctx.capture_log["tells"]) == 2
-        assert "captures" not in ctx.capture_log
+        assert len(ctx.highlights.capture_log["tells"]) == 2
+        assert "captures" not in ctx.highlights.capture_log
 
     def test_capture_dynamic_channel_name(self):
         rule = make_capture_rule(r"(\w+) replies: (.*)$", capture_name=r"\1")
         ctx = MagicMock()
-        ctx.captures = {}
-        ctx.capture_log = {}
-        ctx.discover_active = False
-        ctx.randomwalk_active = False
+        ctx.highlights.captures = {}
+        ctx.highlights.capture_log = {}
+        ctx.walk.discover_active = False
+        ctx.walk.randomwalk_active = False
         engine = HighlightEngine([rule], [], mock_term(), ctx=ctx)
         engine.process_line("Bob replies: hello there")
         engine.process_line("Alice replies: hi")
-        assert "Bob" in ctx.capture_log
-        assert "Alice" in ctx.capture_log
-        assert len(ctx.capture_log["Bob"]) == 1
-        assert len(ctx.capture_log["Alice"]) == 1
+        assert "Bob" in ctx.highlights.capture_log
+        assert "Alice" in ctx.highlights.capture_log
+        assert len(ctx.highlights.capture_log["Bob"]) == 1
+        assert len(ctx.highlights.capture_log["Alice"]) == 1

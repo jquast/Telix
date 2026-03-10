@@ -1,5 +1,7 @@
 ## Session Manager
 
+**Default key:** F1 (from within the session manager)
+
 The session manager displays a searchable list of saved telnet and MUD
 sessions.  Sessions are sorted by bookmark status, then most recently
 connected, then name.
@@ -45,15 +47,15 @@ options:
 
 | Flag | Meaning |
 |------|---------|
+| **ws** | WebSocket connection |
 | **ssl** | TLS/SSL connection |
 | **raw** | Raw socket mode (no telnet negotiation) |
 | **line** | Line mode |
-| **!bin** | Binary transfer disabled |
 | **ansi** | ANSI key mode |
 | **eol** | ASCII line endings |
 | **!ice** | iCE colors disabled |
 | **!repl** | REPL disabled (display only) |
-| **ts** | Typescript recording enabled |
+| **ts** | Typescript session recording to a file |
 
 ### Session Editing
 

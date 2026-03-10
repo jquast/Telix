@@ -10,10 +10,11 @@ import os
 import json
 import typing
 
+import rich.color
+
 # 3rd party
 import textual.app
 import textual.theme
-from rich.color import ANSI_COLOR_NAMES, Color
 
 # local
 from . import paths, client_repl_render
@@ -53,7 +54,7 @@ class BarConfig(typing.NamedTuple):
 #: All Rich named colors for the custom color picker.
 def all_rich_colors() -> list[str]:
     """Return all Rich named colors sorted alphabetically."""
-    return sorted(ANSI_COLOR_NAMES.keys())
+    return sorted(rich.color.ANSI_COLOR_NAMES.keys())
 
 
 CURATED_COLORS: list[str] = all_rich_colors()
@@ -253,7 +254,7 @@ def resolve_color_rgb(name: str) -> tuple[int, int, int]:
     return named_color_rgb(name)
 
 
-def bar_color_at(fraction: float, bar: BarConfig, theme_accent: tuple[int, int, int] | None = None) -> str:
+def bar_color_at(fraction: float, bar: BarConfig) -> str:
     """
     Return an ``#rrggbb`` hex color for a bar at *fraction* full.
 
@@ -263,7 +264,6 @@ def bar_color_at(fraction: float, bar: BarConfig, theme_accent: tuple[int, int, 
 
     :param fraction: 0.0 (empty) to 1.0 (full).
     :param bar: Bar configuration.
-    :param theme_accent: Unused, kept for API compatibility.
     :returns: Hex color string.
     """
     fraction = max(0.0, min(1.0, fraction))
@@ -295,7 +295,7 @@ def lerp_hsv_path(
 
 def named_color_rgb(name: str) -> tuple[int, int, int]:
     """Convert a Rich named color to an (r, g, b) tuple."""
-    color = Color.parse(name)
+    color = rich.color.Color.parse(name)
     triplet = color.get_truecolor()
     return (triplet.red, triplet.green, triplet.blue)
 

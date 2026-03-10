@@ -151,6 +151,24 @@ arguments (in any order after the verb):
 | `` `randomwalk noreply autosearch` `` | Walk with triggers disabled, auto-search |
 | `` `randomwalk autosearch autosurvey` `` | Walk with auto search and survey |
 
+### Script
+
+Run an async Python script.  Scripts are searched in the current directory
+and ``~/.config/telix/scripts/``.
+
+**Warning:** Scripts run concurrently and asynchronously.  Multiple scripts
+(or a script combined with active triggers) can send commands simultaneously,
+potentially flooding the server with rapid input -- a "server storm".  Use
+`` `stopscript` `` or press **Alt+Q** to stop all running scripts immediately.
+
+| Example | Effect |
+|---------|--------|
+| `` `script NAME` `` | Run async Python script NAME |
+| `` `script MODULE.FUNC` `` | Run a specific named async function from MODULE |
+| `` `scripts` `` | List all currently running scripts |
+| `` `stopscript` `` | Stop all running scripts |
+| `` `stopscript NAME` `` | Stop the named script |
+
 ### Resume
 
 Resume the last autodiscover or randomwalk from where it stopped,

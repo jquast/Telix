@@ -337,10 +337,137 @@ class TestDetectTerminalColors:
         assert call_order == ["detect", "telnet"]
 
 
+class TestTelnetUrlRouting:
+    def test_telnet_url_routes_to_telnet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A telnet:// URL is rewritten to a bare host and falls through to telnetlib3."""
+        monkeypatch.setattr(sys, "argv", ["telix", "telnet://mud.example.com"])
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        assert "mud.example.com" in sys.argv
+        assert not any(a.startswith("telnet://") for a in sys.argv)
+
+    def test_telnet_url_with_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """telnet://host:port injects both host and port into argv."""
+        monkeypatch.setattr(sys, "argv", ["telix", "telnet://mud.example.com:4000"])
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        assert "mud.example.com" in sys.argv
+        assert "4000" in sys.argv
+
+    def test_telnets_url_injects_ssl(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Telnets:// injects --ssl into argv."""
+        monkeypatch.setattr(sys, "argv", ["telix", "telnets://mud.example.com"])
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        assert "--ssl" in sys.argv
+
+    def test_telnets_does_not_duplicate_ssl(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Telnets:// does not inject --ssl if already present."""
+        monkeypatch.setattr(sys, "argv", ["telix", "telnets://mud.example.com", "--ssl"])
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        assert sys.argv.count("--ssl") == 1
+
+
+class TestSshUrlRouting:
+    def test_ssh_url_routes_to_run_ssh_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An ssh:// URL calls run_ssh_client, not run_ws_client or run_client."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://bbs.example.com"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append((host, port, username))
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == [("bbs.example.com", 22, "")]
+
+    def test_ssh_url_with_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ssh://host:port extracts the port from the URL."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://bbs.example.com:2222"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append((host, port))
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == [("bbs.example.com", 2222)]
+
+    def test_ssh_url_with_username(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ssh://user@host extracts the username from the URL."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://sysop@bbs.example.com"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append((host, username))
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == [("bbs.example.com", "sysop")]
+
+    def test_ssh_url_username_flag_overrides_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--username flag takes precedence over username embedded in the URL."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://sysop@bbs.example.com", "--username", "admin"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append(username)
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == ["admin"]
+
+    def test_ssh_url_key_file_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--key-file is forwarded to run_ssh_client."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://bbs.example.com", "--key-file", "id_ed25519"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append(key_file)
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == ["id_ed25519"]
+
+    def test_ssh_url_with_user_and_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ssh://user@host:port extracts all three components from the URL."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://sysop@bbs.example.com:2222"])
+        captured = []
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            captured.append((host, port, username))
+
+        with patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh):
+            main()
+
+        assert captured == [("bbs.example.com", 2222, "sysop")]
+
+    def test_ssh_url_does_not_call_ws_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An ssh:// URL does not call run_ws_client."""
+        monkeypatch.setattr(sys, "argv", ["telix", "ssh://bbs.example.com"])
+
+        async def fake_run_ssh(host, port, username, key_file, term_type, shell, **kwargs):
+            pass
+
+        with (
+            patch("telix.main.ssh_client.run_ssh_client", side_effect=fake_run_ssh),
+            patch("telix.main.ws_client.run_ws_client") as mock_ws,
+        ):
+            main()
+
+        mock_ws.assert_not_called()
+
+
 class TestBuildWsCommandUsesMain:
     def test_ws_command_uses_telix_main(self) -> None:
         """build_ws_command spawns telix.main, not telix.ws_client."""
-        from telix.client_tui_base import SessionConfig, build_ws_command
+        from telix.client_tui_session_manager import SessionConfig, build_ws_command
 
         cfg = SessionConfig(host="example.com", port=443, protocol="websocket", ssl=True)
         cmd = build_ws_command(cfg)

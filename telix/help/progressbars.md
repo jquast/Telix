@@ -1,5 +1,7 @@
 ## Progress Bar Editor
 
+**Default key:** Alt+B
+
 Configure GMCP-driven progress bars for the toolbar.  Each bar maps
 a GMCP package field pair (value + max) to a colored bar display.
 
@@ -10,27 +12,39 @@ a GMCP package field pair (value + max) to a colored bar display.
 | **#** | Display order |
 | **Name** | Label shown on the toolbar |
 | **Source** | GMCP package name (e.g. `Char.Vitals`) |
+| **Value** | Field name for the current value |
+| **Max** | Field name for the maximum value |
 | **Enabled** | Whether the bar is active |
-| **Color** | Color mode (`theme` or `custom`) |
+| **Color** | Color gradient swatch |
+
+### Buttons
+
+| Button | Action |
+|--------|--------|
+| **Add** | Create a new progress bar |
+| **Edit** | Edit the selected bar |
+| **Copy** | Duplicate the selected bar |
+| **Detect** | Auto-detect bars from current GMCP data |
+| **Help** | Open this help screen |
+| **Save** | Save all changes to disk and close |
+| **Cancel** | Discard changes and close |
 
 ### Form Fields
 
 - **Name** -- display label for the bar
 - **Enabled** -- toggle the bar on/off
-- **GMCP Pkg** -- the GMCP package containing the fields
+- **Source** -- the GMCP package containing the fields
   (e.g. `Char.Vitals`, `Char.Status`)
-- **Value Field** -- field name for the current value (e.g. `hp`)
-- **Max Field** -- field name for the maximum value (e.g. `maxhp`)
+- **Val/Max** -- field names for the current value and maximum value
+  (e.g. `hp` and `maxhp`); two dropdowns on the same row
 - **Color Mode** -- `Theme` uses your TUI theme accent color;
   `Custom` lets you choose specific max/min colors
-- **Max Color** -- bar color at 100% (custom mode only)
-- **Min Color** -- bar color at 0% (custom mode only)
-- **Text Color** -- foreground color for text overlaid on the bar.
-  `auto` (default) uses dark text on the filled portion and grey on
-  the empty portion.  Choose a theme or custom color to override.
+- **Min** -- bar color at 0% and text color on the filled portion
+  (custom mode: two dropdowns; theme mode: theme color choices)
+- **Max** -- bar color at 100% and text color on the empty portion
+  (custom mode: two dropdowns; theme mode: theme color choices)
 - **Path** -- `Shortest` or `Longest` hue arc between colors
-- **Preview** -- live preview of the bar at the chosen percentage
-- **Value %** -- preview percentage (0-100)
+- **Preview** -- animated live preview of the bar cycling through 0-100%
 
 ### Side
 

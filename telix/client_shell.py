@@ -14,8 +14,10 @@ the ``gmcp.mudstandards.org`` wire format.
 # std imports
 import io
 import os
+import re
 import sys
 import shlex
+import codecs
 import typing
 import asyncio
 import logging
@@ -32,6 +34,7 @@ import telnetlib3.stream_writer
 # local
 from . import (
     chat,
+    util,
     paths,
     rooms,
     macros,
@@ -63,63 +66,63 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     os.makedirs(str(paths.xdg_data_dir()), exist_ok=True)
 
     macros_path = os.path.join(config_dir, "macros.json")
-    ctx.macros_file = macros_path
+    ctx.macros.file = macros_path
     if os.path.isfile(macros_path):
-        ctx.macro_defs = macros.load_macros(macros_path, ctx.session_key)
-    ctx.macro_defs = macros.ensure_builtin_macros(ctx.macro_defs)
+        ctx.macros.defs = macros.load_macros(macros_path, ctx.session_key)
+    ctx.macros.defs = macros.ensure_builtin_macros(ctx.macros.defs)
 
-    disconnect = next((m for m in ctx.macro_defs if m.builtin_name == "disconnect" and m.enabled), None)
+    disconnect = next((m for m in ctx.macros.defs if m.builtin_name == "disconnect" and m.enabled), None)
     if disconnect is not None:
         seq = macros.key_name_to_seq(disconnect.key)
         if seq is not None:
-            ctx.keyboard_escape = seq
+            ctx.repl.keyboard_escape = seq
 
     triggers_path = os.path.join(config_dir, "triggers.json")
-    ctx.triggers_file = triggers_path
+    ctx.triggers.file = triggers_path
     if os.path.isfile(triggers_path):
-        ctx.trigger_rules = trigger.load_triggers(triggers_path, ctx.session_key)
+        ctx.triggers.rules = trigger.load_triggers(triggers_path, ctx.session_key)
 
     highlights_path = os.path.join(config_dir, "highlights.json")
-    ctx.highlights_file = highlights_path
+    ctx.highlights.file = highlights_path
     if os.path.isfile(highlights_path):
-        ctx.highlight_rules = highlighter.load_highlights(highlights_path, ctx.session_key)
+        ctx.highlights.rules = highlighter.load_highlights(highlights_path, ctx.session_key)
 
     progressbars_path = os.path.join(config_dir, "progressbars.json")
-    ctx.progressbars_file = progressbars_path
+    ctx.progress.file = progressbars_path
     if os.path.isfile(progressbars_path):
-        ctx.progressbar_configs = progressbars.load_progressbars(progressbars_path, ctx.session_key)
+        ctx.progress.configs = progressbars.load_progressbars(progressbars_path, ctx.session_key)
 
-    ctx.gmcp_snapshot_file = paths.gmcp_snapshot_path(ctx.session_key)
+    ctx.gmcp.snapshot_file = paths.gmcp_snapshot_path(ctx.session_key)
 
     chat_file = paths.chat_path(ctx.session_key)
-    ctx.chat_file = chat_file
+    ctx.chat.file = chat_file
     if os.path.isfile(chat_file):
-        ctx.chat_messages = chat.load_chat(chat_file)
-    ctx.on_chat_text = lambda data: chat.append_chat_msg(ctx, data)
-    ctx.on_chat_channels = lambda data: setattr(ctx, "chat_channels", data)
+        ctx.chat.messages = chat.load_chat(chat_file)
+    ctx.chat.on_text = lambda data: chat.append_chat_msg(ctx, data)
+    ctx.chat.on_channels = lambda data: setattr(ctx.chat, "chat_channels", data)
 
     rooms_file = rooms.rooms_path(ctx.session_key)
-    ctx.rooms_file = rooms_file
-    ctx.current_room_file = rooms.current_room_path(ctx.session_key)
-    ctx.room_graph = rooms.RoomStore(rooms_file)
+    ctx.room.file = rooms_file
+    ctx.room.current_file = rooms.current_room_path(ctx.session_key)
+    ctx.room.graph = rooms.RoomStore(rooms_file)
 
     def on_room_info(data: typing.Any) -> None:
         num = str(data["num"])
-        ctx.previous_room_num = ctx.current_room_num
-        ctx.current_room_num = num
-        ctx.room_changed.set()
-        ctx.room_changed.clear()
-        ctx.room_graph.update_room(data)
-        rooms.write_current_room(ctx.current_room_file, num)
+        ctx.room.previous = ctx.room.current
+        ctx.room.current = num
+        ctx.room.changed.set()
+        ctx.room.changed.clear()
+        ctx.room.graph.update_room(data)
+        rooms.write_current_room(ctx.room.current_file, num)
 
-    ctx.on_room_info = on_room_info
-    ctx.history_file = paths.history_path(ctx.session_key)
+    ctx.gmcp.on_room_info = on_room_info
+    ctx.repl.history_file = paths.history_path(ctx.session_key)
 
     from . import scripts as scripts_mod
 
     scripts_dir = str(paths.xdg_config_dir() / "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
-    ctx.script_manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
+    ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
 
 
 class ColorFilteredWriter:
@@ -140,17 +143,21 @@ class ColorFilteredWriter:
         self.inner = inner
         self.ctx = ctx
         self.encoding = encoding or ctx.encoding or "utf-8"
+        self._decoder: codecs.IncrementalDecoder | None = None
 
     def write(self, data: bytes) -> None:
         """Filter *data* through the color filter if one is active, then write."""
-        # XXX TODO: implement dynamically changing IncrementalDecoder like done in telnetlib3
-        cf = self.ctx.color_filter
+        cf = self.ctx.repl.color_filter
         if cf is not None:
-            text = data.decode(self.encoding, errors="replace")
+            cur_encoding = self.ctx.encoding or self.encoding
+            if self._decoder is None or cur_encoding != getattr(self._decoder, "_encoding", ""):
+                self._decoder = codecs.getincrementaldecoder(cur_encoding)(errors="replace")
+                self._decoder._encoding = cur_encoding  # type: ignore[attr-defined]
+            text = self._decoder.decode(data)
             text = cf.filter(text)
-            if self.ctx.erase_eol:
-                text = text.replace("\r\n", "\x1b[K\r\n\x1b[K")
-            data = text.encode(self.ctx.encoding, errors="replace")
+            if self.ctx.repl.erase_eol:
+                text = util.erase_eol(text)
+            data = text.encode(cur_encoding, errors="replace")
         self.inner.write(data)
 
     def __getattr__(self, name: str) -> typing.Any:
@@ -217,7 +224,7 @@ def want_repl(
     """Return True when the REPL should be active."""
     if ctx.raw_mode is True:
         return False
-    return ctx.repl_enabled and getattr(writer, "mode", "local") == "local"
+    return ctx.repl.enabled and getattr(writer, "mode", "local") == "local"
 
 
 def _setup_color_filter(
@@ -231,15 +238,14 @@ def _setup_color_filter(
     """
     Create and attach a color filter from telix CLI args and terminal detection.
 
-    Reads color options from :data:`telix.main._color_args` (set by
-    :func:`~telix.main.main` before the shell starts) and encoding from
-    the telnetlib3 writer context.  For retro encodings (PETSCII, ATASCII),
-    uses the encoding-specific filter instead of ColorFilter.
+    Reads color options from ``ctx.color_args`` (threaded through the call chain
+    from :func:`~telix.main.main`) and encoding from the telnetlib3 writer context.
+    For retro encodings (PETSCII, ATASCII), uses the encoding-specific filter
+    instead of ColorFilter.
     """
-    from . import main as _main_mod
-    from .color_filter import PALETTES, ColorConfig, ColorFilter, PetsciiColorFilter, AtasciiControlFilter
+    from . import color_filter
 
-    args = _main_mod._color_args
+    args = ctx.color_args
     if args is None:
         return
 
@@ -257,21 +263,23 @@ def _setup_color_filter(
     if is_petscii and colormatch != "c64":
         colormatch = "c64"
 
-    if colormatch not in PALETTES:
+    if colormatch not in color_filter.PALETTES:
         log.warning("Unknown palette %r, disabling color filter", colormatch)
         return
 
     if is_petscii or colormatch == "c64":
-        ctx.color_filter = PetsciiColorFilter(brightness=args.color_brightness, contrast=args.color_contrast)
+        ctx.repl.color_filter = color_filter.PetsciiColorFilter(
+            brightness=args.color_brightness, contrast=args.color_contrast
+        )
         return
 
     if is_atascii:
-        ctx.color_filter = AtasciiControlFilter()
+        ctx.repl.color_filter = color_filter.AtasciiControlFilter()
         return
 
     bg_color: tuple[int, int, int] = (0, 0, 0)
     bg_str = args.background_color
-    if isinstance(bg_str, str) and bg_str.startswith("#") and len(bg_str) == 7:
+    if isinstance(bg_str, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", bg_str):
         bg_color = (int(bg_str[1:3], 16), int(bg_str[3:5], 16), int(bg_str[5:7], 16))
     elif isinstance(bg_str, tuple):
         bg_color = bg_str
@@ -293,7 +301,7 @@ def _setup_color_filter(
         bg_color = (0, 0, 0)
         fg_color = None
 
-    color_config = ColorConfig(
+    color_config = color_filter.ColorConfig(
         palette_name=colormatch,
         brightness=args.color_brightness,
         contrast=args.color_contrast,
@@ -302,25 +310,23 @@ def _setup_color_filter(
         foreground_color=fg_color,
         force_black_bg=force_black_bg,
     )
-    ctx.color_filter = ColorFilter(color_config)
-    ctx.erase_eol = True
+    ctx.repl.color_filter = color_filter.ColorFilter(color_config)
+    ctx.repl.erase_eol = True
 
 
 def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     """
     Set ``ctx.ansi_keys`` from the telix CLI ``--ansi-keys`` flag.
 
-    Reads :data:`telix.main._color_args` set by :func:`~telix.main.main`
-    before the shell starts.  No-op when called outside a main() context.
+    Reads ``ctx.color_args`` threaded through the call chain from
+    :func:`~telix.main.main`.  No-op when called outside a main() context.
 
     :param ctx: Session context to update.
     """
-    from . import main as _main_mod
-
-    args = _main_mod._color_args
+    args = ctx.color_args
     if args is None:
         return
-    ctx.ansi_keys = bool(getattr(args, "ansi_keys", False))
+    ctx.repl.ansi_keys = bool(getattr(args, "ansi_keys", False))
 
 
 async def telix_client_shell(
@@ -341,12 +347,16 @@ async def telix_client_shell(
     """
     # 1. Build SessionContext and attach to writer, preserving attributes
     #    that run_client() wrappers already set on the original ctx.
+    # Transfer color_args from module-level global to initial ctx for native telnet path.
+    from . import main as _main_mod
+
+    telnet_writer.ctx.color_args = _main_mod._color_args  # type: ignore[attr-defined]
     ctx = telnet_writer.ctx = session_context.TelixSessionContext.create_using_telnet_ctx(
         writer=telnet_writer,  # type: ignore[arg-type]
         session_key=build_session_key(telnet_writer),
         encoding=telnet_writer.fn_encoding(incoming=True),
     )
-    ctx.repl_enabled = True
+    ctx.repl.enabled = True
 
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)
@@ -361,18 +371,18 @@ async def telix_client_shell(
         if base_on_gmcp is not None:
             base_on_gmcp(package, data)
         if package == "Comm.Channel.Text":
-            if ctx.on_chat_text is not None:
-                ctx.on_chat_text(data)
+            if ctx.chat.on_text is not None:
+                ctx.chat.on_text(data)
         elif package == "Comm.Channel.List":
-            if ctx.on_chat_channels is not None:
-                ctx.on_chat_channels(data)
+            if ctx.chat.on_channels is not None:
+                ctx.chat.on_channels(data)
         elif package == "Room.Info":
-            if ctx.on_room_info is not None:
-                ctx.on_room_info(data)
+            if ctx.gmcp.on_room_info is not None:
+                ctx.gmcp.on_room_info(data)
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.GMCP, on_gmcp)
 
-    keyboard_escape = ctx.keyboard_escape
+    keyboard_escape = ctx.repl.keyboard_escape
 
     with telnetlib3.client_shell.Terminal(telnet_writer=telnet_writer) as tty_shell:
         linesep = "\n"
@@ -395,7 +405,7 @@ async def telix_client_shell(
             nonlocal ga_detected_raw
             ga_detected_raw = True
             prompt_ready_raw.set()
-            ar = ctx.trigger_engine
+            ar = ctx.triggers.engine
             if ar is not None:
                 ar.on_prompt()
 
@@ -411,7 +421,7 @@ async def telix_client_shell(
                 pass
             prompt_ready_raw.clear()
 
-        ctx.trigger_wait_fn = wait_for_prompt_raw
+        ctx.triggers.wait_fn = wait_for_prompt_raw
         ctx.autoreply_wait_fn = wait_for_prompt_raw
 
         escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)
@@ -419,7 +429,7 @@ async def telix_client_shell(
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
         def handle_close(msg: str) -> None:
-            cf = ctx.color_filter
+            cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
@@ -448,7 +458,7 @@ async def telix_client_shell(
         while True:
             if check_want_repl() and tty_shell._istty:
                 mode_switched = await client_repl.repl_event_loop(
-                    telnet_reader, telnet_writer, tty_shell, stdout, history_file=ctx.history_file
+                    telnet_reader, telnet_writer, tty_shell, stdout, history_file=ctx.repl.history_file
                 )
                 if not mode_switched:
                     # Connection closed normally.
@@ -465,7 +475,7 @@ async def telix_client_shell(
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.color_filter is not None else stdout
+            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
             await telnetlib3.client_shell._raw_event_loop(
                 telnet_reader,
                 telnet_writer,
@@ -507,19 +517,20 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
     import telnetlib3._session_context
 
     ssh_writer.ctx = telnetlib3._session_context.TelnetSessionContext()  # type: ignore[assignment]
+    ssh_writer.ctx.color_args = getattr(ssh_writer, "color_args", None)
 
     ctx = ssh_writer.ctx = session_context.TelixSessionContext.create_using_telnet_ctx(
         session_key=build_session_key(ssh_writer),
         writer=ssh_writer,  # type: ignore[arg-type]
         encoding=ssh_writer.encoding,
     )
-    ctx.repl_enabled = False
+    ctx.repl.enabled = False
     ctx.raw_mode = True
 
     load_configs(ctx)
     _setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
 
-    keyboard_escape = ctx.keyboard_escape
+    keyboard_escape = ctx.repl.keyboard_escape
 
     with telnetlib3.client_shell.Terminal(telnet_writer=ssh_writer) as tty_shell:  # type: ignore[arg-type]
         linesep = "\r\n"
@@ -530,7 +541,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
         stdout.write(f"Escape character is '{escape_name}'.{linesep}".encode())
 
         def handle_close(msg: str) -> None:
-            cf = ctx.color_filter
+            cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
@@ -543,9 +554,9 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             state = telnetlib3.client_shell._RawLoopState(
-                switched_to_raw=True, last_will_echo=False, local_echo=not ssh_writer.will_echo, linesep=linesep
+                switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.color_filter is not None else stdout
+            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ssh_reader,  # type: ignore[arg-type]
                 ssh_writer,  # type: ignore[arg-type]
@@ -584,7 +595,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     ctx = ws_writer.ctx = session_context.TelixSessionContext.create_using_telnet_ctx(
         session_key=build_session_key(ws_writer), writer=ws_writer, encoding=ws_writer.encoding
     )
-    ctx.repl_enabled = not no_repl
+    ctx.repl.enabled = not no_repl
 
     # 2. Load per-session configs.
     load_configs(ctx)
@@ -595,18 +606,18 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
     def on_gmcp(package: str, data: typing.Any) -> None:
         if package == "Comm.Channel.Text":
-            if ctx.on_chat_text is not None:
-                ctx.on_chat_text(data)
+            if ctx.chat.on_text is not None:
+                ctx.chat.on_text(data)
         elif package == "Comm.Channel.List":
-            if ctx.on_chat_channels is not None:
-                ctx.on_chat_channels(data)
+            if ctx.chat.on_channels is not None:
+                ctx.chat.on_channels(data)
         elif package == "Room.Info":
-            if ctx.on_room_info is not None:
-                ctx.on_room_info(data)
+            if ctx.gmcp.on_room_info is not None:
+                ctx.gmcp.on_room_info(data)
 
     ws_writer.set_ext_callback(ws_transport.GMCP, on_gmcp)
 
-    keyboard_escape = ctx.keyboard_escape
+    keyboard_escape = ctx.repl.keyboard_escape
 
     # Terminal / repl_event_loop / _flush_color_filter are typed for
     # TelnetWriter but accept any duck-compatible writer at runtime.
@@ -620,7 +631,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
         def handle_close(msg: str) -> None:
-            cf = ctx.color_filter
+            cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
@@ -628,13 +639,13 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
-        if tty_shell._istty and ctx.repl_enabled:
+        if tty_shell._istty and ctx.repl.enabled:
             await client_repl.repl_event_loop(
                 ws_reader,  # type: ignore[arg-type]
                 ws_writer,  # type: ignore[arg-type]
                 tty_shell,
                 stdout,
-                history_file=ctx.history_file,
+                history_file=ctx.repl.history_file,
             )
             handle_close("Connection closed.")
         elif tty_shell._istty:
@@ -646,7 +657,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.color_filter is not None else stdout
+            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ws_reader,  # type: ignore[arg-type]
                 ws_writer,  # type: ignore[arg-type]

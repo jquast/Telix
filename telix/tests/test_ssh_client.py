@@ -1,17 +1,18 @@
-"""Tests for telix.ssh_client -- key file path resolution."""
+"""Tests for telix.ssh_client -- key file path resolution and data delivery."""
 
+import asyncio
 import os
 
 import pytest
 
 from telix.ssh_client import resolve_key_file
+from telix.ssh_transport import SSHReader
 
 
 @pytest.mark.parametrize(
     "key_file, expected",
     [
-        ("id_ed25519", os.path.expanduser("~/.ssh/id_ed25519")),
-        ("id_rsa", os.path.expanduser("~/.ssh/id_rsa")),
+        ("id_ed25519", "id_ed25519"),
         ("~/.ssh/id_ed25519", os.path.expanduser("~/.ssh/id_ed25519")),
         ("/absolute/path/key", "/absolute/path/key"),
         ("subdir/key", "subdir/key"),
@@ -19,5 +20,62 @@ from telix.ssh_client import resolve_key_file
     ],
 )
 def test_resolve_key_file(key_file, expected):
-    """resolve_key_file expands bare filenames to ~/.ssh/ and ~ paths."""
+    """resolve_key_file expands ~ paths, leaving bare names as-is."""
     assert resolve_key_file(key_file) == expected
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_client_delivers_prompt_without_newline():
+    """Chunks without trailing newlines (e.g. shell prompts) are delivered to the reader."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    chunks = ["*** System restart required ***\r\n", "user@host:~$ "]
+    chunk_idx = 0
+    delivered: list[str] = []
+    eof_event = asyncio.Event()
+
+    async def fake_read(n: int = -1) -> str:
+        nonlocal chunk_idx
+        if chunk_idx < len(chunks):
+            data = chunks[chunk_idx]
+            chunk_idx += 1
+            return data
+        await eof_event.wait()
+        return ""
+
+    fake_stdout = MagicMock()
+    fake_stdout.read = fake_read
+
+    fake_process = MagicMock()
+    fake_process.stdout = fake_stdout
+    fake_process.__aenter__ = AsyncMock(return_value=fake_process)
+    fake_process.__aexit__ = AsyncMock(return_value=None)
+
+    fake_conn = MagicMock()
+    fake_conn.__aenter__ = AsyncMock(return_value=fake_conn)
+    fake_conn.__aexit__ = AsyncMock(return_value=None)
+    fake_conn.create_process = MagicMock(return_value=fake_process)
+
+    async def fake_shell(reader: SSHReader, writer: object) -> None:
+        while True:
+            chunk = await reader.read()
+            if not chunk:
+                break
+            delivered.append(chunk)
+
+    with (
+        patch("asyncssh.connect", return_value=fake_conn),
+        patch("shutil.get_terminal_size", return_value=(80, 24)),
+    ):
+        from telix.ssh_client import run_ssh_client
+
+        task = asyncio.ensure_future(
+            run_ssh_client(
+                host="host", port=22, username="user", key_file="", term_type="xterm", shell=fake_shell
+            )
+        )
+        await asyncio.sleep(0.05)
+        eof_event.set()
+        await task
+
+    assert delivered == chunks

@@ -132,6 +132,6 @@ def atomic_write(path: str, content: str) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
         os.replace(tmp, path)
-    except BaseException:
+    except Exception:
         os.unlink(tmp)
         raise

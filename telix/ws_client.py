@@ -4,16 +4,20 @@ WebSocket client for telix.
 Provides :func:`run_ws_client` and :func:`build_parser`, called by
 :func:`telix.main.main` when a ``ws://`` or ``wss://`` URL is given on the
 command line.  Connects via ``websockets.connect()`` using the
-``gmcp.mudstandards.org`` or ``telnet.mudstandards.org`` subprotocol.
+``gmcp.mudstandards.org``, ``telnet.mudstandards.org``, or
+``terminal.mudstandards.org`` subprotocol.
 
 For the ``telnet.mudstandards.org`` subprotocol, a real
 :class:`telnetlib3.client_base.TelnetClient` is run on top of a
 :class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC option
 negotiation and all telnet-specific CLI flags.
 
-For the ``gmcp.mudstandards.org`` subprotocol, lightweight
+For the ``gmcp.mudstandards.org`` and ``terminal.mudstandards.org``
+subprotocols, lightweight
 :class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter`
-adapters are used instead.
+adapters are used instead.  The ``terminal`` subprotocol carries only binary
+frames (UTF-8 encoded I/O and ANSI control codes); the ``gmcp`` subprotocol
+additionally delivers GMCP commands as text frames.
 """
 
 import sys
@@ -38,7 +42,12 @@ log = logging.getLogger(__name__)
 
 GMCP_SUBPROTOCOL = "gmcp.mudstandards.org"
 TELNET_SUBPROTOCOL = "telnet.mudstandards.org"
-WS_SUBPROTOCOLS = [websockets.typing.Subprotocol(GMCP_SUBPROTOCOL), websockets.typing.Subprotocol(TELNET_SUBPROTOCOL)]
+TERMINAL_SUBPROTOCOL = "terminal.mudstandards.org"
+WS_SUBPROTOCOLS = [
+    websockets.typing.Subprotocol(GMCP_SUBPROTOCOL),
+    websockets.typing.Subprotocol(TELNET_SUBPROTOCOL),
+    websockets.typing.Subprotocol(TERMINAL_SUBPROTOCOL),
+]
 
 
 async def run_ws_client(
@@ -67,6 +76,7 @@ async def run_ws_client(
     connect_maxwait: float = 4.0,
     connect_timeout: "float | None" = None,
     compression: "bool | None" = None,
+    color_args: "argparse.Namespace | None" = None,
 ) -> None:
     """
     Connect to a WebSocket MUD server and run the telix shell.
@@ -107,6 +117,7 @@ async def run_ws_client(
     :param connect_maxwait: Maximum wait (seconds) for negotiation to complete.
     :param connect_timeout: WebSocket open timeout in seconds (default: 10).
     :param compression: ``True`` to request MCCP, ``False`` to refuse, ``None`` for auto.
+    :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
     """
     if logfile:
         telnetlib3.accessories.make_logger(
@@ -119,7 +130,7 @@ async def run_ws_client(
     open_timeout = connect_timeout if connect_timeout is not None else 10
 
     async with websockets.connect(url, subprotocols=WS_SUBPROTOCOLS, max_size=2**20, open_timeout=open_timeout) as ws:
-        if ws.subprotocol not in (GMCP_SUBPROTOCOL, TELNET_SUBPROTOCOL):
+        if ws.subprotocol not in (GMCP_SUBPROTOCOL, TELNET_SUBPROTOCOL, TERMINAL_SUBPROTOCOL):
             log.warning("server did not negotiate a known subprotocol (got %r), GMCP may not work", ws.subprotocol)
 
         # Sniff the first frame to detect servers that send raw IAC negotiation over the
@@ -160,6 +171,7 @@ async def run_ws_client(
                 always_wont=always_wont or set(),
                 typescript=typescript,
                 typescript_mode=typescript_mode,
+                color_args=color_args,
             )
         else:
             await _run_gmcp_ws(
@@ -176,6 +188,7 @@ async def run_ws_client(
                 typescript=typescript,
                 typescript_mode=typescript_mode,
                 shell=shell,
+                color_args=color_args,
             )
 
 
@@ -204,6 +217,7 @@ async def _run_telnet_over_ws(
     typescript: str,
     typescript_mode: str,
     first_msg: "bytes | str | None" = None,
+    color_args: "argparse.Namespace | None" = None,
 ) -> None:
     """
     Run a telnet session over the ``telnet.mudstandards.org`` WebSocket subprotocol.
@@ -261,6 +275,7 @@ async def _run_telnet_over_ws(
         writer.always_dont = always_dont
         writer.passive_do = {telnetlib3.telopt.GMCP}
         writer._encoding_explicit = encoding not in ("utf8", "utf-8", False)
+        writer.ctx.color_args = color_args  # type: ignore[attr-defined]
         if gmcp_modules:
             writer.ctx.gmcp_modules = gmcp_modules  # type: ignore[attr-defined]
 
@@ -336,6 +351,7 @@ async def _run_gmcp_ws(
     typescript_mode: str,
     shell: str,
     first_msg: "bytes | str | None" = None,
+    color_args: "argparse.Namespace | None" = None,
 ) -> None:
     """
     Run a session over the ``gmcp.mudstandards.org`` WebSocket subprotocol.
@@ -353,7 +369,8 @@ async def _run_gmcp_ws(
     writer.ctx.raw_mode = raw_mode
     writer.ctx.no_repl = no_repl  # type: ignore[attr-defined]
     writer.ctx.ascii_eol = ascii_eol
-    writer.ctx.ansi_keys = ansi_keys
+    writer.ctx.ansi_keys = ansi_keys  # type: ignore[attr-defined]
+    writer.ctx.color_args = color_args
 
     # Mode-based echo default: BBS (no_repl or raw mode) = server echoes; MUD = local echo.
     writer.will_echo = no_repl or raw_mode is True

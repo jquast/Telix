@@ -1,5 +1,7 @@
 ## Macro Editor
 
+**Default key:** Alt+M
+
 Macros bind a **keystroke** to a **command sequence**.  When the key is
 pressed during a telnet session, the command text is expanded and executed
 exactly as if you had typed it at the input line.
@@ -21,13 +23,14 @@ disable a builtin, but you cannot delete it.
 | F5 | Resume last walk |
 | Alt+H | Edit highlights |
 | Alt+M | Edit macros |
-| Alt+A | Edit triggers |
+| Alt+T | Edit triggers |
 | Alt+R | Edit rooms |
-| Alt+C | Edit captures |
+| Alt+C | Chat viewer / captures |
 | Alt+B | Edit bars |
-| Alt+T | Edit theme |
+| Alt+E | Edit theme |
 | Alt+Shift+H | Toggle highlights |
 | Alt+Shift+A | Toggle triggers |
+| Alt+Q | Stop all running scripts |
 | Ctrl+L | Repaint screen |
 | Ctrl+] | Disconnect |
 
@@ -36,7 +39,7 @@ disable a builtin, but you cannot delete it.
 | Column | Meaning |
 |--------|---------|
 | **Key** | The keystroke that triggers the macro (e.g. F2, Ctrl+A) |
-| **Text** | The command sequence to execute |
+| **Command Text** | The command sequence to execute |
 | **Last** | Timestamp of the last time this macro was triggered |
 
 ### Buttons
@@ -54,7 +57,7 @@ disable a builtin, but you cannot delete it.
 
 - **Enabled** -- toggle the macro on/off without deleting it
 - **Key** -- click "Capture" then press the desired keystroke
-- **Text** -- the command sequence (use `;` and `|` separators, backtick
+- **Command Text** -- the command sequence (use `;` and `|` separators, backtick
   commands); read-only for builtin macros
 
 ### Keyboard Shortcuts
@@ -78,7 +81,7 @@ insert a template you can edit.
 A toggle macro alternates between two commands on each press.  Enable
 the **Toggle** switch in the form to turn a macro into a toggle.
 
-- **On command** (the "Text" field) -- sent on the first press
+- **On command** (the "Command Text" field) -- sent on the first press
 - **Off command** -- sent on the second press, then back to On, etc.
 
 Toggle macros always start in the "on" state when the session begins.
@@ -88,10 +91,7 @@ The current toggle state is not saved to disk.
 
 | Key | Text | Notes |
 |-----|------|-------|
-| Alt+E | `get boots;get jacket;take crysknife;wield crysknife;equip boots;equip cloak` | Equip gear after respawn |
-| Alt+S | `` `travel 8bd9a5e5`;5order splint;5order bandage;`return` `` | Buy supplies and return |
-| F2 | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
-| F6 | `3n;2e;look` | Navigate and look |
-| Ctrl+R | `` `return` `` | Return to macro start room |
-| Alt+D | `` `autodiscover 50` `` | Explore 50 unvisited exits |
-| F7 | `survey on` / `survey off` | Toggle macro -- alternates each press |
+| Alt + G | `get boots;get jacket;take crysknife;wield crysknife;equip boots;equip cloak` | Equip gear after respawn |
+| Alt + S | `` `travel 8bd9a5e5`;5order splint;5order bandage;`return` `` | Heal at supply store and return |
+| ALT + B | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
+| Alt + D | `` `autodiscover 1` `` | Explore one unvisited exit |

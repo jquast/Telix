@@ -4,7 +4,7 @@
 import os
 import re
 import json
-from typing import Any, ClassVar, NamedTuple
+import typing
 
 # 3rd party
 import textual.app
@@ -16,7 +16,7 @@ import textual.containers
 from . import trigger, client_tui_base
 
 
-class TriggerTuple(NamedTuple):
+class TriggerTuple(typing.NamedTuple):
     """Lightweight tuple for trigger rules in the TUI editor."""
 
     pattern: str
@@ -34,7 +34,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
 
     growable_keys: list[str] = ["pattern"]
 
-    BINDINGS: ClassVar[list[textual.binding.Binding]] = [
+    BINDINGS: typing.ClassVar[list[textual.binding.Binding]] = [
         textual.binding.Binding("escape", "cancel_or_close", "Cancel", priority=True),
         textual.binding.Binding("f1", "show_help", "Help", show=True),
         textual.binding.Binding("plus", "reorder_hint", "Change Priority", key_display="+/=/-", show=True),
@@ -84,7 +84,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
         return "Triggers"
 
     @property
-    def items(self) -> list[Any]:
+    def items(self) -> list[typing.Any]:
         return self.rules
 
     @property

@@ -1,5 +1,7 @@
 ## Room Mapping
 
+**Keys:** F3 Random walk -- F4 Autodiscover -- F5 Resume -- Alt+R Room browser
+
 When the server sends GMCP `Room.Info` messages, Telix builds an
 incrementally-growing room graph stored in SQLite at
 `$XDG_DATA_HOME/telix/rooms-<hash>.db`.

@@ -24,7 +24,7 @@ if sys.platform == "win32":
 # local
 from telix.paths import DATA_DIR, history_path
 from telix.macros import Macro, load_macros, save_macros
-from telix.trigger import SearchBuffer, TriggerRule, TriggerEngine
+from telix.trigger import TriggerRule, SearchBuffer, TriggerEngine
 from telix.client_repl import (
     TRAVEL_RE,
     STYLE_NORMAL,
@@ -545,36 +545,55 @@ def test_history_path_no_traversal() -> None:
     assert ".." not in os.path.basename(result)
 
 
-class DynamicRoomContext:
-    """SessionContext subclass with property-based current_room_num."""
+class DynamicRoomState:
+    """RoomState proxy with a property-based current driven by a sequence or fixed value."""
 
-    def __init__(self, room_num: str, room_sequence: list[str] | None) -> None:
-        self.real_ctx = TelixSessionContext(session_key="test")
-        self.room_val = room_num
-        self.seq_iter = iter(room_sequence) if room_sequence else None
+    def __init__(self, real_room_state: object, room_num: str, room_sequence: list[str] | None) -> None:
+        object.__setattr__(self, "_real", real_room_state)
+        object.__setattr__(self, "room_val", room_num)
+        object.__setattr__(self, "seq_iter", iter(room_sequence) if room_sequence else None)
 
     @property
-    def current_room_num(self) -> str:
-        if self.seq_iter is not None:
-            val = next(self.seq_iter, None)
+    def current(self) -> str:
+        seq_iter = object.__getattribute__(self, "seq_iter")
+        if seq_iter is not None:
+            val = next(seq_iter, None)
             if val is not None:
-                self.room_val = val
-        return self.room_val
+                object.__setattr__(self, "room_val", val)
+        return object.__getattribute__(self, "room_val")
 
-    @current_room_num.setter
-    def current_room_num(self, value: str) -> None:
-        self.room_val = value
+    @current.setter
+    def current(self, value: str) -> None:
+        object.__setattr__(self, "room_val", value)
 
     def __getattr__(self, name: str) -> object:
-        return getattr(self.real_ctx, name)
+        return getattr(object.__getattribute__(self, "_real"), name)
 
     def __setattr__(self, name: str, value: object) -> None:
-        if name in ("real_ctx", "room_val", "seq_iter"):
-            super().__setattr__(name, value)
-        elif name == "current_room_num":
-            super().__setattr__("room_val", value)
+        if name in ("room_val", "seq_iter", "_real"):
+            object.__setattr__(self, name, value)
+        elif name == "current":
+            object.__setattr__(self, "room_val", value)
         else:
-            setattr(self.real_ctx, name, value)
+            setattr(object.__getattribute__(self, "_real"), name, value)
+
+
+class DynamicRoomContext:
+    """TelixSessionContext wrapper with a dynamic room sub-object for sequence-based room changes."""
+
+    def __init__(self, room_num: str, room_sequence: list[str] | None) -> None:
+        object.__setattr__(self, "_real_ctx", TelixSessionContext(session_key="test"))
+        real_ctx = object.__getattribute__(self, "_real_ctx")
+        object.__setattr__(self, "room", DynamicRoomState(real_ctx.room, room_num, room_sequence))
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(object.__getattribute__(self, "_real_ctx"), name)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if name in ("room", "_real_ctx"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, "_real_ctx"), name, value)
 
 
 class WalkWriter:
@@ -590,9 +609,9 @@ class WalkWriter:
         self.echo_log: list[str] = []
         self.ctx = DynamicRoomContext(room_num, room_sequence)
         self.ctx.writer = self  # type: ignore[assignment]
-        self.ctx.echo_command = self.echo_log.append
-        self.ctx.room_arrival_timeout = 0.0
-        self.ctx.room_graph = types.SimpleNamespace(
+        self.ctx.prompt.echo = self.echo_log.append
+        self.ctx.room.arrival_timeout = 0.0
+        self.ctx.room.graph = types.SimpleNamespace(
             adj=adj or {},
             rooms={},
             get_room=lambda num: types.SimpleNamespace(name=num),
@@ -618,7 +637,7 @@ async def test_randomwalk_stuck_room_stops(monkeypatch: pytest.MonkeyPatch, fast
     assert len(retry_msgs) == MAX_STUCK_RETRIES
     stop_msgs = [m for m in writer.echo_log if "all exits blocked, stopping" in m]
     assert len(stop_msgs) == 1
-    assert not writer.ctx.randomwalk_active
+    assert not writer.ctx.walk.randomwalk_active
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -668,7 +687,7 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
 
     no_change_msgs = [m for m in writer.echo_log if "no room change" in m]
     assert len(no_change_msgs) >= 1
-    assert ("room1", "north") in writer.ctx.blocked_exits
+    assert ("room1", "north") in writer.ctx.walk.blocked_exits
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -687,8 +706,8 @@ async def test_autodiscover_stuck_gateway_stops(monkeypatch: pytest.MonkeyPatch,
     def fake_find_branches(pos: str, **kw: object) -> list[tuple[str, str, str]]:
         return [("gw1", "east", "target1"), ("gw2", "west", "target2"), ("gw3", "south", "target3")]
 
-    writer.ctx.room_graph.find_branches = fake_find_branches
-    writer.ctx.room_graph.find_path_with_rooms = lambda src, dst, **kw: [("north", dst)]
+    writer.ctx.room.graph.find_branches = fake_find_branches
+    writer.ctx.room.graph.find_path_with_rooms = lambda src, dst, **kw: [("north", dst)]
 
     async def fake_fast_travel(*args: object, **kwargs: object) -> None:
         pass
@@ -699,7 +718,7 @@ async def test_autodiscover_stuck_gateway_stops(monkeypatch: pytest.MonkeyPatch,
 
     stuck_msgs = [m for m in writer.echo_log if "all routes blocked" in m]
     assert len(stuck_msgs) == 1
-    assert not writer.ctx.discover_active
+    assert not writer.ctx.walk.discover_active
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -724,14 +743,14 @@ async def test_autodiscover_blocked_edge_avoids_retrying(monkeypatch: pytest.Mon
             return [("gw1", "north", "t1"), ("gw2", "south", "t2")]
         return [("gw2", "south", "t2")]
 
-    writer.ctx.room_graph.find_branches = fake_find_branches
+    writer.ctx.room.graph.find_branches = fake_find_branches
 
     def fake_find_path(src: str, dst: str, **kw: object) -> list[tuple[str, str]] | None:
         if src == "start" and "portal" not in adj.get("start", {}):
             return None
         return [("portal", "island"), ("east", dst)]
 
-    writer.ctx.room_graph.find_path_with_rooms = fake_find_path
+    writer.ctx.room.graph.find_path_with_rooms = fake_find_path
 
     fast_travel_calls = 0
 
@@ -762,13 +781,13 @@ async def test_send_chained_mixed_uses_move_pacing(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(asyncio, "sleep", tracking_sleep)
 
     writer = WalkWriter(room_num="room1")
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     commands = ["e", "e", "e", "n", "n", "rocks"]
     seq = ["room2", "room3", "room4", "room4a", "room4b", "room4c"]
-    writer.ctx.seq_iter = iter(seq)
+    writer.ctx.room.seq_iter = iter(seq)
 
     await send_chained(commands, writer.ctx, logging.getLogger("test"))
 
@@ -791,9 +810,9 @@ async def test_send_chained_repeated_non_move(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(asyncio, "sleep", tracking_sleep)
 
     writer = WalkWriter(room_num="room1")
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     commands = ["buy coffee"] * 5
     await send_chained(commands, writer.ctx, logging.getLogger("test"))
@@ -851,13 +870,13 @@ async def test_send_chained_queue_cancellation(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(asyncio, "sleep", fast_sleep)
 
     writer = WalkWriter(room_num="room1")
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     commands = ["e", "e", "e", "e", "e"]
     seq = ["room2", "room3", "room4", "room5", "room6"]
-    writer.ctx.seq_iter = iter(seq)
+    writer.ctx.room.seq_iter = iter(seq)
 
     render_calls: list[int] = []
     queue = CommandQueue(commands, render=lambda: render_calls.append(1))
@@ -867,7 +886,6 @@ async def test_send_chained_queue_cancellation(monkeypatch: pytest.MonkeyPatch) 
     def cancel_after_two() -> None:
         orig_render()
         if queue.current_idx >= 2:
-            queue.cancelled = True
             queue.cancel_event.set()
 
     queue.render = cancel_after_two
@@ -875,7 +893,7 @@ async def test_send_chained_queue_cancellation(monkeypatch: pytest.MonkeyPatch) 
     await send_chained(commands, writer.ctx, logging.getLogger("test"), queue=queue)
 
     assert len(writer.sent) <= 2
-    assert queue.cancelled
+    assert queue.cancel_event.is_set()
     assert len(render_calls) >= 1
 
 
@@ -894,9 +912,9 @@ async def test_send_chained_delay_pauses(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(asyncio, "sleep", tracking_sleep)
 
     writer = WalkWriter(room_num="room1")
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     commands = ["look", "`delay 2s`", "north"]
 
@@ -1201,19 +1219,21 @@ class CommandTrackingContext(DynamicRoomContext):
 
     def __init__(self, room_num: str, adj: dict[str, dict[str, str]], blocked_directions: set[tuple[str, str]]) -> None:
         super().__init__(room_num, room_sequence=None)
-        self.adj = adj
-        self.blocked = blocked_directions
+        object.__setattr__(self, "_adj", adj)
+        object.__setattr__(self, "_blocked", blocked_directions)
 
     def on_write(self, data: str | bytes) -> None:
         text = data.decode("utf-8") if isinstance(data, bytes) else data
         direction = text.strip()
-        current = self.room_val
-        if (current, direction) in self.blocked:
+        current = self.room.current
+        adj = object.__getattribute__(self, "_adj")
+        blocked = object.__getattribute__(self, "_blocked")
+        if (current, direction) in blocked:
             return
-        exits = self.adj.get(current, {})
+        exits = adj.get(current, {})
         if direction in exits:
-            self.room_val = exits[direction]
-            self.room_changed.set()
+            self.room.current = exits[direction]
+            self.room.changed.set()
 
 
 class TrackingWalkWriter(WalkWriter):
@@ -1224,9 +1244,9 @@ class TrackingWalkWriter(WalkWriter):
         self.echo_log: list[str] = []
         self.ctx = CommandTrackingContext(room_num, adj, blocked_directions)
         self.ctx.writer = self  # type: ignore[assignment]
-        self.ctx.echo_command = self.echo_log.append
-        self.ctx.room_arrival_timeout = 0.0
-        self.ctx.room_graph = types.SimpleNamespace(
+        self.ctx.prompt.echo = self.echo_log.append
+        self.ctx.room.arrival_timeout = 0.0
+        self.ctx.room.graph = types.SimpleNamespace(
             adj=adj,
             rooms={},
             get_room=lambda num: types.SimpleNamespace(name=num),
@@ -1254,8 +1274,8 @@ async def test_randomwalk_blocked_exit_tries_other_direction(monkeypatch: pytest
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
 
-    assert ("room1", "north") in writer.ctx.blocked_exits
-    assert "room3" in writer.ctx.last_walk_visited
+    assert ("room1", "north") in writer.ctx.walk.blocked_exits
+    assert "room3" in writer.ctx.walk.last_walk_visited
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1271,15 +1291,15 @@ async def test_autodiscover_skips_persistently_blocked_exits(monkeypatch: pytest
     def fake_find_branches(pos: str, **kw: object) -> list[tuple[str, str, str]]:
         return [("room1", "east", "room2"), ("room1", "west", "room3")]
 
-    writer.ctx.room_graph.find_branches = fake_find_branches
+    writer.ctx.room.graph.find_branches = fake_find_branches
 
     def track_send(direction: str) -> None:
         explored_dirs.append(direction)
 
-    writer.ctx.send_line = track_send
+    writer.ctx.repl.send_line = track_send
 
     # Pre-seed east as blocked
-    writer.ctx.blocked_exits.add(("room1", "east"))
+    writer.ctx.walk.blocked_exits.add(("room1", "east"))
 
     await autodiscover(writer.ctx, logging.getLogger("test"), limit=10)
 
@@ -1297,15 +1317,15 @@ async def test_resume_randomwalk_from_same_room(monkeypatch: pytest.MonkeyPatch,
     # Run once -- walks nowhere (north blocked), saves state
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=2)
 
-    assert writer.ctx.last_walk_mode == "randomwalk"
-    assert writer.ctx.last_walk_room == "room1"
-    saved_visited = writer.ctx.last_walk_visited.copy()
+    assert writer.ctx.walk.last_walk_mode == "randomwalk"
+    assert writer.ctx.walk.last_walk_room == "room1"
+    saved_visited = writer.ctx.walk.last_walk_visited.copy()
     assert "room1" in saved_visited
 
     # Resume: visited set should be carried over
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=2, resume=True)
 
-    assert saved_visited.issubset(writer.ctx.last_walk_visited)
+    assert saved_visited.issubset(writer.ctx.walk.last_walk_visited)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1317,9 +1337,9 @@ async def test_resume_not_used_on_room_change(monkeypatch: pytest.MonkeyPatch, f
     writer = WalkWriter(room_num="room1", adj=adj)
 
     # Simulate previous walk ended at different room
-    writer.ctx.last_walk_mode = "randomwalk"
-    writer.ctx.last_walk_room = "room99"
-    writer.ctx.last_walk_visited = {"room99"}
+    writer.ctx.walk.last_walk_mode = "randomwalk"
+    writer.ctx.walk.last_walk_room = "room99"
+    writer.ctx.walk.last_walk_visited = {"room99"}
 
     parts = ["`resume`"]
     remainder = await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
@@ -1356,7 +1376,7 @@ async def test_randomwalk_bounce_detection(monkeypatch: pytest.MonkeyPatch, fast
 
     bounce_msgs = [m for m in writer.echo_log if "bounce" in m]
     assert len(bounce_msgs) >= 1
-    assert not writer.ctx.randomwalk_active
+    assert not writer.ctx.walk.randomwalk_active
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1376,7 +1396,7 @@ async def test_randomwalk_bounce_blocks_reverse(monkeypatch: pytest.MonkeyPatch,
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=30)
 
-    assert "room3" in writer.ctx.last_walk_visited
+    assert "room3" in writer.ctx.walk.last_walk_visited
     stop_msgs = [m for m in writer.echo_log if "all exits blocked, stopping" in m]
     assert not stop_msgs
 
@@ -1414,12 +1434,12 @@ async def test_randomwalk_blocked_exit_not_global(monkeypatch: pytest.MonkeyPatc
     }
     blocked = {("room1", "east")}
     writer = TrackingWalkWriter(room_num="room1", adj=adj, blocked_directions=blocked)
-    writer.ctx.blocked_exits.add(("room1", "east"))
+    writer.ctx.walk.blocked_exits.add(("room1", "east"))
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=10)
 
-    assert "room3" in writer.ctx.last_walk_visited
-    assert "room2" in writer.ctx.last_walk_visited
+    assert "room3" in writer.ctx.walk.last_walk_visited
+    assert "room2" in writer.ctx.walk.last_walk_visited
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1506,11 +1526,11 @@ async def test_randomwalk_skips_blocked_rooms(monkeypatch: pytest.MonkeyPatch, f
         "room3": {"north": "room1"},
     }
     writer = WalkWriter(room_num="room1", adj=adj)
-    writer.ctx.room_graph.blocked_rooms = lambda: frozenset({"room2"})
+    writer.ctx.room.graph.blocked_rooms = lambda: frozenset({"room2"})
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
 
-    assert "room2" not in writer.ctx.last_walk_visited
+    assert "room2" not in writer.ctx.walk.last_walk_visited
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1518,9 +1538,11 @@ async def test_randomwalk_skips_blocked_rooms(monkeypatch: pytest.MonkeyPatch, f
 async def test_home_travel_command(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = WalkWriter(room_num="room1", adj=adj)
-    writer.ctx.room_graph.room_area = lambda num: "town"
-    writer.ctx.room_graph.get_home_for_area = lambda area: "room2"
-    writer.ctx.room_graph.find_path_with_rooms = lambda src, dst, **kw: [("north", "room2")] if dst == "room2" else None
+    writer.ctx.room.graph.room_area = lambda num: "town"
+    writer.ctx.room.graph.get_home_for_area = lambda area: "room2"
+    writer.ctx.room.graph.find_path_with_rooms = lambda src, dst, **kw: (
+        [("north", "room2")] if dst == "room2" else None
+    )
 
     fast_travel_args: list[object] = []
     __import__("telix.client_repl_travel", fromlist=["fast_travel"]).fast_travel
@@ -1677,9 +1699,9 @@ async def test_send_chained_typescript_no_echo(tmp_path: Any, monkeypatch: pytes
 
     writer = WalkWriter(room_num="room1")
     writer.will_echo = False
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     ts_path = tmp_path / "typescript"
     ts_file = open(ts_path, "w", encoding="utf-8")
@@ -1709,9 +1731,9 @@ async def test_send_chained_typescript_echo_on(tmp_path: Any, monkeypatch: pytes
 
     writer = WalkWriter(room_num="room1")
     writer.will_echo = True
-    writer.ctx.wait_for_prompt = None
-    writer.ctx.prompt_ready = None
-    writer.ctx.room_changed = None
+    writer.ctx.prompt.wait_fn = None
+    writer.ctx.prompt.ready = None
+    writer.ctx.room.changed = None
 
     ts_path = tmp_path / "typescript"
     ts_file = open(ts_path, "w", encoding="utf-8")
@@ -1871,13 +1893,13 @@ async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatc
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     engine = TriggerEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
-    writer.ctx.trigger_engine = engine
+    writer.ctx.triggers.engine = engine
     assert engine.enabled is True
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=2, noreply=True)
 
     assert engine.enabled is True
-    assert writer.ctx.last_walk_noreply is True
+    assert writer.ctx.walk.last_walk_noreply is True
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1887,9 +1909,9 @@ async def test_autodiscover_noreply_disables_engine(monkeypatch: pytest.MonkeyPa
 
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = WalkWriter(room_num="room1", adj=adj)
-    writer.ctx.room_graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
+    writer.ctx.room.graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
     engine = TriggerEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
-    writer.ctx.trigger_engine = engine
+    writer.ctx.triggers.engine = engine
 
     async def noop_fast_travel(*args, **kwargs):
         pass
@@ -1899,7 +1921,7 @@ async def test_autodiscover_noreply_disables_engine(monkeypatch: pytest.MonkeyPa
     await autodiscover(writer.ctx, logging.getLogger("test"), limit=1, noreply=True)
 
     assert engine.enabled is True
-    assert writer.ctx.last_walk_noreply is True
+    assert writer.ctx.walk.last_walk_noreply is True
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1909,9 +1931,9 @@ async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sle
 
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
-    writer.ctx.last_walk_mode = "randomwalk"
-    writer.ctx.last_walk_room = "room1"
-    writer.ctx.last_walk_noreply = True
+    writer.ctx.walk.last_walk_mode = "randomwalk"
+    writer.ctx.walk.last_walk_room = "room1"
+    writer.ctx.walk.last_walk_noreply = True
 
     captured_noreply: list[bool] = []
 
@@ -2128,9 +2150,9 @@ class TestRefreshHighlightEngineBuiltin:
     def make_repl(self, highlight_rules, trigger_rules, term) -> ReplSession:
         repl = object.__new__(ReplSession)
         ctx = TelixSessionContext()
-        ctx.highlight_rules = highlight_rules
-        ctx.trigger_rules = trigger_rules
-        ctx.highlight_engine = None
+        ctx.highlights.rules = highlight_rules
+        ctx.triggers.rules = trigger_rules
+        ctx.highlights.engine = None
         repl.blessed_term = term
         repl.ctx = ctx
         return repl
@@ -2146,7 +2168,7 @@ class TestRefreshHighlightEngineBuiltin:
 
         repl.refresh_highlight_engine()
 
-        result, matched = repl.ctx.highlight_engine.process_line("A monster appears!")
+        result, matched = repl.ctx.highlights.engine.process_line("A monster appears!")
         assert matched is True
         assert "\x1b[PERU]" in result
         assert "\x1b[BEIGE]" not in result
@@ -2162,7 +2184,7 @@ class TestRefreshHighlightEngineBuiltin:
 
         repl.refresh_highlight_engine()
 
-        result, matched = repl.ctx.highlight_engine.process_line("A monster appears!")
+        result, matched = repl.ctx.highlights.engine.process_line("A monster appears!")
         assert matched is False
         assert "\x1b[PERU]" not in result
 
@@ -2233,3 +2255,63 @@ class TestWriteHint:
 
         write_hint("", self.writer, self.bt, trigger=False)
         assert self._output() == ""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "erase_eol, expected",
+    [
+        (True, "line1\x1b[K\r\r\nline2"),
+        (False, "line1\r\r\nline2"),
+    ],
+)
+async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol, expected) -> None:
+    """read_server injects erase-to-eol sequences only when erase_eol is True."""
+    import telnetlib3.client_shell as telnet_shell
+
+    pytest.importorskip("blessed")
+
+    server_data = iter([b"line1\r\r\nline2", b""])
+    eof = [False]
+
+    async def fake_read(_n):
+        chunk = next(server_data)
+        if not chunk:
+            eof[0] = True
+        return chunk
+
+    monkeypatch.setattr(telnet_shell, "_transform_output", lambda out, writer, raw: out)
+
+    ctx = TelixSessionContext()
+    ctx.repl.erase_eol = erase_eol
+    ctx.repl.color_filter = None
+    ctx.typescript_file = None
+
+    line_hold_calls: list[str] = []
+    bt = types.SimpleNamespace(restore="", save="", clear_eos="", hide_cursor="")
+    stdout, _ = mock_stdout()
+
+    repl = object.__new__(ReplSession)
+    repl.scroll = types.SimpleNamespace()
+    repl.blessed_term = bt
+    repl.server_done = False
+    repl.telnet_reader = types.SimpleNamespace(read=fake_read, at_eof=lambda: eof[0])
+    repl.telnet_writer = types.SimpleNamespace(will_echo=False, mode="kludge")
+    repl.ctx = ctx
+    repl.prompt_pending = False
+    repl.replay_buf = []
+    repl.stdout = stdout
+    repl.dialogs_mod = types.SimpleNamespace(subprocess_is_active=False, subprocess_buffer=[])
+    repl.line_hold = types.SimpleNamespace(
+        add=lambda text: line_hold_calls.append(text) or ("", ""),
+        flush_raw=lambda: "",
+    )
+    repl.refresh_trigger_engine = lambda: None
+    repl.refresh_highlight_engine = lambda: None
+    repl.cancel_line_hold_timer = lambda: None
+
+    await repl.read_server()
+
+    assert len(line_hold_calls) == 1
+    assert line_hold_calls[0] == expected

@@ -236,6 +236,12 @@ class TestRunWsClientRouting:
         assert calls["path"] == "telnet"
 
     @pytest.mark.asyncio
+    async def test_terminal_subprotocol_routes_to_gmcp_path(self, monkeypatch):
+        """terminal.mudstandards.org subprotocol routes to GMCP path (binary-only, no IAC)."""
+        calls = await self._run(monkeypatch, first_msg=b"hello", subprotocol="terminal.mudstandards.org")
+        assert calls["path"] == "gmcp"
+
+    @pytest.mark.asyncio
     async def test_timeout_falls_back_to_gmcp_path(self, monkeypatch):
         """When no initial frame arrives within timeout, GMCP path is used."""
         import websockets

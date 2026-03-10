@@ -11,7 +11,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from telix import scripts
-from telix.client_repl_commands import SCRIPT_CMD_RE, STOPSCRIPT_CMD_RE
+from telix.client_repl_commands import (
+    SCRIPT_CMD_RE,
+    STOPSCRIPT_CMD_RE,
+    SCRIPTS_CMD_RE,
+    DispatchHooks,
+    StepResult,
+    dispatch_one,
+)
 
 # ---------------------------------------------------------------------------
 # Backtick regex constants
@@ -41,6 +48,22 @@ class TestScriptCmdRe:
 
     def test_case_insensitive(self):
         assert SCRIPT_CMD_RE.match("`SCRIPT demo`") is not None
+
+
+class TestScriptsCmdRe:
+    """SCRIPTS_CMD_RE matches the bare `scripts` backtick command."""
+
+    def test_matches(self):
+        assert SCRIPTS_CMD_RE.match("`scripts`") is not None
+
+    def test_case_insensitive(self):
+        assert SCRIPTS_CMD_RE.match("`SCRIPTS`") is not None
+
+    def test_does_not_match_with_args(self):
+        assert SCRIPTS_CMD_RE.match("`scripts foo`") is None
+
+    def test_does_not_match_plain_text(self):
+        assert SCRIPTS_CMD_RE.match("scripts") is None
 
 
 class TestStopscriptCmdRe:
@@ -197,15 +220,15 @@ def make_ctx():
     """Return a minimal mock TelixSessionContext."""
     ctx = MagicMock()
     ctx.gmcp_data = {"Char.Vitals": {"hp": 80, "maxhp": 100}}
-    ctx.current_room_num = "42"
-    ctx.captures = {"Kills": 5}
-    ctx.room_graph = MagicMock()
-    ctx.room_graph.adj = {"42": {"north": "43", "south": "41"}}
-    ctx.room_graph.find_path.return_value = ["north", "north"]
-    ctx.room_graph.get_room.return_value = MagicMock(name="Forest", area="Wilds")
-    ctx.echo_command = MagicMock()
-    ctx.wait_for_prompt = None
-    ctx.prompt_ready = None
+    ctx.room.current = "42"
+    ctx.highlights.captures = {"Kills": 5}
+    ctx.room.graph = MagicMock()
+    ctx.room.graph.adj = {"42": {"north": "43", "south": "41"}}
+    ctx.room.graph.find_path.return_value = ["north", "north"]
+    ctx.room.graph.get_room.return_value = MagicMock(name="Forest", area="Wilds")
+    ctx.prompt.echo = MagicMock()
+    ctx.prompt.wait_fn = None
+    ctx.prompt.ready = None
     ctx.script_manager = None
     ctx.writer = MagicMock()
     return ctx
@@ -247,7 +270,7 @@ class TestScriptContextNeighbors:
 
     def test_no_room_graph(self):
         session_ctx = make_ctx()
-        session_ctx.room_graph = None
+        session_ctx.room.graph = None
         buf = scripts.ScriptOutputBuffer()
         ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
         assert ctx.neighbors() == {}
@@ -261,11 +284,11 @@ class TestScriptContextPrint:
         buf = scripts.ScriptOutputBuffer()
         ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
         ctx.print("hello world")
-        session_ctx.echo_command.assert_called_once_with("hello world")
+        session_ctx.prompt.echo.assert_called_once_with("hello world")
 
     def test_no_echo_command_does_not_crash(self):
         session_ctx = make_ctx()
-        session_ctx.echo_command = None
+        session_ctx.prompt.echo = None
         buf = scripts.ScriptOutputBuffer()
         ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
         ctx.print("silent")
@@ -299,8 +322,8 @@ class TestScriptContextSend:
     @pytest.mark.asyncio
     async def test_single_command(self):
         session_ctx = make_ctx()
-        session_ctx.wait_for_prompt = None
-        session_ctx.prompt_ready = None
+        session_ctx.prompt.wait_fn = None
+        session_ctx.prompt.ready = None
         buf = scripts.ScriptOutputBuffer()
         ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
         sent = []
@@ -311,8 +334,8 @@ class TestScriptContextSend:
     @pytest.mark.asyncio
     async def test_chained_commands(self):
         session_ctx = make_ctx()
-        session_ctx.wait_for_prompt = None
-        session_ctx.prompt_ready = None
+        session_ctx.prompt.wait_fn = None
+        session_ctx.prompt.ready = None
         buf = scripts.ScriptOutputBuffer()
         ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
         sent = []
@@ -352,7 +375,7 @@ class TestScriptManagerStartStop:
 
         assert isinstance(task, asyncio.Task)
         await asyncio.sleep(0.05)
-        session_ctx.echo_command.assert_called()
+        session_ctx.prompt.echo.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_with_args(self):
@@ -417,6 +440,175 @@ class TestScriptManagerStartStop:
         with patch.dict(sys.modules, {"bare_mod": mod}):
             with pytest.raises(ValueError, match="no function"):
                 mgr.start_script(session_ctx, "bare_mod.nonexistent")
+
+
+class TestScriptContextNewProperties:
+    """ScriptContext new simple property accessors."""
+
+    def test_session_key(self):
+        session_ctx = make_ctx()
+        session_ctx.session_key = "mud.example.com:4000"
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.session_key == "mud.example.com:4000"
+
+    def test_previous_room_id(self):
+        session_ctx = make_ctx()
+        session_ctx.room.previous = "41"
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.previous_room_id == "41"
+
+    def test_capture_log(self):
+        session_ctx = make_ctx()
+        log_data = {"Kills": [{"value": 5, "time": 1234}]}
+        session_ctx.highlights.capture_log = log_data
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.capture_log is log_data
+
+    def test_chat_messages(self):
+        session_ctx = make_ctx()
+        msgs = [{"channel": "tells", "text": "hello"}]
+        session_ctx.chat.messages = msgs
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.chat_messages is msgs
+
+    def test_chat_unread(self):
+        session_ctx = make_ctx()
+        session_ctx.chat.unread = 3
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.chat_unread == 3
+
+    def test_chat_channels(self):
+        session_ctx = make_ctx()
+        channels = [{"name": "tells"}, {"name": "clan"}]
+        session_ctx.chat.channels = channels
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.chat_channels is channels
+
+
+class TestScriptContextRoomChanged:
+    """ScriptContext.room_changed awaitable."""
+
+    @pytest.mark.asyncio
+    async def test_fires_when_event_set(self):
+        session_ctx = make_ctx()
+        session_ctx.room.changed = asyncio.Event()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def pulse():
+            await asyncio.sleep(0.05)
+            session_ctx.room.changed.set()
+            session_ctx.room.changed.clear()
+
+        asyncio.ensure_future(pulse())
+        assert await ctx.room_changed(timeout=1.0) is True
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_false(self):
+        session_ctx = make_ctx()
+        session_ctx.room.changed = asyncio.Event()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert await ctx.room_changed(timeout=0.05) is False
+
+
+class TestScriptContextWalk:
+    """ScriptContext.walk_active and stop_walk."""
+
+    def test_walk_active_all_none(self):
+        session_ctx = make_ctx()
+        session_ctx.walk.discover_task = None
+        session_ctx.walk.randomwalk_task = None
+        session_ctx.walk.travel_task = None
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.walk_active is False
+
+    def test_walk_active_discover_running(self):
+        session_ctx = make_ctx()
+        task = MagicMock()
+        task.done.return_value = False
+        session_ctx.walk.discover_task = task
+        session_ctx.walk.randomwalk_task = None
+        session_ctx.walk.travel_task = None
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.walk_active is True
+
+    def test_walk_active_all_done(self):
+        session_ctx = make_ctx()
+        task = MagicMock()
+        task.done.return_value = True
+        session_ctx.walk.discover_task = task
+        session_ctx.walk.randomwalk_task = task
+        session_ctx.walk.travel_task = task
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.walk_active is False
+
+    def test_stop_walk_cancels_running_tasks(self):
+        session_ctx = make_ctx()
+        task = MagicMock()
+        task.done.return_value = False
+        session_ctx.walk.discover_task = task
+        session_ctx.walk.randomwalk_task = None
+        session_ctx.walk.travel_task = None
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        ctx.stop_walk()
+        task.cancel.assert_called_once()
+
+    def test_stop_walk_skips_done_tasks(self):
+        session_ctx = make_ctx()
+        task = MagicMock()
+        task.done.return_value = True
+        session_ctx.walk.discover_task = task
+        session_ctx.walk.randomwalk_task = None
+        session_ctx.walk.travel_task = None
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        ctx.stop_walk()
+        task.cancel.assert_not_called()
+
+
+def make_dispatch_hooks(mgr, echoed):
+    """Return a minimal DispatchHooks wired to *mgr* and an echo recorder."""
+    ctx = make_ctx()
+    ctx.scripts.manager = mgr
+    return DispatchHooks(
+        ctx=ctx,
+        log=logging.getLogger("test"),
+        wait_fn=None,
+        send_fn=lambda s: None,
+        echo_fn=echoed.append,
+    )
+
+
+class TestScriptsDispatch:
+    """Backtick `scripts` command echoes active script names."""
+
+    @pytest.mark.asyncio
+    async def test_lists_running_scripts(self):
+        mod = make_fake_module("run", "await asyncio.sleep(10)")
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+        with patch.dict(sys.modules, {"bg_script": mod}):
+            mgr.start_script(session_ctx, "bg_script")
+        echoed = []
+        hooks = make_dispatch_hooks(mgr, echoed)
+        result = await dispatch_one("`scripts`", 0, 0, frozenset(), hooks)
+        assert result is StepResult.HANDLED
+        assert any("bg_script" in line for line in echoed)
+        mgr.stop_script(None)
+
+    @pytest.mark.asyncio
+    async def test_no_scripts_running(self):
+        mgr = scripts.ScriptManager()
+        echoed = []
+        hooks = make_dispatch_hooks(mgr, echoed)
+        result = await dispatch_one("`scripts`", 0, 0, frozenset(), hooks)
+        assert result is StepResult.HANDLED
+        assert any("no scripts" in line.lower() for line in echoed)
+
+    @pytest.mark.asyncio
+    async def test_no_manager(self):
+        echoed = []
+        hooks = make_dispatch_hooks(None, echoed)
+        result = await dispatch_one("`scripts`", 0, 0, frozenset(), hooks)
+        assert result is StepResult.HANDLED
 
 
 class TestScriptManagerFeed:

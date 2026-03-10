@@ -49,4 +49,41 @@ The following MUD standards are supported:
 .. _MCCP: https://tintin.mudhalla.net/protocols/mccp/
 .. _EOR: https://tintin.mudhalla.net/protocols/eor/
 
+WebSocket
+~~~~~~~~~
+
+Connections use ``ws://`` or ``wss://`` (TLS) URLs.  Telix advertises all three
+`mudstandards.org WebSocket subprotocols`_ during the opening handshake and selects
+its engine based on whichever the server accepts:
+
+* ``telnet.mudstandards.org`` -- WebSocket binary frames carry a complete telnet
+  stream including IAC option negotiation.  A full telnetlib3 client is used,
+  giving access to all telnet options (NAWS, TTYPE, GMCP, MCCP, etc.) exactly as
+  in a direct Telnet connection.
+* ``gmcp.mudstandards.org`` -- binary frames carry UTF-8 game output and ANSI
+  control codes; GMCP commands arrive as JSON text frames.  ECHO negotiation via
+  sparse IAC sequences is handled transparently.
+* ``terminal.mudstandards.org`` -- binary frames only; UTF-8 I/O and ANSI control
+  codes with no telnet negotiation and no GMCP text frames.
+
+If the server does not negotiate a recognised subprotocol, or if a bare IAC byte
+(``0xFF``) appears in the first received frame on the GMCP or terminal path, Telix
+automatically promotes the connection to the full telnet engine.
+
+The fourth mudstandards.org subprotocol, ``json.mudstandards.org``, is not currently
+supported.
+
+.. _mudstandards.org WebSocket subprotocols: https://mudstandards.org/websocket/
+
+SSH
+~~~
+
+Telix uses ``asyncssh`` for SSHv2 connections.  SSH connections run in
+BBS-style raw mode -- there is no telnet negotiation.  Password and
+keyboard-interactive authentication are supported.  Use the ``telix-ssh``
+command to connect::
+
+    telix-ssh bbs.example.com
+
+SSH is suitable for BBS systems that offer SSH alongside Telnet.
 

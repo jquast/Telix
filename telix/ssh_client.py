@@ -110,25 +110,24 @@ class SSHTelix(asyncssh.SSHClient):
 
 def resolve_key_file(key_file: str) -> str:
     """
-    Resolve a key file path, expanding ``~`` and bare filenames.
-
-    A bare filename with no directory component (e.g. ``"id_ed25519"``) is
-    resolved relative to ``~/.ssh/``.  Paths containing a directory separator
-    or starting with ``~`` are passed to :func:`os.path.expanduser` directly.
-    An empty string is returned unchanged.
+    Resolve a key file path, expanding ``~``.
 
     :param key_file: Raw key file value from config or CLI.
-    :returns: Absolute path to the key file.
+    :returns: Expanded path to the key file, or empty string unchanged.
     """
     if not key_file:
         return key_file
-    if not os.path.dirname(key_file):
-        key_file = "~/.ssh/" + key_file
     return os.path.expanduser(key_file)
 
 
 async def run_ssh_client(
-    host: str, port: int, username: str, key_file: str, term_type: str, shell: Callable[..., Awaitable[None]]
+    host: str,
+    port: int,
+    username: str,
+    key_file: str,
+    term_type: str,
+    shell: Callable[..., Awaitable[None]],
+    color_args: "argparse.Namespace | None" = None,
 ) -> None:
     """
     Connect to an SSH server and run the telix shell.
@@ -145,9 +144,11 @@ async def run_ssh_client(
     :param key_file: Path to a private key file; empty string uses password auth.
     :param term_type: Terminal type string (e.g. ``"xterm-256color"``).
     :param shell: Async callable ``shell(reader, writer)`` -- the REPL entry point.
+    :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
     """
     reader = ssh_transport.SSHReader()
     writer = ssh_transport.SSHWriter(peername=(host, port))
+    writer.color_args = color_args  # type: ignore[attr-defined]
 
     shell_task = asyncio.ensure_future(shell(reader, writer))
 
@@ -166,7 +167,10 @@ async def run_ssh_client(
         async with conn.create_process(term_type=term_type, term_size=(cols, rows)) as process:
             writer.process = process
             try:
-                async for data in process.stdout:
+                while True:
+                    data = await process.stdout.read(4096)
+                    if not data:
+                        break
                     reader.feed_data(data)
             finally:
                 reader.feed_eof()
@@ -235,7 +239,6 @@ def main() -> None:
     import os
     import sys
 
-    from . import main as main_mod
     from .client_shell import ssh_client_shell
 
     parser = build_parser()
@@ -243,8 +246,13 @@ def main() -> None:
 
     term_type = args.term or os.environ.get("TERM", "xterm-256color")
 
-    # Store color args so _setup_color_filter can read them in the shell.
-    main_mod._color_args = args
+    color_args = argparse.Namespace(
+        colormatch=args.colormatch,
+        color_brightness=args.color_brightness,
+        color_contrast=args.color_contrast,
+        background_color=args.background_color,
+        no_ice_colors=args.no_ice_colors,
+    )
 
     asyncio.run(
         run_ssh_client(
@@ -254,6 +262,7 @@ def main() -> None:
             key_file=args.key_file,
             term_type=term_type,
             shell=ssh_client_shell,
+            color_args=color_args,
         )
     )
     sys.exit(0)

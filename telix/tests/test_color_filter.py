@@ -505,25 +505,36 @@ def test_empty_reset_produces_single_sequence() -> None:
     assert result.count("\x1b[") == 1
 
 
-def test_sgr7_reverse_emits_explicit_swapped_colors() -> None:
-    bg = (10, 20, 30)
-    f = _make_filter(background_color=bg)
+def test_sgr7_passes_through() -> None:
+    """Reverse video passes through as \x1b[7m so the terminal handles mode correctly."""
+    f = _make_filter()
     f.filter("x")
     result = f.filter("\x1b[7m")
-    fg_rgb = PALETTES["vga"][7]
-    assert f"48;2;{fg_rgb[0]};{fg_rgb[1]};{fg_rgb[2]}" in result
-    assert f"38;2;{bg[0]};{bg[1]};{bg[2]}" in result
+    assert "\x1b[7m" in result
 
 
-def test_sgr27_reverse_off_restores_colors() -> None:
-    bg = (10, 20, 30)
-    f = _make_filter(background_color=bg)
+def test_sgr27_passes_through() -> None:
+    """Reverse-video-off passes through as \x1b[27m."""
+    f = _make_filter()
     f.filter("x")
-    f.filter("\x1b[7m")
     result = f.filter("\x1b[27m")
-    fg_rgb = PALETTES["vga"][7]
-    assert f"38;2;{fg_rgb[0]};{fg_rgb[1]};{fg_rgb[2]}" in result
-    assert f"48;2;{bg[0]};{bg[1]};{bg[2]}" in result
+    assert "\x1b[27m" in result
+
+
+def test_reverse_video_with_explicit_fg_does_not_inject_light_bg() -> None:
+    """
+    After reset+reverse+explicit-black-fg, no VGA-gray background is emitted.
+
+    Reproduces the 1984.ws white-bar bug: ESC[0m ESC[7m ESC[38;2;0;0;0m should not produce a light background.  With the
+    old pass-through-as-explicit-swap approach, ESC[7m would bake in bg=(170,170,170) and the subsequent fg change would
+    not undo it.  With correct pass-through, the terminal manages reverse mode and subsequent fg changes affect the
+    displayed background correctly.
+    """
+    f = _make_filter()
+    f.filter("x")
+    result = f.filter("\x1b[0m\x1b[7m\x1b[38;2;0;0;0m")
+    vga_gray = PALETTES["vga"][7]
+    assert f"48;2;{vga_gray[0]};{vga_gray[1]};{vga_gray[2]}" not in result
 
 
 @pytest.mark.parametrize(

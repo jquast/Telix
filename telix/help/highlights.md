@@ -1,5 +1,7 @@
 ## Highlight Editor
 
+**Default key:** Alt+H -- **Toggle all highlights:** Alt+Shift+H
+
 Highlights apply visual styles to server output when a regex pattern
 matches.  Rules are evaluated in order; multiple rules can match the
 same text.
@@ -11,7 +13,7 @@ same text.
 | **#** | Priority order |
 | **Pattern** | Regex matched against server output |
 | **Highlight** | Named style applied to the match |
-| **Flags** | **S** = Stop movement, **CS** = Case-sensitive, **M** = Multiline, **C** = Captured |
+| **Flags** | **S** = Stop movement, **CS** = Case-sensitive, **M** = Multiline, **C** = Captured, **X** = disabled |
 
 ### Flags Explained
 
@@ -24,6 +26,9 @@ same text.
   Use `\n` in the pattern to span line boundaries (e.g. `echoes:\n.*hijacked`).
 - **C (Captured)** -- extract regex groups into named variables and log
   matched lines to a capture channel (see Captures below).
+- **X (disabled)** -- the rule is disabled and won't match.  Toggle via the
+  Enabled switch in the form, or use Alt+Shift+H in-session to disable
+  all highlights globally.
 
 ### Form Fields
 

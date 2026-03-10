@@ -14,15 +14,15 @@ import pytest
 
 # local
 from telix.trigger import (
-    SearchBuffer,
     TriggerRule,
-    ExclusiveState,
+    SearchBuffer,
     TriggerEngine,
+    ExclusiveState,
     compare,
-    parse_entries,
-    check_condition,
     load_triggers,
+    parse_entries,
     save_triggers,
+    check_condition,
     substitute_groups,
     resolve_group_value,
     extract_group_source,
@@ -173,9 +173,7 @@ def test_load_triggers_invalid_regex(tmp_path):
 
 def test_load_triggers_empty_pattern_skipped(tmp_path):
     fp = tmp_path / "empty.json"
-    fp.write_text(
-        json.dumps({SK: {"triggers": [{"pattern": "", "reply": "x"}, {"pattern": "valid", "reply": "y"}]}})
-    )
+    fp.write_text(json.dumps({SK: {"triggers": [{"pattern": "", "reply": "x"}, {"pattern": "valid", "reply": "y"}]}}))
     rules = load_triggers(str(fp), SK)
     assert len(rules) == 1
 
@@ -325,11 +323,13 @@ def mock_writer():
     ctx = types.SimpleNamespace(
         writer=writer,
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
-        randomwalk_auto_survey=False,
+        walk=types.SimpleNamespace(
+            active_command=None,
+            active_command_time=0.0,
+            randomwalk_active=False,
+            randomwalk_auto_evaluate=False,
+            randomwalk_auto_survey=False,
+        ),
     )
     ctx.log = logging.getLogger("test")
     return ctx, written
@@ -778,9 +778,7 @@ async def test_disabled_always_rule_skipped():
 async def test_prompt_cycle_dedup_blocks_same_rule():
     """Once on_prompt activates cycle tracking, a rule fires at most once per cycle."""
     writer, written = mock_writer()
-    rules = [
-        TriggerRule(pattern=re.compile(r"(^Corpse of|^\w+ times 'Corpse)", re.MULTILINE), reply="look in corpse;")
-    ]
+    rules = [TriggerRule(pattern=re.compile(r"(^Corpse of|^\w+ times 'Corpse)", re.MULTILINE), reply="look in corpse;")]
     engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
@@ -948,9 +946,7 @@ async def test_on_prompt_clears_buffer_prevents_stale_rematch():
 @pytest.mark.asyncio
 async def test_on_prompt_clears_buffer_dotall_no_cross_record():
     writer, written = mock_writer()
-    rules = [
-        TriggerRule(pattern=re.compile(r"Corpse contains:.*?(\d+ solaris)", re.DOTALL), reply=r"get all solaris;")
-    ]
+    rules = [TriggerRule(pattern=re.compile(r"Corpse contains:.*?(\d+ solaris)", re.DOTALL), reply=r"get all solaris;")]
     engine = TriggerEngine(rules, writer, writer.log)
     engine.on_prompt()
 
@@ -1034,11 +1030,13 @@ def mock_writer_with_vitals(hp: int, maxhp: int, mp: int, maxmp: int):
     ctx = types.SimpleNamespace(
         writer=writer,
         log=logging.getLogger("test"),
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
-        randomwalk_auto_survey=False,
+        walk=types.SimpleNamespace(
+            active_command=None,
+            active_command_time=0.0,
+            randomwalk_active=False,
+            randomwalk_auto_evaluate=False,
+            randomwalk_auto_survey=False,
+        ),
         gmcp_data={"Char.Vitals": {"hp": str(hp), "maxhp": str(maxhp), "mp": str(mp), "maxmp": str(maxmp)}},
     )
     return ctx, written
@@ -1371,10 +1369,9 @@ async def test_trigger_engine_stamps_last_fired():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rule = TriggerRule(pattern=re.compile("hello"), reply="world;")
     engine = TriggerEngine(rules=[rule], ctx=ctx, log=logging.getLogger("test"))
@@ -1522,10 +1519,9 @@ def test_status_text_initially_empty():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     engine = TriggerEngine(rules=[], ctx=ctx, log=logging.getLogger("test"))
     assert engine.status_text == ""
@@ -1536,10 +1532,9 @@ async def test_status_text_during_until():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1557,10 +1552,9 @@ async def test_status_text_during_delay():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1578,10 +1572,9 @@ async def test_status_text_cleared_on_cancel():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1597,10 +1590,9 @@ async def test_until_progress_tracks_elapsed():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1622,10 +1614,9 @@ async def test_until_progress_cleared_on_timeout():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1643,10 +1634,9 @@ async def test_status_text_masks_send_when_will_echo():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=sent.append, will_echo=True),
         gmcp_data={},
-        active_command=None,
-        active_command_time=0.0,
-        randomwalk_active=False,
-        randomwalk_auto_evaluate=False,
+        walk=types.SimpleNamespace(
+            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+        ),
     )
     rules = [TriggerRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))

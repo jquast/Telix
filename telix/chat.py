@@ -61,15 +61,15 @@ def append_chat_msg(ctx: "TelixSessionContext", data: dict[str, typing.Any]) -> 
         etc.
     """
     msg: dict[str, typing.Any] = {
-        "ts": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         "channel": data.get("channel", ""),
         "channel_ansi": data.get("channel_ansi", ""),
         "talker": data.get("talker", ""),
         "text": data.get("text", ""),
     }
-    ctx.chat_messages.append(msg)
-    ctx.chat_unread += 1
-    if len(ctx.chat_messages) > 500:
-        ctx.chat_messages[:] = ctx.chat_messages[-500:]
-    if ctx.chat_file:
-        persist_chat(ctx.chat_file, msg)
+    ctx.chat.messages.append(msg)
+    ctx.chat.unread += 1
+    if len(ctx.chat.messages) > 500:
+        ctx.chat.messages[:] = ctx.chat.messages[-500:]
+    if ctx.chat.file:
+        persist_chat(ctx.chat.file, msg)

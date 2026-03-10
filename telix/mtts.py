@@ -16,8 +16,8 @@ MNES adds standardised NEW_ENVIRON variables: ``CLIENT_NAME``,
 ``CLIENT_VERSION``, ``TERMINAL_TYPE``, ``MTTS``, and ``CHARSET``.
 """
 
+import typing
 import dataclasses
-from typing import Any
 from collections.abc import Callable, Sequence
 
 import telnetlib3.client
@@ -100,7 +100,7 @@ class TelixClient(telnetlib3.client.TelnetClient):
             return self.ttype_factory()
         return super().send_ttype()
 
-    def send_env(self, keys: Sequence[str]) -> dict[str, Any]:
+    def send_env(self, keys: Sequence[str]) -> dict[str, typing.Any]:
         """Extend base env response with MNES variables."""
         env = super().send_env(keys)
         if self.mnes_env is not None:

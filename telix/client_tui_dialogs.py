@@ -12,7 +12,6 @@ live in ``client_tui_rooms``, ``client_tui_captures``, and
 import sys
 import json
 import typing
-from typing import Any
 
 # 3rd party
 import textual.app
@@ -24,7 +23,7 @@ import textual.containers
 
 # local
 from . import client_tui_base, client_tui_editors
-from .client_tui_app import TelnetSessionApp, tui_main  # noqa: F401
+from .client_tui_app import TelnetSessionApp, tui_main
 
 __all__ = ["TelnetSessionApp", "tui_main"]
 from .client_tui_rooms import (  # noqa: F401
@@ -275,7 +274,7 @@ class TabbedEditorScreen(textual.screen.Screen[None]):
         self.app.exit()
 
 
-def run_unified_editor(params: dict[str, Any]) -> None:
+def run_unified_editor(params: dict[str, typing.Any]) -> None:
     """
     Launch the tabbed editor in the current (worker) thread.
 
@@ -572,9 +571,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                     with textual.containers.Horizontal(classes="rw-switch-cell"):
                         yield textual.widgets.Label("Auto survey:")
                         yield textual.widgets.Switch(
-                            value=(self.default_auto_survey),
-                            id="rw-auto-survey",
-                            disabled=(not self.default_triggers),
+                            value=(self.default_auto_survey), id="rw-auto-survey", disabled=(not self.default_triggers)
                         )
                     with textual.containers.Horizontal(classes="rw-switch-cell"):
                         yield textual.widgets.Label("Triggers:")
@@ -874,9 +871,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
                     with textual.containers.Horizontal(classes="ad-switch-cell"):
                         yield textual.widgets.Label("Auto survey:")
                         yield textual.widgets.Switch(
-                            value=(self.default_auto_survey),
-                            id="ad-auto-survey",
-                            disabled=(not self.default_triggers),
+                            value=(self.default_auto_survey), id="ad-auto-survey", disabled=(not self.default_triggers)
                         )
                     with textual.containers.Horizontal(classes="ad-switch-cell"):
                         yield textual.widgets.Label("Triggers:")

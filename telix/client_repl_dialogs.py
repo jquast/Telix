@@ -6,31 +6,29 @@ import re
 import sys
 import json
 import signal
+import typing
 import asyncio
 import logging
 import tempfile
 import threading
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from collections.abc import Callable, Iterator
 
-from .help import get_help
-from .paths import CONFIG_DIR as config_dir
-
 # local
-from .paths import safe_terminal_size
-from .rooms import load_prefs, save_prefs, read_fasttravel
-from .rooms import rooms_path as rooms_path_fn
-from .rooms import fasttravel_path as fasttravel_path_fn
-from .rooms import current_room_path as current_room_path_fn
-from .macros import load_macros
-from .trigger import load_triggers
-from .repl_theme import invalidate_cache as invalidate_theme_cache
-from .highlighter import load_highlights
-from .progressbars import load_progressbars
-from .gmcp_snapshot import save_gmcp_snapshot
-from .client_repl_render import make_styles
-from .client_repl_travel import fast_travel
+from . import help as help_mod
+from . import (
+    paths,
+    rooms,
+    macros,
+    trigger,
+    repl_theme,
+    highlighter,
+    progressbars,
+    gmcp_snapshot,
+    client_repl_render,
+    client_repl_travel,
+)
 
 if TYPE_CHECKING:
     from .session_context import TelixSessionContext
@@ -57,15 +55,15 @@ def _patch_signal_for_thread() -> Iterator[None]:
     the module-level ``signal.signal`` reference here is race-free.
     """
     original = signal.signal
-    tui_handlers: dict[int, Any] = {}
+    tui_handlers: dict[int, typing.Any] = {}
 
-    def safe_signal(signum: int, handler: Any) -> Any:
+    def safe_signal(signum: int, handler: typing.Any) -> typing.Any:
         if threading.current_thread() is threading.main_thread():
             return original(signum, handler)
         tui_handlers[signum] = handler
         return None
 
-    def forward_sigwinch(sig: int, frame: Any) -> None:
+    def forward_sigwinch(sig: int, frame: typing.Any) -> None:
         h = tui_handlers.get(signal.SIGWINCH)
         if callable(h):
             h(sig, frame)
@@ -92,7 +90,7 @@ def _prepare_terminal() -> None:
 
 
 def _run_in_thread(
-    target: Callable[[], None], replay_buf: Any | None = None, cleanup_files: list[str] | None = None
+    target: Callable[[], None], replay_buf: typing.Any | None = None, cleanup_files: list[str] | None = None
 ) -> None:
     """
     Run a TUI callable in a worker thread with terminal and editor-active flag management.
@@ -136,7 +134,7 @@ subprocess_is_active = False
 subprocess_buffer: list[bytes] = []
 
 
-def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: Any | None = None) -> bool:
+def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: typing.Any | None = None) -> bool:
     """
     Show a Textual confirmation dialog in a worker thread.
 
@@ -165,7 +163,7 @@ def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: Any | N
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
-        safe_terminal_size(),
+        paths.safe_terminal_size(),
     )
     _prepare_terminal()
     _run_in_thread(
@@ -184,7 +182,7 @@ def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: Any | N
     return bool(data.get("confirmed", False))
 
 
-def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> str | None:
+def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "") -> str | None:
     """
     Show the random walk dialog with visit-level parameter.
 
@@ -202,7 +200,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
     default_auto_survey = False
     default_triggers = True
     if session_key:
-        prefs = load_prefs(session_key)
+        prefs = rooms.load_prefs(session_key)
         default_visit_level = int(prefs.get("randomwalk_visit_level", 2))
         default_auto_search = bool(prefs.get("randomwalk_auto_search", False))
         default_auto_evaluate = bool(prefs.get("randomwalk_auto_evaluate", False))
@@ -234,7 +232,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
         if not data.get("confirmed", False):
             return None
         if session_key:
-            save_data = load_prefs(session_key)
+            save_data = rooms.load_prefs(session_key)
             save_data["randomwalk_visit_level"] = int(  # type: ignore[assignment]
                 data.get("visit_level", default_visit_level)
             )
@@ -242,7 +240,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             save_data["randomwalk_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
             save_data["randomwalk_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
             save_data["randomwalk_triggers"] = bool(data.get("triggers", default_triggers))
-            save_prefs(session_key, save_data)
+            rooms.save_prefs(session_key, save_data)
         return str(data.get("command", f"`randomwalk 999 {default_visit_level}`"))
     finally:
         try:
@@ -251,7 +249,7 @@ def randomwalk_dialog(replay_buf: Any | None = None, session_key: str = "") -> s
             pass
 
 
-def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") -> str | None:
+def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str = "") -> str | None:
     """
     Show the autodiscover dialog with BFS/DFS strategy selection.
 
@@ -269,7 +267,7 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
     default_auto_survey = False
     default_triggers = True
     if session_key:
-        prefs = load_prefs(session_key)
+        prefs = rooms.load_prefs(session_key)
         saved = prefs.get("autodiscover_strategy", "bfs")
         if saved in ("bfs", "dfs"):
             default_strategy = str(saved)
@@ -303,13 +301,13 @@ def autodiscover_dialog(replay_buf: Any | None = None, session_key: str = "") ->
         if not data.get("confirmed", False):
             return None
         if session_key:
-            save_data = load_prefs(session_key)
+            save_data = rooms.load_prefs(session_key)
             save_data["autodiscover_strategy"] = str(data.get("strategy", default_strategy))
             save_data["autodiscover_auto_search"] = bool(data.get("auto_search", default_auto_search))
             save_data["autodiscover_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
             save_data["autodiscover_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
             save_data["autodiscover_triggers"] = bool(data.get("triggers", default_triggers))
-            save_prefs(session_key, save_data)
+            rooms.save_prefs(session_key, save_data)
         return str(data.get("command", f"`autodiscover {default_strategy}`"))
     finally:
         try:
@@ -332,7 +330,7 @@ def render_help_md(has_gmcp: bool = False) -> list[str]:
     :param has_gmcp: Whether GMCP room data is available.
     :rtype: list[str]
     """
-    md = get_help("keybindings")
+    md = help_mod.get_help("keybindings")
     lines: list[str] = []
     in_header_row = False
     skip_section = False
@@ -364,7 +362,7 @@ def render_help_md(has_gmcp: bool = False) -> list[str]:
     return lines
 
 
-def show_help(macro_defs: "Any" = None, replay_buf: Any | None = None, has_gmcp: bool = False) -> None:
+def show_help(macro_defs: "typing.Any" = None, replay_buf: typing.Any | None = None, has_gmcp: bool = False) -> None:
     """
     Launch the keybindings help viewer as a Textual TUI in a worker thread.
 
@@ -381,7 +379,7 @@ def show_help(macro_defs: "Any" = None, replay_buf: Any | None = None, has_gmcp:
     )
 
 
-def most_recent_channel(chat_messages: list[Any], capture_log: dict[str, Any]) -> str:
+def most_recent_channel(chat_messages: list[typing.Any], capture_log: dict[str, typing.Any]) -> str:
     """Return the channel with the most recent activity across chat and captures."""
     best_ts = ""
     best_ch = ""
@@ -398,7 +396,7 @@ def most_recent_channel(chat_messages: list[Any], capture_log: dict[str, Any]) -
     return best_ch
 
 
-def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_buf: Any | None = None) -> None:
+def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_buf: typing.Any | None = None) -> None:
     """
     Launch the unified tabbed TUI editor in a worker thread.
 
@@ -414,30 +412,30 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     session_key = ctx.session_key
 
     # -- Gather all pane parameters --
-    highlights_file = ctx.highlights_file or os.path.join(config_dir, "highlights.json")
-    macros_file = ctx.macros_file or os.path.join(config_dir, "macros.json")
-    triggers_file = ctx.triggers_file or os.path.join(config_dir, "triggers.json")
-    progressbars_file = ctx.progressbars_file or os.path.join(config_dir, "progressbars.json")
-    rooms_file = ctx.rooms_file or rooms_path_fn(session_key)
-    current_room_file = ctx.current_room_file or current_room_path_fn(session_key)
-    fasttravel_file = fasttravel_path_fn(session_key)
+    highlights_file = ctx.highlights.file or os.path.join(paths.CONFIG_DIR, "highlights.json")
+    macros_file = ctx.macros.file or os.path.join(paths.CONFIG_DIR, "macros.json")
+    triggers_file = ctx.triggers.file or os.path.join(paths.CONFIG_DIR, "triggers.json")
+    progressbars_file = ctx.progress.file or os.path.join(paths.CONFIG_DIR, "progressbars.json")
+    rooms_file = ctx.room.file or rooms.rooms_path(session_key)
+    current_room_file = ctx.room.current_file or rooms.current_room_path(session_key)
+    fasttravel_file = rooms.fasttravel_path(session_key)
 
     # Flush GMCP snapshot so the bars editor can read it.
-    gmcp_snapshot_file = ctx.gmcp_snapshot_file or ""
+    gmcp_snapshot_file = ctx.gmcp.snapshot_file or ""
     if gmcp_snapshot_file and ctx.gmcp_data:
-        save_gmcp_snapshot(gmcp_snapshot_file, session_key, ctx.gmcp_data)
-        ctx.gmcp_dirty = False
+        gmcp_snapshot.save_gmcp_snapshot(gmcp_snapshot_file, session_key, ctx.gmcp_data)
+        ctx.gmcp.dirty = False
 
     # Trigger select pattern.
-    engine = ctx.trigger_engine
+    engine = ctx.triggers.engine
     select_pattern = getattr(engine, "last_matched_pattern", "") if engine else ""
 
     # Chat / capture data.
-    chat_file = ctx.chat_file or ""
-    ctx.chat_unread = 0
-    captures = ctx.captures
-    capture_log = ctx.capture_log
-    initial_channel = most_recent_channel(ctx.chat_messages, capture_log)
+    chat_file = ctx.chat.file or ""
+    ctx.chat.unread = 0
+    captures = ctx.highlights.captures
+    capture_log = ctx.highlights.capture_log
+    initial_channel = most_recent_channel(ctx.chat.messages, capture_log)
 
     capture_file = ""
     if captures or capture_log:
@@ -468,7 +466,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
         initial_tab,
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
-        safe_terminal_size(),
+        paths.safe_terminal_size(),
     )
     _prepare_terminal()
     _run_in_thread(
@@ -484,31 +482,31 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     reload_progressbars(ctx, progressbars_file, session_key, log)
 
     # Rebuild REPL color styles in case the theme was changed.
-    invalidate_theme_cache()
-    make_styles()
+    repl_theme.invalidate_cache()
+    client_repl_render.make_styles()
 
     # Reload room graph.
-    room_graph = ctx.room_graph
+    room_graph = ctx.room.graph
     if room_graph is not None:
         room_graph.load_adjacency()
 
     # Handle fast travel.
-    steps, noreply = read_fasttravel(fasttravel_file)
+    steps, noreply = rooms.read_fasttravel(fasttravel_file)
     if steps:
         log.debug("travel: scheduling %d steps (noreply=%s)", len(steps), noreply)
-        task = asyncio.ensure_future(fast_travel(steps, ctx, log, noreply=noreply))
-        ctx.travel_task = task
+        task = asyncio.ensure_future(client_repl_travel.fast_travel(steps, ctx, log, noreply=noreply))
+        ctx.walk.travel_task = task
 
         def on_done(t: "asyncio.Task[None]") -> None:
-            if ctx.travel_task is t:
-                ctx.travel_task = None
+            if ctx.walk.travel_task is t:
+                ctx.walk.travel_task = None
             if not t.cancelled() and t.exception() is not None:
                 log.warning("fast travel failed: %s", t.exception())
 
         task.add_done_callback(on_done)
 
 
-def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: Any | None = None) -> None:
+def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: typing.Any | None = None) -> None:
     """
     Launch a TUI editor for macros or triggers in a subprocess.
 
@@ -521,9 +519,9 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
     session_key = ctx.session_key
 
     if editor_type == "macros":
-        path = ctx.macros_file or os.path.join(config_dir, "macros.json")
-        rp = ctx.rooms_file or rooms_path_fn(session_key)
-        crp = ctx.current_room_file or current_room_path_fn(session_key)
+        path = ctx.macros.file or os.path.join(paths.CONFIG_DIR, "macros.json")
+        rp = ctx.room.file or rooms.rooms_path(session_key)
+        crp = ctx.room.current_file or rooms.current_room_path(session_key)
         target = lambda: client_tui_base.launch_editor_in_thread(  # noqa: E731
             client_tui_editors.MacroEditScreen(
                 path=path, session_key=session_key, rooms_file=rp, current_room_file=crp
@@ -531,27 +529,27 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
             session_key=session_key,
         )
     elif editor_type == "highlights":
-        path = ctx.highlights_file or os.path.join(config_dir, "highlights.json")
+        path = ctx.highlights.file or os.path.join(paths.CONFIG_DIR, "highlights.json")
         target = lambda: client_tui_base.launch_editor_in_thread(  # noqa: E731
             client_tui_editors.HighlightEditScreen(path=path, session_key=session_key), session_key=session_key
         )
     elif editor_type == "progressbars":
-        path = ctx.progressbars_file or os.path.join(config_dir, "progressbars.json")
-        snap = ctx.gmcp_snapshot_file or ""
+        path = ctx.progress.file or os.path.join(paths.CONFIG_DIR, "progressbars.json")
+        snap = ctx.gmcp.snapshot_file or ""
         if snap and ctx.gmcp_data:
-            save_gmcp_snapshot(snap, session_key, ctx.gmcp_data)
-            ctx.gmcp_dirty = False
+            gmcp_snapshot.save_gmcp_snapshot(snap, session_key, ctx.gmcp_data)
+            ctx.gmcp.dirty = False
         target = lambda: client_tui_base.launch_editor_in_thread(  # noqa: E731
             client_tui_editors.ProgressBarEditScreen(path=path, session_key=session_key, gmcp_snapshot_path=snap),
             session_key=session_key,
         )
     else:
-        path = ctx.triggers_file or os.path.join(config_dir, "triggers.json")
-        snap = ctx.gmcp_snapshot_file or ""
+        path = ctx.triggers.file or os.path.join(paths.CONFIG_DIR, "triggers.json")
+        snap = ctx.gmcp.snapshot_file or ""
         if snap and ctx.gmcp_data:
-            save_gmcp_snapshot(snap, session_key, ctx.gmcp_data)
-            ctx.gmcp_dirty = False
-        engine = ctx.trigger_engine
+            gmcp_snapshot.save_gmcp_snapshot(snap, session_key, ctx.gmcp_data)
+            ctx.gmcp.dirty = False
+        engine = ctx.triggers.engine
         select = getattr(engine, "last_matched_pattern", "") if engine else ""
         target = lambda: client_tui_base.launch_editor_in_thread(  # noqa: E731
             client_tui_editors.TriggerEditScreen(
@@ -572,7 +570,7 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         editor_type,
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
-        safe_terminal_size(),
+        paths.safe_terminal_size(),
     )
     _prepare_terminal()
     _run_in_thread(target, replay_buf=replay_buf)
@@ -592,10 +590,10 @@ def reload_macros(ctx: "TelixSessionContext", path: str, session_key: str, log: 
     if not os.path.exists(path):
         return
     try:
-        new_defs = load_macros(path, session_key)
-        ctx.macro_defs = new_defs
-        ctx.macros_file = path
-        dispatch = ctx.key_dispatch
+        new_defs = macros.load_macros(path, session_key)
+        ctx.macros.defs = new_defs
+        ctx.macros.file = path
+        dispatch = ctx.repl.key_dispatch
         if dispatch is not None:
             dispatch.set_macros(new_defs, ctx, log)
         log.info("reloaded %d macros from %s", len(new_defs), path)
@@ -608,9 +606,9 @@ def reload_triggers(ctx: "TelixSessionContext", path: str, session_key: str, log
     if not os.path.exists(path):
         return
     try:
-        ctx.trigger_rules = load_triggers(path, session_key)
-        ctx.triggers_file = path
-        n_rules = len(ctx.trigger_rules)
+        ctx.triggers.rules = trigger.load_triggers(path, session_key)
+        ctx.triggers.file = path
+        n_rules = len(ctx.triggers.rules)
         log.info("reloaded %d triggers from %s", n_rules, path)
     except ValueError as exc:
         log.warning("failed to reload triggers: %s", exc)
@@ -621,9 +619,9 @@ def reload_progressbars(ctx: "TelixSessionContext", path: str, session_key: str,
     if not os.path.exists(path):
         return
     try:
-        ctx.progressbar_configs = load_progressbars(path, session_key)
-        ctx.progressbars_file = path
-        n_bars = len(ctx.progressbar_configs)
+        ctx.progress.configs = progressbars.load_progressbars(path, session_key)
+        ctx.progress.file = path
+        n_bars = len(ctx.progress.configs)
         log.info("reloaded %d progress bars from %s", n_bars, path)
     except (ValueError, FileNotFoundError):
         log.warning("failed to reload progress bars from %s", path)
@@ -634,15 +632,15 @@ def reload_highlights(ctx: "TelixSessionContext", path: str, session_key: str, l
     if not os.path.exists(path):
         return
     try:
-        ctx.highlight_rules = load_highlights(path, session_key)
-        ctx.highlights_file = path
-        n_rules = len(ctx.highlight_rules)
+        ctx.highlights.rules = highlighter.load_highlights(path, session_key)
+        ctx.highlights.file = path
+        n_rules = len(ctx.highlights.rules)
         log.info("reloaded %d highlights from %s", n_rules, path)
     except ValueError as exc:
         log.warning("failed to reload highlights: %s", exc)
 
 
-def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: Any | None = None) -> None:
+def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: typing.Any | None = None) -> None:
     """
     Launch the Capture Window TUI in a worker thread.
 
@@ -658,13 +656,13 @@ def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: Any | None = None
     if not session_key:
         return
 
-    chat_file = ctx.chat_file or ""
-    ctx.chat_unread = 0
+    chat_file = ctx.chat.file or ""
+    ctx.chat.unread = 0
 
     capture_file = ""
-    captures = ctx.captures
-    capture_log = ctx.capture_log
-    initial_channel = most_recent_channel(ctx.chat_messages, capture_log)
+    captures = ctx.highlights.captures
+    capture_log = ctx.highlights.capture_log
+    initial_channel = most_recent_channel(ctx.chat.messages, capture_log)
     if captures or capture_log:
         fd, capture_file = tempfile.mkstemp(suffix=".json", prefix="captures-")
         os.close(fd)
@@ -680,7 +678,7 @@ def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: Any | None = None
     )
 
 
-def launch_room_browser(ctx: "TelixSessionContext", replay_buf: Any | None = None) -> None:
+def launch_room_browser(ctx: "TelixSessionContext", replay_buf: typing.Any | None = None) -> None:
     """
     Launch the room browser TUI in a subprocess.
 
@@ -695,9 +693,9 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: Any | None = Non
 
     from . import client_tui_base, client_tui_rooms
 
-    rp = ctx.rooms_file or rooms_path_fn(session_key)
-    crp = ctx.current_room_file or current_room_path_fn(session_key)
-    ftp = fasttravel_path_fn(session_key)
+    rp = ctx.room.file or rooms.rooms_path(session_key)
+    crp = ctx.room.current_file or rooms.current_room_path(session_key)
+    ftp = rooms.fasttravel_path(session_key)
 
     log.debug(
         "room_browser: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
@@ -710,7 +708,7 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: Any | None = Non
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
-        safe_terminal_size(),
+        paths.safe_terminal_size(),
     )
     _prepare_terminal()
     _run_in_thread(
@@ -723,19 +721,19 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: Any | None = Non
         replay_buf=replay_buf,
     )
 
-    room_graph = ctx.room_graph
+    room_graph = ctx.room.graph
     if room_graph is not None:
         room_graph.load_adjacency()
 
-    steps, noreply = read_fasttravel(ftp)
+    steps, noreply = rooms.read_fasttravel(ftp)
     if steps:
         log.debug("travel: scheduling %d steps (noreply=%s)", len(steps), noreply)
-        task = asyncio.ensure_future(fast_travel(steps, ctx, log, noreply=noreply))
-        ctx.travel_task = task
+        task = asyncio.ensure_future(client_repl_travel.fast_travel(steps, ctx, log, noreply=noreply))
+        ctx.walk.travel_task = task
 
         def on_done(t: "asyncio.Task[None]") -> None:
-            if ctx.travel_task is t:
-                ctx.travel_task = None
+            if ctx.walk.travel_task is t:
+                ctx.walk.travel_task = None
             if not t.cancelled() and t.exception() is not None:
                 log.warning("fast travel failed: %s", t.exception())
 

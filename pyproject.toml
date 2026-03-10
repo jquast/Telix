@@ -59,7 +59,6 @@ docs = [
 
 [project.scripts]
 telix = "telix.main:main"
-telix-ssh = "telix.ssh_client:main"
 
 [project.urls]
 Homepage = "https://github.com/jquast/telix"

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 # std imports
 import re
-from typing import NamedTuple
+import typing
 
 # 3rd party
 import wcwidth.sgr_state
@@ -89,7 +89,7 @@ PALETTES: dict[str, PaletteRGB] = {
 _TRAILING_ESC = re.compile(r"\x1b(\[[\d;:]*)?$")
 
 
-class ColorConfig(NamedTuple):
+class ColorConfig(typing.NamedTuple):
     """
     Configuration for ANSI color palette translation.
 
@@ -326,15 +326,11 @@ class ColorFilter:
                 continue
 
             if p == 7:
-                r, g, b = self._current_bg
-                fg_r, fg_g, fg_b = self._current_fg
-                output_parts.extend(["38", "2", str(r), str(g), str(b), "48", "2", str(fg_r), str(fg_g), str(fg_b)])
+                output_parts.append("7")
                 i += 1
                 continue
             if p == 27:
-                r, g, b = self._current_fg
-                bg_r, bg_g, bg_b = self._current_bg
-                output_parts.extend(["38", "2", str(r), str(g), str(b), "48", "2", str(bg_r), str(bg_g), str(bg_b)])
+                output_parts.append("27")
                 i += 1
                 continue
 

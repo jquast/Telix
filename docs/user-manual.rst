@@ -23,16 +23,16 @@ or 120 columns.
 
 These are starting points -- all fields remain editable after selection.
 
-Command syntax
---------------
-
-.. include:: ../telix/help/commands.md
-   :parser: myst_parser.sphinx_
-
-Keyboard shortcuts
-------------------
+Advanced REPL
+-------------
 
 .. include:: ../telix/help/keybindings.md
+   :parser: myst_parser.sphinx_
+
+Backtick Commands
+-----------------
+
+.. include:: ../telix/help/commands.md
    :parser: myst_parser.sphinx_
 
 Macros

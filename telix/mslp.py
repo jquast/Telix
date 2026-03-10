@@ -54,9 +54,7 @@ class MslpCollector:
         """EOR/GA received: promote pending to available, reset pending."""
         if self.pending:
             self.available = self.pending
-            self.pending = []
-        elif not self.pending:
-            self.pending = []
+        self.pending = []
 
     @property
     def count(self) -> int:

@@ -3,7 +3,8 @@ Textual TUI session manager for telix -- re-export hub.
 
 Implementation is split across several sub-modules:
 
-- ``client_tui_base`` -- sessions, base editors, app foundation
+- ``client_tui_session_manager`` -- sessions, config, command building, session screens
+- ``client_tui_base`` -- base editors, help panes, app foundation
 - ``client_tui_macros`` -- macro editor pane and screen
 - ``client_tui_triggers`` -- trigger editor pane and screen
 - ``client_tui_highlights`` -- highlight editor pane and screen
@@ -26,36 +27,15 @@ from .client_tui_bars import ThemeEditPane, ProgressBarTuple, ProgressBarEditPan
 
 # -- base layer -------------------------------------------------------------
 from .client_tui_base import (  # noqa: F401
-    ENCODINGS,
-    BATCH_SIZE,
-    DEFAULTS_KEY,
-    TOOLTIP_CACHE,
-    FLAG_TO_WIDGET,
-    TERMINAL_CLEANUP,
-    PRIMARY_PASTE_COMMANDS,
     HelpPane,
     EditorApp,
     EditListPane,
-    SessionConfig,
     EditListScreen,
     CommandHelpScreen,
-    SessionEditScreen,
-    SessionListScreen,
-    int_val,
-    float_val,
-    build_command,
     launch_editor,
-    load_sessions,
-    relative_time,
-    save_sessions,
-    build_tooltips,
     get_help_topic,
-    build_ssh_command,
-    normalize_encoding,
     restore_blocking_fds,
     log_child_diagnostics,
-    read_primary_selection,
-    handle_arrow_navigation,
     patch_writer_thread_queue,
 )
 
@@ -94,10 +74,35 @@ from .client_tui_editors import (  # noqa: F401
     invert_ts,
     show_help_main,
     edit_macros_main,
-    edit_highlights_main,
     edit_triggers_main,
+    edit_highlights_main,
     edit_progressbars_main,
 )
 from .client_tui_captures import CapsPane, CapsScreen, ChatViewerScreen, chat_viewer_main  # noqa: F401
-from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen  # noqa: F401
 from .client_tui_triggers import TriggerTuple, TriggerEditPane, TriggerEditScreen  # noqa: F401
+from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen  # noqa: F401
+
+# -- session manager layer --------------------------------------------------
+from .client_tui_session_manager import (  # noqa: F401
+    ENCODINGS,
+    BATCH_SIZE,
+    DEFAULTS_KEY,
+    TOOLTIP_CACHE,
+    FLAG_TO_WIDGET,
+    TERMINAL_CLEANUP,
+    PRIMARY_PASTE_COMMANDS,
+    SessionConfig,
+    SessionEditScreen,
+    SessionListScreen,
+    int_val,
+    float_val,
+    build_command,
+    load_sessions,
+    relative_time,
+    save_sessions,
+    build_tooltips,
+    build_ssh_command,
+    normalize_encoding,
+    read_primary_selection,
+    handle_arrow_navigation,
+)

@@ -39,3 +39,12 @@ Example::
     telix --bbs bbs.example.com
     telix --mud mud.example.com 4000
     telix --mud ws://mud.example.com:9119
+
+SSH sessions
+------------
+
+SSH connections use the ``telix-ssh`` entry point instead of ``telix``.
+SSH connections run in BBS/raw mode -- there is no GMCP or telnet negotiation.
+Use ``telix-ssh`` for BBS systems that offer SSH alongside Telnet::
+
+    telix-ssh bbs.example.com

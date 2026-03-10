@@ -20,12 +20,7 @@ import telnetlib3.telopt
 import blessed.line_editor
 import telnetlib3.client_shell
 
-from . import terminal
-from . import highlighter
-from .macros import build_macro_dispatch
-from .trigger import TriggerEngine
-from .highlighter import HighlightEngine
-from .session_context import CommandQueue
+from . import util, macros, trigger, terminal, highlighter, session_context
 
 # local
 # Re-export from sub-modules so existing ``from .client_repl import X``
@@ -37,8 +32,8 @@ from .client_repl_render import (  # noqa: F401
     DISPLAY,
     SEXTANT,
     STYLE_NORMAL,
-    SEXTANT_VISIBLE,
     STYLE_TRIGGER,
+    SEXTANT_VISIBLE,
     CursorSeq,
     FlashTiming,
     ToolbarSlot,
@@ -81,11 +76,11 @@ from .client_repl_dialogs import (  # noqa: F401
     show_help,
     reload_macros,
     confirm_dialog,
+    reload_triggers,
     launch_tui_editor,
     randomwalk_dialog,
     subprocess_buffer,
     launch_chat_viewer,
-    reload_triggers,
     autodiscover_dialog,
     launch_room_browser,
     reload_progressbars,
@@ -99,6 +94,7 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
     BACKTICK_RE,
     COMMAND_DELAY,
     SCRIPT_CMD_RE,
+    SCRIPTS_CMD_RE,
     MOVE_MAX_RETRIES,
     STOPSCRIPT_CMD_RE,
     send_chained,
@@ -163,15 +159,14 @@ RESERVE_WITH_TOOLBAR = 2
 # Both blessed.Terminal and client_shell.Terminal are named "Terminal"
 # in their respective modules; ``blessed_term`` and ``tty_shell`` are
 # used throughout to distinguish the two when both are in scope.
-blessed_term: "blessed.Terminal | None" = None
+_term_cache: "list[blessed.Terminal]" = []
 
 
 def get_term() -> "blessed.Terminal":
     """Return the module-level blessed Terminal singleton."""
-    global blessed_term
-    if blessed_term is None:
-        blessed_term = blessed.Terminal(force_styling=True)
-    return blessed_term
+    if not _term_cache:
+        _term_cache.append(blessed.Terminal(force_styling=True))
+    return _term_cache[0]
 
 
 blocking_fds = terminal.blocking_fds
@@ -605,9 +600,9 @@ class KeyDispatch:
         """Register a handler for a raw character sequence."""
         self.by_seq[char] = handler
 
-    def set_macros(self, macros: "list[Macro]", ctx: "TelixSessionContext", logger: logging.Logger) -> None:
+    def set_macros(self, macro_list: "list[Macro]", ctx: "TelixSessionContext", logger: logging.Logger) -> None:
         """Replace all macro bindings from a macro definition list."""
-        macro_handlers = build_macro_dispatch(macros, ctx, logger)
+        macro_handlers = macros.build_macro_dispatch(macro_list, ctx, logger)
         for key_name, handler in macro_handlers.items():
             if key_name.startswith("KEY_"):
                 self.by_name[key_name] = handler
@@ -767,7 +762,7 @@ class ReplSession:
         self.last_resize_size: list[int] = [0, 0]
         self.last_input_style: dict[str, str] | None = None
         self.scroll: ScrollRegion | None = None
-        self.trigger_engine: TriggerEngine | None = None
+        self.trigger_engine: trigger.TriggerEngine | None = None
         self.ar_rules_ref: object = None
         self.prompt_ready = asyncio.Event()
         self.prompt_ready.set()
@@ -782,12 +777,12 @@ class ReplSession:
         self.macro_defs: list[Macro] | None = None
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
         self.dialogs_mod: typing.Any = None
-        self.line_hold: LineHoldBuffer = LineHoldBuffer(lambda: self.ctx.highlight_engine)
+        self.line_hold: LineHoldBuffer = LineHoldBuffer(lambda: self.ctx.highlights.engine)
         self.line_hold_timer: asyncio.TimerHandle | None = None
         self.mslp_index: int | None = None
 
         if sys.platform == "win32":
-            self.ctx.ansi_keys = True
+            self.ctx.repl.ansi_keys = True
 
     def init_terminal(self) -> None:
         """Import blessed, create terminal singleton, styles, replay buffer."""
@@ -819,10 +814,10 @@ class ReplSession:
     def init_ui(self) -> None:
         """Create key dispatch, macros."""
         self.dispatch = KeyDispatch()
-        self.macro_defs = self.ctx.macro_defs
+        self.macro_defs = self.ctx.macros.defs
         if self.macro_defs:
             self.dispatch.set_macros(self.macro_defs, self.ctx, self.telnet_writer.log)
-        self.ctx.key_dispatch = self.dispatch
+        self.ctx.repl.key_dispatch = self.dispatch
 
     def echo_trigger(self, cmd: str) -> None:
         """Echo a trigger command into the scroll region."""
@@ -834,7 +829,7 @@ class ReplSession:
         self.stdout.write(colored.encode())
         self.replay_buf.append(colored.encode())
         self.stdout.write(self.blessed_term.save.encode())
-        ts = self.ctx.typescript_file
+        ts = self.ctx.typescript_file  # inherited from TelnetSessionContext
         if ts is not None:
             if is_pw:
                 ts.write("\r\n")
@@ -914,7 +909,7 @@ class ReplSession:
 
     def refresh_trigger_engine(self) -> None:
         """Rebuild the trigger engine when rules change."""
-        cur_rules = self.ctx.trigger_rules or None
+        cur_rules = self.ctx.triggers.rules or None
         if cur_rules is self.ar_rules_ref:
             return
         self.ar_rules_ref = cur_rules
@@ -923,7 +918,7 @@ class ReplSession:
             self.trigger_engine.cancel()
             self.trigger_engine = None
         if cur_rules:
-            self.trigger_engine = TriggerEngine(
+            self.trigger_engine = trigger.TriggerEngine(
                 cur_rules,
                 self.ctx,
                 self.telnet_writer.log,
@@ -932,25 +927,22 @@ class ReplSession:
                 wait_fn=self.wait_for_prompt,
             )
             self.trigger_engine.enabled = prev_enabled
-        self.ctx.trigger_engine = self.trigger_engine
+        self.ctx.triggers.engine = self.trigger_engine
 
     def refresh_highlight_engine(self) -> None:
         """Rebuild the highlight engine when rules or triggers change."""
-        hl_rules = self.ctx.highlight_rules or []
-        ar_rules = self.ctx.trigger_rules or []
-        prev_enabled = self.ctx.highlight_engine.enabled if self.ctx.highlight_engine is not None else True
+        hl_rules = self.ctx.highlights.rules or []
+        ar_rules = self.ctx.triggers.rules or []
+        prev_enabled = (
+            self.ctx.highlights.engine.enabled if self.ctx.highlights.engine is not None else True
+        )
         builtin_rule = next((r for r in hl_rules if r.builtin), None)
         ar_highlight = builtin_rule.highlight if builtin_rule else highlighter.DEFAULT_TRIGGER_HIGHLIGHT
         ar_enabled = builtin_rule.enabled if builtin_rule is not None else True
-        self.ctx.highlight_engine = HighlightEngine(
-            hl_rules,
-            ar_rules,
-            self.blessed_term,
-            self.ctx,
-            trigger_highlight=ar_highlight,
-            trigger_enabled=ar_enabled,
+        self.ctx.highlights.engine = highlighter.HighlightEngine(
+            hl_rules, ar_rules, self.blessed_term, self.ctx, trigger_highlight=ar_highlight, trigger_enabled=ar_enabled
         )
-        self.ctx.highlight_engine.enabled = prev_enabled
+        self.ctx.highlights.engine.enabled = prev_enabled
 
     def cancel_line_hold_timer(self) -> None:
         """Cancel any pending line-hold flush timer."""
@@ -997,7 +989,7 @@ class ReplSession:
 
     def toggle_highlights(self) -> None:
         """Toggle the highlight engine on/off."""
-        engine = self.ctx.highlight_engine
+        engine = self.ctx.highlights.engine
         if engine is None:
             return
         engine.enabled = not engine.enabled
@@ -1037,33 +1029,35 @@ class ReplSession:
 
     def discover_mode(self) -> None:
         """Launch or cancel autodiscover mode."""
-        if self.ctx.discover_active:
-            task = self.ctx.discover_task
+        if self.ctx.walk.discover_active:
+            task = self.ctx.walk.discover_task
             if task is not None:
                 task.cancel()
             return
         cmd = autodiscover_dialog(replay_buf=self.replay_buf, session_key=self.ctx.session_key)
         if cmd is None:
             return
-        task = asyncio.ensure_future(handle_travel_commands([cmd], self.ctx, self.telnet_writer.log))  # type: ignore[arg-type]
+        task = asyncio.ensure_future(
+            handle_travel_commands([cmd], self.ctx, self.telnet_writer.log)  # type: ignore[arg-type]
+        )
         task.add_done_callback(self.on_walk_done)
-        self.ctx.discover_task = task
+        self.ctx.walk.discover_task = task
 
     def resume_last_walk(self) -> None:
         """Resume the most recent walk (autodiscover, randomwalk, or travel)."""
-        echo_fn = self.ctx.echo_command
-        mode = self.ctx.last_walk_mode
+        echo_fn = self.ctx.prompt.echo
+        mode = self.ctx.walk.last_walk_mode
         if not mode:
             if echo_fn is not None:
                 echo_fn("RESUME: no previous walk to resume")
             return
-        if self.ctx.last_walk_room != self.ctx.current_room_num:
+        if self.ctx.walk.last_walk_room != self.ctx.room.current:
             if echo_fn is not None:
                 echo_fn("RESUME: room changed since last walk, cannot resume")
             return
         if mode == "autodiscover":
-            if self.ctx.discover_active:
-                task = self.ctx.discover_task
+            if self.ctx.walk.discover_active:
+                task = self.ctx.walk.discover_task
                 if task is not None:
                     task.cancel()
                 return
@@ -1072,39 +1066,41 @@ class ReplSession:
                     self.ctx,
                     self.telnet_writer.log,
                     resume=True,
-                    strategy=self.ctx.last_walk_strategy,
-                    noreply=self.ctx.last_walk_noreply,
+                    strategy=self.ctx.walk.last_walk_strategy,
+                    noreply=self.ctx.walk.last_walk_noreply,
                 )
             )
             t.add_done_callback(self.on_walk_done)
-            self.ctx.discover_task = t
+            self.ctx.walk.discover_task = t
         elif mode == "randomwalk":
-            if self.ctx.randomwalk_active:
-                task = self.ctx.randomwalk_task
+            if self.ctx.walk.randomwalk_active:
+                task = self.ctx.walk.randomwalk_task
                 if task is not None:
                     task.cancel()
                 return
             t = asyncio.ensure_future(
-                randomwalk(self.ctx, self.telnet_writer.log, resume=True, noreply=self.ctx.last_walk_noreply)
+                randomwalk(self.ctx, self.telnet_writer.log, resume=True, noreply=self.ctx.walk.last_walk_noreply)
             )
             t.add_done_callback(self.on_walk_done)
-            self.ctx.randomwalk_task = t
+            self.ctx.walk.randomwalk_task = t
         elif echo_fn is not None:
             echo_fn(f"RESUME: cannot resume mode '{mode}'")
 
     def randomwalk_mode(self) -> None:
         """Launch or cancel random walk mode."""
-        if self.ctx.randomwalk_active:
-            task = self.ctx.randomwalk_task
+        if self.ctx.walk.randomwalk_active:
+            task = self.ctx.walk.randomwalk_task
             if task is not None:
                 task.cancel()
             return
         cmd = randomwalk_dialog(replay_buf=self.replay_buf, session_key=self.ctx.session_key)
         if cmd is None:
             return
-        task = asyncio.ensure_future(handle_travel_commands([cmd], self.ctx, self.telnet_writer.log))  # type: ignore[arg-type]
+        task = asyncio.ensure_future(
+            handle_travel_commands([cmd], self.ctx, self.telnet_writer.log)  # type: ignore[arg-type]
+        )
         task.add_done_callback(self.on_walk_done)
-        self.ctx.randomwalk_task = task
+        self.ctx.walk.randomwalk_task = task
 
     def on_gmcp_ready(self) -> None:
         """Handle GMCP becoming available -- schedule toolbar refresh."""
@@ -1119,8 +1115,8 @@ class ReplSession:
         self.editor.set_password_mode(bool(self.telnet_writer.will_echo))
         engine = self.trigger_engine
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        disc = self.ctx.discover_active
-        rwalk = self.ctx.randomwalk_active
+        disc = self.ctx.walk.discover_active
+        rwalk = self.ctx.walk.randomwalk_active
         style = STYLE_TRIGGER if (disc or rwalk or ar_active) else STYLE_NORMAL
         changed = self.last_input_style is not style
         self.last_input_style = style
@@ -1132,9 +1128,9 @@ class ReplSession:
             dmz_row = self.scroll.scroll_bottom + 1
             if dmz_row < self.scroll.input_row:
                 self.stdout.write((self.blessed_term.move_yx(dmz_row, 0) + dmz_line(self.scroll.cols, active)).encode())
-            ac_age = time.monotonic() - self.ctx.active_command_time
+            ac_age = time.monotonic() - self.ctx.walk.active_command_time
             cmd_visible = self.ctx.command_queue is not None or (
-                self.ctx.active_command is not None and ac_age < FLASH.DURATION
+                self.ctx.walk.active_command is not None and ac_age < FLASH.DURATION
             )
             if not cmd_visible:
                 self.stdout.write(
@@ -1146,7 +1142,7 @@ class ReplSession:
         """Return ``True`` when the input line uses the trigger color scheme."""
         engine = self.trigger_engine
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.discover_active or self.ctx.randomwalk_active or ar
+        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or ar
 
     @property
     def bg_sgr(self) -> str:
@@ -1260,7 +1256,7 @@ class ReplSession:
             dmz = sr.scroll_bottom + 1
             if dmz < sr.input_row:
                 self.stdout.write((bt.move_yx(dmz, 0) + dmz_line(cols, ar_bg)).encode())
-        cs = self.ctx.cursor_style or CURSOR.DEFAULT_STYLE
+        cs = self.ctx.repl.cursor_style or CURSOR.DEFAULT_STYLE
         osc = cursor_ar_osc() if ar_bg else cursor_osc()
         self.stdout.write(CURSOR.STYLES.get(cs, CURSOR.STEADY_BLOCK).encode())
         self.stdout.write(osc.encode())
@@ -1300,18 +1296,19 @@ class ReplSession:
         self.telnet_writer.set_iac_callback(telnetlib3.telopt.GA, self.on_prompt_signal)
         self.telnet_writer.set_iac_callback(telnetlib3.telopt.CMD_EOR, self.on_prompt_signal)
 
-        self.ctx.wait_for_prompt = self.wait_for_prompt
-        self.ctx.echo_command = self.echo_trigger
-        self.ctx.prompt_ready = self.prompt_ready
+        self.ctx.prompt.wait_fn = self.wait_for_prompt
+        self.ctx.prompt.echo = self.echo_trigger
+        self.ctx.prompt.ready = self.prompt_ready
         self.ctx.on_trigger_activity = self.on_trigger_activity
 
         self.refresh_trigger_engine()
         self.refresh_highlight_engine()
 
         assert self.scroll is not None
-        self.ctx.repl_actions = {
+        self.ctx.repl.actions = {
             "help": lambda: show_help(replay_buf=self.replay_buf),
             "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
+            "captures": lambda: launch_unified_editor("captures", self.ctx, self.replay_buf),
             "toggle_highlights": self.toggle_highlights,
             "toggle_triggers": self.toggle_triggers,
             "disconnect": self.reg_close,
@@ -1324,7 +1321,7 @@ class ReplSession:
         self.dispatch.register("KEY_TAB", self.mslp_tab)
         self.dispatch.register("KEY_BTAB", self.mslp_shift_tab)
 
-        self.ctx.on_gmcp_ready = self.on_gmcp_ready
+        self.ctx.gmcp.on_ready = self.on_gmcp_ready
 
     def submit_command_queue(
         self,
@@ -1335,13 +1332,13 @@ class ReplSession:
         """Create a command queue and start chained send."""
         assert self.scroll is not None
         scroll = self.scroll
-        q = CommandQueue(
+        q = session_context.CommandQueue(
             commands,
             render=lambda: render_command_queue(  # type: ignore[arg-type]
                 self.ctx.command_queue,
                 scroll,
                 self.stdout,
-                flash_elapsed=time.monotonic() - self.ctx.active_command_time,
+                flash_elapsed=time.monotonic() - self.ctx.walk.active_command_time,
                 hint=self.activity_hint(),
                 progress=until_progress(self.trigger_engine),
                 base_bg_sgr=self.bg_sgr,
@@ -1349,7 +1346,7 @@ class ReplSession:
             ),
         )
         self.ctx.command_queue = q
-        self.ctx.active_command_time = time.monotonic()
+        self.ctx.walk.active_command_time = time.monotonic()
         q.render()
         task = asyncio.ensure_future(
             send_chained(commands, self.ctx, self.telnet_writer.log, queue=q, immediate_set=immediate_set)
@@ -1382,7 +1379,7 @@ class ReplSession:
                         self.stdout.write(esc_hold)
                         self.replay_buf.append(esc_hold)
                         self.stdout.write(bt.save.encode())
-                    cf = self.ctx.color_filter
+                    cf = self.ctx.repl.color_filter
                     if cf is not None:
                         flush = cf.flush()
                         if flush:
@@ -1406,20 +1403,20 @@ class ReplSession:
                     self.prompt_pending = False
                     if self.trigger_engine is not None:
                         self.trigger_engine.on_prompt()
-                    if self.ctx.script_manager is not None:
-                        self.ctx.script_manager.on_prompt()
+                    if self.ctx.scripts.manager is not None:
+                        self.ctx.scripts.manager.on_prompt()
                     self.update_input_style()
                 continue
             if isinstance(out, bytes):
                 out = out.decode("utf-8", errors="replace")
-            cf = self.ctx.color_filter
+            cf = self.ctx.repl.color_filter
             if cf is not None:
                 out = cf.filter(out)
             out = self.ctx.mslp_collector.filter(out)
             out = telnetlib3.client_shell._transform_output(out, self.telnet_writer, True)
-            if self.ctx.erase_eol:
-                out = out.replace("\r\n", "\x1b[K\r\n\x1b[K")
-            ts = self.ctx.typescript_file
+            if self.ctx.repl.erase_eol:
+                out = util.erase_eol(out)
+            ts = self.ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None:
                 ts.write(out)
                 ts.flush()
@@ -1459,13 +1456,13 @@ class ReplSession:
                 if is_prompt:
                     self.trigger_engine.on_prompt()
                     self.prompt_pending = False
-            if self.ctx.script_manager is not None:
-                self.ctx.script_manager.feed(emit_now)
+            if self.ctx.scripts.manager is not None:
+                self.ctx.scripts.manager.feed(emit_now)
                 if is_prompt:
-                    self.ctx.script_manager.on_prompt()
+                    self.ctx.scripts.manager.on_prompt()
             cq_s = self.ctx.command_queue
-            ac_s = self.ctx.active_command
-            ac_elapsed = time.monotonic() - self.ctx.active_command_time
+            ac_s = self.ctx.walk.active_command
+            ac_elapsed = time.monotonic() - self.ctx.walk.active_command_time
             hint = self.activity_hint()
             prog = until_progress(self.trigger_engine)
             bg = self.bg_sgr
@@ -1542,7 +1539,7 @@ class ReplSession:
                     self.fire_resize()
 
                 action = self.dispatch.lookup(key)
-                if action is None and self.ctx.ansi_keys:
+                if action is None and self.ctx.repl.ansi_keys:
                     seq = self.dispatch.lookup_ansi(key)
                     if seq is not None:
                         self.telnet_writer.write(seq)  # type: ignore[arg-type]
@@ -1626,18 +1623,17 @@ class ReplSession:
                         continue
 
                     cq = self.ctx.command_queue
-                    if cq is not None and not cq.cancelled:
-                        cq.cancelled = True
+                    if cq is not None and not cq.cancel_event.is_set():
                         cq.cancel_event.set()
                         chained = chained_task_ref[0]
                         if chained is not None and not chained.done():
                             chained.cancel()
-                        self.ctx.command_queue = None
+                        self.ctx.command_queue = None  # top-level, stays
 
                     if self.history_file and not self.telnet_writer.will_echo:
                         save_history_entry(line, self.history_file)
 
-                    ts = self.ctx.typescript_file
+                    ts = self.ctx.typescript_file  # inherited from TelnetSessionContext
                     if ts is not None:
                         if self.telnet_writer.will_echo:
                             ts.write("\r\n")
@@ -1655,16 +1651,23 @@ class ReplSession:
 
                     if self.trigger_engine is not None:
                         self.trigger_engine.cancel()
-                    disc_task = self.ctx.discover_task
+                    echo_fn = self.ctx.prompt.echo
+                    disc_task = self.ctx.walk.discover_task
                     if disc_task is not None and not disc_task.done():
+                        if echo_fn is not None:
+                            echo_fn("AUTODISCOVER: cancelled by input")
                         disc_task.cancel()
-                    rw_task = self.ctx.randomwalk_task
+                    rw_task = self.ctx.walk.randomwalk_task
                     if rw_task is not None and not rw_task.done():
+                        if echo_fn is not None:
+                            echo_fn("RANDOMWALK: cancelled by input")
                         rw_task.cancel()
-                    ft_task = self.ctx.travel_task
+                    ft_task = self.ctx.walk.travel_task
                     if ft_task is not None and not ft_task.done():
+                        if echo_fn is not None:
+                            echo_fn("TRAVEL: cancelled by input")
                         ft_task.cancel()
-                        self.ctx.travel_task = None
+                        self.ctx.walk.travel_task = None
 
                     if self.ga_detected:
                         try:
@@ -1697,7 +1700,7 @@ class ReplSession:
                         elif parts and SCRIPT_CMD_RE.match(parts[0]):
                             sm = SCRIPT_CMD_RE.match(parts[0])
                             assert sm is not None
-                            mgr = self.ctx.script_manager
+                            mgr = self.ctx.scripts.manager
                             if mgr is not None:
                                 try:
                                     mgr.start_script(self.ctx, sm.group(1))
@@ -1707,13 +1710,24 @@ class ReplSession:
                         elif parts and STOPSCRIPT_CMD_RE.match(parts[0]):
                             ss = STOPSCRIPT_CMD_RE.match(parts[0])
                             assert ss is not None
-                            mgr = self.ctx.script_manager
+                            mgr = self.ctx.scripts.manager
                             if mgr is not None:
                                 stopped = mgr.stop_script(ss.group(1))
-                                echo_fn = self.ctx.echo_command
+                                echo_fn = self.ctx.prompt.echo
                                 if echo_fn is not None:
                                     for sname in stopped:
                                         echo_fn(f"[stopscript] stopped: {sname}")
+                            parts = parts[1:]
+                        elif parts and SCRIPTS_CMD_RE.match(parts[0]):
+                            mgr = self.ctx.scripts.manager
+                            echo_fn = self.ctx.prompt.echo
+                            if mgr is not None and echo_fn is not None:
+                                active = mgr.active_scripts()
+                                if active:
+                                    for sname in active:
+                                        echo_fn(f"[scripts] running: {sname}")
+                                else:
+                                    echo_fn("[scripts] no scripts running")
                             parts = parts[1:]
                         elif parts and TRAVEL_RE.match(parts[0]):
                             remainder = await handle_travel_commands(parts, self.ctx, self.telnet_writer.log)
@@ -1738,7 +1752,7 @@ class ReplSession:
                     self.stdout.write(bt.hide_cursor.encode())
                     cq2 = self.ctx.command_queue
                     if cq2 is not None:
-                        ac_elapsed2 = time.monotonic() - self.ctx.active_command_time
+                        ac_elapsed2 = time.monotonic() - self.ctx.walk.active_command_time
                         cursor_col = render_command_queue(
                             cq2,
                             scroll,
@@ -1803,7 +1817,7 @@ class ReplSession:
                     self.stdout.write(f"{bl}\r\n".encode())
 
             self.stdout.write(self.blessed_term.save.encode())
-            cs = self.ctx.cursor_style or CURSOR.DEFAULT_STYLE
+            cs = self.ctx.repl.cursor_style or CURSOR.DEFAULT_STYLE
             self.stdout.write(CURSOR.STYLES.get(cs, CURSOR.STEADY_BLOCK).encode())
 
             self.register_callbacks()

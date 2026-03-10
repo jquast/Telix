@@ -6,7 +6,7 @@ import typing
 import configparser
 import importlib.resources
 
-from . import client_tui_base
+from . import client_tui_session_manager
 
 # Encoding aliases applied when loading favorites.
 _ENCODING_ALIASES: dict[str, str] = {"topaz": "latin1"}
@@ -62,7 +62,19 @@ def load_favorites() -> list[dict[str, typing.Any]]:
     return entries
 
 
-def _apply_type_presets(cfg: client_tui_base.SessionConfig, entry_type: str) -> None:
+def _apply_overrides(
+    cfg: client_tui_session_manager.SessionConfig, enc: str | None, mode: str | None, protocol: str | None
+) -> None:
+    """Apply optional field overrides to *cfg* when values are present and valid."""
+    if enc:
+        cfg.encoding = enc
+    if mode in ("auto", "raw", "line"):
+        cfg.mode = mode
+    if protocol in ("telnet", "websocket"):
+        cfg.protocol = protocol
+
+
+def _apply_type_presets(cfg: client_tui_session_manager.SessionConfig, entry_type: str) -> None:
     """Apply type-specific presets matching the session manager radio buttons."""
     if entry_type == "bbs":
         cfg.colormatch = "vga"
@@ -76,25 +88,18 @@ def _apply_type_presets(cfg: client_tui_base.SessionConfig, entry_type: str) -> 
         cfg.compression = True
 
 
-def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_base.SessionConfig:
+def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager.SessionConfig:
     """Convert a single directory/favorites entry dict to a SessionConfig."""
     host = entry["host"]
     port = entry.get("port", 23)
-    cfg = client_tui_base.SessionConfig(host=host, port=port, name=entry.get("name", host))
+    cfg = client_tui_session_manager.SessionConfig(host=host, port=port, name=entry.get("name", host))
     if entry.get("ssl"):
         cfg.ssl = True
     enc = entry.get("encoding")
-    if enc:
-        cfg.encoding = enc
     entry_type = entry.get("type", "")
     _apply_type_presets(cfg, entry_type)
     cfg.server_type = entry_type
-    mode = entry.get("mode")
-    if mode in ("auto", "raw", "line"):
-        cfg.mode = mode
-    protocol = entry.get("protocol")
-    if protocol in ("telnet", "websocket"):
-        cfg.protocol = protocol
+    _apply_overrides(cfg, enc, entry.get("mode"), entry.get("protocol"))
     ws_path = entry.get("ws_path")
     if ws_path:
         cfg.ws_path = ws_path
@@ -105,7 +110,7 @@ def directory_to_sessions() -> dict[str, typing.Any]:
     """
     Convert directory entries to a sessions dict.
 
-    Each entry becomes a :class:`~telix.client_tui_base.SessionConfig` keyed by
+    Each entry becomes a :class:`~telix.client_tui_session_manager.SessionConfig` keyed by
     ``"host:port"``.  Only fields that differ from ``SessionConfig`` defaults
     are set.  Favorites are merged in and bookmarked.
 

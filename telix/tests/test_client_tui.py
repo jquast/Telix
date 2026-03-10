@@ -24,19 +24,19 @@ from telix.client_tui import (
     DEFAULTS_KEY,
     PRIMARY_PASTE_COMMANDS,
     CapsPane,
+    TriggerTuple,
     MacroEditPane,
     SessionConfig,
     ThemeEditPane,
-    TriggerTuple,
     MacroEditScreen,
     RoomBrowserPane,
-    TelnetSessionApp,
     TriggerEditPane,
+    TelnetSessionApp,
     CommandHelpScreen,
     HighlightEditPane,
     SessionListScreen,
-    TabbedEditorScreen,
     TriggerEditScreen,
+    TabbedEditorScreen,
     ProgressBarEditPane,
     RandomwalkDialogScreen,
     AutodiscoverDialogScreen,
@@ -955,10 +955,10 @@ class TestActionConnectScreenRefresh:
         type(screen).app = property(lambda self: self._app)
 
         with (
-            patch("telix.client_tui_base.subprocess.Popen") as mock_popen,
-            patch("telix.client_tui_base.os.get_terminal_size") as mock_ts,
-            patch("telix.client_tui_base.os.set_blocking", create=True),
-            patch("telix.client_tui_base.sys.stdout"),
+            patch("telix.client_tui_session_manager.subprocess.Popen") as mock_popen,
+            patch("telix.client_tui_session_manager.os.get_terminal_size") as mock_ts,
+            patch("telix.client_tui_session_manager.os.set_blocking", create=True),
+            patch("telix.client_tui_session_manager.sys.stdout"),
         ):
             mock_ts.return_value = MagicMock(lines=24, columns=80)
             mock_popen.return_value = MagicMock(returncode=0)
@@ -991,11 +991,13 @@ class TestActionConnectScreenRefresh:
         mock_proc.returncode = 1
 
         with (
-            patch("telix.client_tui_base.subprocess.Popen", return_value=mock_proc),
-            patch("telix.client_tui_base.os.get_terminal_size", return_value=MagicMock(lines=24, columns=80)),
-            patch("telix.client_tui_base.os.set_blocking", create=True),
-            patch("telix.client_tui_base.sys.stdout"),
-            patch("telix.client_tui_base.os._exit") as mock_os_exit,
+            patch("telix.client_tui_session_manager.subprocess.Popen", return_value=mock_proc),
+            patch(
+                "telix.client_tui_session_manager.os.get_terminal_size", return_value=MagicMock(lines=24, columns=80)
+            ),
+            patch("telix.client_tui_session_manager.os.set_blocking", create=True),
+            patch("telix.client_tui_session_manager.sys.stdout"),
+            patch("telix.client_tui_session_manager.os._exit") as mock_os_exit,
         ):
             screen.action_connect()
         mock_os_exit.assert_called_once_with(1)
@@ -1006,7 +1008,7 @@ class TestReadPrimarySelection:
         fake_result = MagicMock()
         fake_result.returncode = 0
         fake_result.stdout = b"hello world"
-        with patch("telix.client_tui_base.subprocess.run", return_value=fake_result) as m:
+        with patch("telix.client_tui_session_manager.subprocess.run", return_value=fake_result) as m:
             result = read_primary_selection()
         assert result == "hello world"
         m.assert_called_once_with(PRIMARY_PASTE_COMMANDS[0], capture_output=True, timeout=2, check=False)
@@ -1023,14 +1025,14 @@ class TestReadPrimarySelection:
                 raise FileNotFoundError
             return fake_result
 
-        with patch("telix.client_tui_base.subprocess.run", side_effect=fake_run):
+        with patch("telix.client_tui_session_manager.subprocess.run", side_effect=fake_run):
             result = read_primary_selection()
         assert result == "from xsel"
         assert calls[0][0] == "xclip"
         assert calls[1][0] == "xsel"
 
     def test_returns_empty_when_no_helpers_available(self) -> None:
-        with patch("telix.client_tui_base.subprocess.run", side_effect=FileNotFoundError):
+        with patch("telix.client_tui_session_manager.subprocess.run", side_effect=FileNotFoundError):
             assert read_primary_selection() == ""
 
     def test_skips_helper_with_nonzero_exit(self) -> None:
@@ -1040,5 +1042,5 @@ class TestReadPrimarySelection:
         def fake_run(cmd, **kwargs):
             return fail if cmd[0] == "xclip" else ok
 
-        with patch("telix.client_tui_base.subprocess.run", side_effect=fake_run):
+        with patch("telix.client_tui_session_manager.subprocess.run", side_effect=fake_run):
             assert read_primary_selection() == "ok"

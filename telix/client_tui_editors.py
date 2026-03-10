@@ -10,24 +10,24 @@ and ``client_tui_bars``.
 
 # local
 from . import client_tui_base
-from .client_tui_bars import ThemeEditPane, ProgressBarTuple, ProgressBarEditPane, ProgressBarEditScreen  # noqa: F401
-from .client_tui_macros import MacroEditPane, MacroEditScreen  # noqa: F401
-from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen  # noqa: F401
-from .client_tui_triggers import TriggerTuple, TriggerEditPane, TriggerEditScreen  # noqa: F401
+from .client_tui_bars import ThemeEditPane, ProgressBarTuple, ProgressBarEditPane, ProgressBarEditScreen
+from .client_tui_macros import MacroEditPane, MacroEditScreen
+from .client_tui_triggers import TriggerTuple, TriggerEditPane, TriggerEditScreen
+from .client_tui_highlights import HighlightTuple, HighlightEditPane, HighlightEditScreen
 
 __all__ = [
-    "ThemeEditPane",
-    "ProgressBarTuple",
-    "ProgressBarEditPane",
-    "ProgressBarEditScreen",
-    "MacroEditPane",
-    "MacroEditScreen",
-    "HighlightTuple",
     "HighlightEditPane",
     "HighlightEditScreen",
-    "TriggerTuple",
+    "HighlightTuple",
+    "MacroEditPane",
+    "MacroEditScreen",
+    "ProgressBarEditPane",
+    "ProgressBarEditScreen",
+    "ProgressBarTuple",
+    "ThemeEditPane",
     "TriggerEditPane",
     "TriggerEditScreen",
+    "TriggerTuple",
     "invert_ts",
 ]
 

@@ -4,7 +4,7 @@
 import json
 import asyncio
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 # 3rd party
 import pytest
@@ -17,8 +17,11 @@ from telix.client_shell import (
     want_repl,
     load_configs,
     ws_client_shell,
+    ssh_client_shell,
+    _setup_ansi_keys,
     build_session_key,
     telix_client_shell,
+    _setup_color_filter,
 )
 from telix.ws_transport import GMCP, WebSocketWriter
 from telix.session_context import TelixSessionContext
@@ -73,15 +76,15 @@ class TestLoadConfigs:
         ctx = TelixSessionContext(session_key="host:1234")
         load_configs(ctx)
 
-        assert ctx.macros_file.endswith("macros.json")
-        assert ctx.triggers_file.endswith("triggers.json")
-        assert ctx.highlights_file.endswith("highlights.json")
-        assert ctx.history_file is not None
-        assert ctx.rooms_file.endswith(".db")
-        assert all(m.builtin for m in ctx.macro_defs)
-        assert len(ctx.macro_defs) == 15
-        assert ctx.trigger_rules == []
-        assert ctx.highlight_rules == []
+        assert ctx.macros.file.endswith("macros.json")
+        assert ctx.triggers.file.endswith("triggers.json")
+        assert ctx.highlights.file.endswith("highlights.json")
+        assert ctx.repl.history_file is not None
+        assert ctx.room.file.endswith(".db")
+        assert all(m.builtin for m in ctx.macros.defs)
+        assert len(ctx.macros.defs) == 16
+        assert ctx.triggers.rules == []
+        assert ctx.highlights.rules == []
 
     def test_loads_macros(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         cfg = tmp_path / "cfg"
@@ -104,7 +107,7 @@ class TestLoadConfigs:
 
         ctx = TelixSessionContext(session_key="host:1234")
         load_configs(ctx)
-        assert ctx.macro_defs[0] is sentinel[0]
+        assert ctx.macros.defs[0] is sentinel[0]
 
     def test_creates_dirs(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         cfg = tmp_path / "new_cfg"
@@ -126,28 +129,28 @@ class TestLoadConfigs:
 class TestWantRepl:
     def test_enabled_local(self) -> None:
         ctx = TelixSessionContext()
-        ctx.repl_enabled = True
+        ctx.repl.enabled = True
         writer = MagicMock()
         writer.mode = "local"
         assert want_repl(ctx, writer) is True
 
     def test_disabled(self) -> None:
         ctx = TelixSessionContext()
-        ctx.repl_enabled = False
+        ctx.repl.enabled = False
         writer = MagicMock()
         writer.mode = "local"
         assert want_repl(ctx, writer) is False
 
     def test_kludge_mode(self) -> None:
         ctx = TelixSessionContext()
-        ctx.repl_enabled = True
+        ctx.repl.enabled = True
         writer = MagicMock()
         writer.mode = "kludge"
         assert want_repl(ctx, writer) is False
 
     def test_raw_mode_forced(self) -> None:
         ctx = TelixSessionContext()
-        ctx.repl_enabled = True
+        ctx.repl.enabled = True
         ctx.raw_mode = True
         writer = MagicMock()
         writer.mode = "local"
@@ -155,7 +158,7 @@ class TestWantRepl:
 
     def test_no_mode_attr(self) -> None:
         ctx = TelixSessionContext()
-        ctx.repl_enabled = True
+        ctx.repl.enabled = True
         writer = MagicMock(spec=[])
         assert want_repl(ctx, writer) is True
 
@@ -176,7 +179,7 @@ class TestCtxPreservation:
         old_ctx.typescript_file = "fake_ts"
         old_ctx.raw_mode = True
         old_ctx.ascii_eol = True
-        old_ctx.color_filter = "fake_color"
+        old_ctx.color_filter = "fake_color"  # plain TelnetSessionContext, flat attr ok
         old_ctx.input_filter = "fake_input"
 
         writer = MagicMock()
@@ -189,7 +192,7 @@ class TestCtxPreservation:
         ctx.typescript_file = old_ctx.typescript_file
         ctx.raw_mode = old_ctx.raw_mode
         ctx.ascii_eol = old_ctx.ascii_eol
-        ctx.color_filter = old_ctx.color_filter
+        ctx.repl.color_filter = old_ctx.color_filter
         ctx.input_filter = old_ctx.input_filter
         ctx.writer = writer
         writer.ctx = ctx
@@ -197,7 +200,7 @@ class TestCtxPreservation:
         assert ctx.typescript_file == "fake_ts"
         assert ctx.raw_mode is True
         assert ctx.ascii_eol is True
-        assert ctx.color_filter == "fake_color"
+        assert ctx.repl.color_filter == "fake_color"
         assert ctx.input_filter == "fake_input"
         assert ctx.session_key == "example.com:4000"
 
@@ -270,15 +273,15 @@ class TestWsClientShellGMCP:
         session_key = build_session_key(writer)
         ctx = TelixSessionContext(session_key=session_key)
         ctx.writer = writer
-        ctx.repl_enabled = True
+        ctx.repl.enabled = True
         writer.ctx = ctx
         load_configs(ctx)
 
         # Simulate the GMCP callback setup from ws_client_shell.
         def on_gmcp(package: str, data: Any) -> None:
             if package == "Room.Info":
-                if ctx.on_room_info is not None:
-                    ctx.on_room_info(data)
+                if ctx.gmcp.on_room_info is not None:
+                    ctx.gmcp.on_room_info(data)
 
         writer.set_ext_callback(GMCP, on_gmcp)
         assert GMCP in writer._ext_callback
@@ -301,12 +304,12 @@ class TestWsClientShellGMCP:
         load_configs(ctx)
 
         received: list[Any] = []
-        ctx.on_room_info = received.append
+        ctx.gmcp.on_room_info = received.append
 
         def on_gmcp(package: str, data: Any) -> None:
             if package == "Room.Info":
-                if ctx.on_room_info is not None:
-                    ctx.on_room_info(data)
+                if ctx.gmcp.on_room_info is not None:
+                    ctx.gmcp.on_room_info(data)
 
         writer.set_ext_callback(GMCP, on_gmcp)
 
@@ -348,9 +351,9 @@ class TestWsClientShellNoRepl:
 
         old_ctx = writer.ctx
         ctx = TelixSessionContext(session_key="gel.monster:8443")
-        ctx.repl_enabled = not old_ctx.no_repl
+        ctx.repl.enabled = not old_ctx.no_repl
 
-        assert ctx.repl_enabled is False
+        assert ctx.repl.enabled is False
 
 
 class TestWsClientShellTypescript:
@@ -424,13 +427,97 @@ class TestWsClientShellTypescript:
         assert opened_files[0] == "w"
 
 
+class TestSetupAnsiKeys:
+    """_setup_ansi_keys works with the color_args on the session context."""
+
+    def _make_telnet_color_args(self, **kwargs):
+        """Build an argparse.Namespace matching _build_telix_parser() output (no ansi_keys)."""
+        import argparse
+
+        return argparse.Namespace(
+            colormatch="vga",
+            color_brightness=1.0,
+            color_contrast=1.0,
+            background_color="#000000",
+            no_ice_colors=False,
+            no_repl=False,
+            **kwargs,
+        )
+
+    def test_does_not_raise_with_telnet_color_args(self) -> None:
+        """_setup_ansi_keys does not crash when ansi_keys is absent from color_args."""
+        ctx = TelixSessionContext()
+        ctx.color_args = self._make_telnet_color_args()
+        _setup_ansi_keys(ctx)
+        assert ctx.repl.ansi_keys is False
+
+    def test_sets_ansi_keys_true_when_present(self) -> None:
+        """_setup_ansi_keys sets ctx.repl.ansi_keys=True when the flag is present in color_args."""
+        ctx = TelixSessionContext()
+        ctx.color_args = self._make_telnet_color_args(ansi_keys=True)
+        _setup_ansi_keys(ctx)
+        assert ctx.repl.ansi_keys is True
+
+    def test_no_op_when_color_args_none(self) -> None:
+        """_setup_ansi_keys is a no-op when color_args is None (non-main invocation)."""
+        ctx = TelixSessionContext()
+        ctx.color_args = None
+        _setup_ansi_keys(ctx)
+        assert ctx.repl.ansi_keys is False
+
+
+class TestSetupColorFilter:
+    """_setup_color_filter works with color_args on the session context."""
+
+    def _make_color_args(self, **kwargs):
+        import argparse
+
+        defaults = {
+            "colormatch": "vga",
+            "color_brightness": 1.0,
+            "color_contrast": 1.0,
+            "background_color": "#000000",
+            "no_ice_colors": False,
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    def test_attaches_color_filter_for_vga(self) -> None:
+        """_setup_color_filter attaches a ColorFilter for the default VGA palette."""
+        ctx = TelixSessionContext()
+        ctx.color_args = self._make_color_args()
+        writer = MagicMock()
+        writer.ctx.encoding = "utf-8"
+        writer.default_encoding = "utf-8"
+        _setup_color_filter(ctx, writer)
+        assert ctx.repl.color_filter is not None
+
+    def test_invalid_hex_background_color_does_not_raise(self) -> None:
+        """_setup_color_filter does not crash for a malformed background color string."""
+        ctx = TelixSessionContext()
+        ctx.color_args = self._make_color_args(background_color="#ZZZZZZ")
+        writer = MagicMock()
+        writer.ctx.encoding = "utf-8"
+        writer.default_encoding = "utf-8"
+        _setup_color_filter(ctx, writer)
+        assert ctx.repl.color_filter is not None
+
+    def test_none_colormatch_skips_filter(self) -> None:
+        """_setup_color_filter does nothing when colormatch is 'none'."""
+        ctx = TelixSessionContext()
+        ctx.color_args = self._make_color_args(colormatch="none")
+        writer = MagicMock()
+        _setup_color_filter(ctx, writer)
+        assert ctx.repl.color_filter is None
+
+
 class TestColorFilteredWriter:
     """_ColorFilteredWriter applies ctx.color_filter to write() calls."""
 
     def _make_ctx(self, color_filter=None, erase_eol=False):
         ctx = TelixSessionContext()
-        ctx.color_filter = color_filter
-        ctx.erase_eol = erase_eol
+        ctx.repl.color_filter = color_filter
+        ctx.repl.erase_eol = erase_eol
         return ctx
 
     def test_passes_through_without_filter(self) -> None:
@@ -461,7 +548,64 @@ class TestColorFilteredWriter:
         writer = ColorFilteredWriter(inner, ctx, "utf-8")
         writer.write(b"line1\r\nline2")
         written = inner.write.call_args[0][0]
-        assert b"\x1b[K" in written
+        assert written == b"line1\x1b[K\r\nline2"
+
+    def test_erase_eol_bare_cr_before_crlf(self) -> None:
+        """erase_eol inserts \\x1b[K before bare CR+CRLF only, not after."""
+        inner = MagicMock()
+        cf = MagicMock()
+        cf.filter.return_value = "line1\r\r\nline2"
+        ctx = self._make_ctx(color_filter=cf, erase_eol=True)
+        writer = ColorFilteredWriter(inner, ctx, "utf-8")
+        writer.write(b"line1\r\r\nline2")
+        written = inner.write.call_args[0][0]
+        assert written == b"line1\x1b[K\r\r\nline2"
+
+    def test_erase_eol_skips_cursor_reposition_lines(self) -> None:
+        """erase_eol does not inject \\x1b[K when the line has no printable content."""
+        inner = MagicMock()
+        cf = MagicMock()
+        cf.filter.return_value = "\x1b[2H\x1b[0;1;40;36m\r\nline2"
+        ctx = self._make_ctx(color_filter=cf, erase_eol=True)
+        writer = ColorFilteredWriter(inner, ctx, "utf-8")
+        writer.write(b"\x1b[2H\x1b[0;1;40;36m\r\nline2")
+        written = inner.write.call_args[0][0]
+        assert written == b"\x1b[2H\x1b[0;1;40;36m\r\nline2"
+
+    def test_split_multibyte_sequence(self) -> None:
+        """A multi-byte character split across two write() calls is decoded correctly."""
+        inner = MagicMock()
+        cf = MagicMock()
+        cf.filter.side_effect = lambda t: t
+        ctx = self._make_ctx(color_filter=cf)
+        ctx.encoding = "utf-8"
+        writer = ColorFilteredWriter(inner, ctx, "utf-8")
+
+        # UTF-8 'é' is 0xC3 0xA9 -- split across two writes
+        writer.write(b"\xc3")
+        writer.write(b"\xa9")
+
+        calls = [c[0][0] for c in inner.write.call_args_list]
+        assert calls[0] == b""
+        assert calls[1] == "é".encode()
+
+    def test_encoding_change_resets_decoder(self) -> None:
+        """When ctx.encoding changes, the decoder is rebuilt for the new encoding."""
+        inner = MagicMock()
+        cf = MagicMock()
+        cf.filter.side_effect = lambda t: t
+        ctx = self._make_ctx(color_filter=cf)
+        ctx.encoding = "utf-8"
+        writer = ColorFilteredWriter(inner, ctx, "utf-8")
+
+        writer.write(b"hello")
+        ctx.encoding = "latin-1"
+        # 0xe9 is 'é' in latin-1; with no decoder reset this would be mojibake
+        writer.write(b"\xe9")
+
+        calls = [c[0][0] for c in inner.write.call_args_list]
+        assert calls[0] == b"hello"
+        assert calls[1] == "é".encode("latin-1")
 
     def test_delegates_other_attributes(self) -> None:
         """Non-write attributes are delegated to the inner writer."""
@@ -485,3 +629,56 @@ class TestColorFilteredWriter:
             ts_file.close()
 
         assert ts_file.closed
+
+
+class TestSshClientShellNoLocalEcho:
+    """ssh_client_shell must not enable local echo -- the SSH PTY echoes server-side."""
+
+    @pytest.mark.asyncio
+    async def test_local_echo_false(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ssh_client_shell passes local_echo=False to _raw_event_loop."""
+        from telix.ssh_transport import SSHReader, SSHWriter
+
+        monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
+        monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
+        monkeypatch.setattr(
+            "telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json")
+        )
+        monkeypatch.setattr(
+            "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
+        )
+        monkeypatch.setattr("telix.rooms.rooms_path", lambda sk: str(tmp_path / "data" / f"rooms-{sk}.db"))
+
+        captured_state = []
+
+        async def fake_raw_event_loop(*args, **kwargs):
+            state = args[6] if len(args) > 6 else kwargs.get("state")
+            captured_state.append(state)
+
+        fake_stdout_writer = MagicMock()
+        fake_stdout_writer.write = MagicMock()
+
+        fake_tty_shell = MagicMock()
+        fake_tty_shell._istty = True
+        fake_tty_shell._save_mode = None
+        fake_tty_shell.make_stdout = AsyncMock(return_value=fake_stdout_writer)
+        fake_tty_shell.connect_stdin = AsyncMock(return_value=MagicMock())
+        fake_tty_shell.setup_winch = MagicMock()
+        fake_tty_shell.cleanup_winch = MagicMock()
+        fake_tty_shell.disconnect_stdin = MagicMock()
+
+        fake_terminal_cm = MagicMock()
+        fake_terminal_cm.__enter__ = MagicMock(return_value=fake_tty_shell)
+        fake_terminal_cm.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr("telnetlib3.client_shell.Terminal", lambda **kw: fake_terminal_cm)
+        monkeypatch.setattr("telnetlib3.client_shell._raw_event_loop", fake_raw_event_loop)
+
+        reader = SSHReader()
+        writer = SSHWriter(peername=("host", 22))
+        reader.feed_eof()
+
+        await ssh_client_shell(reader, writer)
+
+        assert len(captured_state) == 1
+        assert captured_state[0].local_echo is False

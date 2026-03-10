@@ -18,7 +18,7 @@ from telix.client_repl_render import ToolbarSlot, sgr_fg, wcswidth
 
 def make_ctx(tmp_path: Any, session_key: str = "test:4000") -> TelixSessionContext:
     ctx = TelixSessionContext(session_key=session_key)
-    ctx.chat_file = str(tmp_path / "chat.json")
+    ctx.chat.file = str(tmp_path / "chat.json")
     return ctx
 
 
@@ -32,32 +32,32 @@ class TestAppendChat:
         data = sample_gmcp_msg()
         append_chat_msg(ctx, data)
 
-        assert len(ctx.chat_messages) == 1
-        assert ctx.chat_messages[0]["channel"] == "chat"
-        assert ctx.chat_messages[0]["talker"] == "Bob"
-        assert "ts" in ctx.chat_messages[0]
+        assert len(ctx.chat.messages) == 1
+        assert ctx.chat.messages[0]["channel"] == "chat"
+        assert ctx.chat.messages[0]["talker"] == "Bob"
+        assert "ts" in ctx.chat.messages[0]
 
     def test_increments_unread(self, tmp_path: Any) -> None:
         ctx = make_ctx(tmp_path)
-        assert ctx.chat_unread == 0
+        assert ctx.chat.unread == 0
         append_chat_msg(ctx, sample_gmcp_msg())
-        assert ctx.chat_unread == 1
+        assert ctx.chat.unread == 1
         append_chat_msg(ctx, sample_gmcp_msg(talker="Alice"))
-        assert ctx.chat_unread == 2
+        assert ctx.chat.unread == 2
 
     def test_ring_buffer_cap(self, tmp_path: Any) -> None:
         ctx = make_ctx(tmp_path)
-        ctx.chat_file = ""
+        ctx.chat.file = ""
         for i in range(510):
             append_chat_msg(ctx, sample_gmcp_msg(talker=f"user{i}"))
-        assert len(ctx.chat_messages) == 500
-        assert ctx.chat_messages[0]["talker"] == "user10"
+        assert len(ctx.chat.messages) == 500
+        assert ctx.chat.messages[0]["talker"] == "user10"
 
     def test_persists_to_file(self, tmp_path: Any) -> None:
         ctx = make_ctx(tmp_path)
         append_chat_msg(ctx, sample_gmcp_msg())
-        assert os.path.exists(ctx.chat_file)
-        with open(ctx.chat_file, encoding="utf-8") as f:
+        assert os.path.exists(ctx.chat.file)
+        with open(ctx.chat.file, encoding="utf-8") as f:
             data = json.load(f)
         assert len(data) == 1
         assert data[0]["talker"] == "Bob"
@@ -101,8 +101,8 @@ class TestPersistChat:
 class TestChatBadge:
     def test_badge_present_when_unread(self) -> None:
         ctx = TelixSessionContext(session_key="test:4000")
-        ctx.chat_unread = 5
-        badge = f"Chat:{ctx.chat_unread}"
+        ctx.chat.unread = 5
+        badge = f"Chat:{ctx.chat.unread}"
         slot = ToolbarSlot(
             priority=3,
             display_order=8,
@@ -116,34 +116,34 @@ class TestChatBadge:
 
     def test_badge_absent_when_zero(self) -> None:
         ctx = TelixSessionContext(session_key="test:4000")
-        ctx.chat_unread = 0
-        assert ctx.chat_unread == 0
+        ctx.chat.unread = 0
+        assert ctx.chat.unread == 0
 
 
 class TestChannelList:
     def test_stores_channel_list(self) -> None:
         ctx = TelixSessionContext(session_key="test:4000")
         channels = [{"name": "chat", "caption": "Chat"}, {"name": "tp", "caption": "Talker"}]
-        ctx.chat_channels = channels
-        assert len(ctx.chat_channels) == 2
-        assert ctx.chat_channels[0]["name"] == "chat"
+        ctx.chat.channels = channels
+        assert len(ctx.chat.channels) == 2
+        assert ctx.chat.channels[0]["name"] == "chat"
 
 
 class TestOnChatTextCallback:
     def test_callback_appends_message(self, tmp_path: Any) -> None:
         ctx = make_ctx(tmp_path)
-        ctx.on_chat_text = lambda data: append_chat_msg(ctx, data)
-        ctx.on_chat_text(sample_gmcp_msg(channel="tp", talker="Alice", text="hey"))
-        assert len(ctx.chat_messages) == 1
-        assert ctx.chat_messages[0]["talker"] == "Alice"
-        assert ctx.chat_unread == 1
+        ctx.chat.on_text = lambda data: append_chat_msg(ctx, data)
+        ctx.chat.on_text(sample_gmcp_msg(channel="tp", talker="Alice", text="hey"))
+        assert len(ctx.chat.messages) == 1
+        assert ctx.chat.messages[0]["talker"] == "Alice"
+        assert ctx.chat.unread == 1
 
     def test_channels_callback_stores_list(self) -> None:
         ctx = TelixSessionContext(session_key="test:4000")
         channels = [{"name": "chat"}, {"name": "tp"}]
-        ctx.on_chat_channels = lambda data: setattr(ctx, "chat_channels", data)
-        ctx.on_chat_channels(channels)
-        assert ctx.chat_channels == channels
+        ctx.chat.on_channels = lambda data: setattr(ctx.chat, "channels", data)
+        ctx.chat.on_channels(channels)
+        assert ctx.chat.channels == channels
 
 
 class TestChatPath:

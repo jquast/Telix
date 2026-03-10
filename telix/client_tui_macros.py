@@ -3,7 +3,7 @@
 # std imports
 import os
 import sys
-from typing import Any, ClassVar
+import typing
 
 # 3rd party
 import textual.app
@@ -21,7 +21,7 @@ class MacroEditPane(client_tui_base.EditListPane):
 
     growable_keys: list[str] = ["toggle-text"]
 
-    BINDINGS: ClassVar[list[textual.binding.Binding]] = [
+    BINDINGS: typing.ClassVar[list[textual.binding.Binding]] = [
         textual.binding.Binding("escape", "cancel_or_close", "Cancel", priority=True),
         textual.binding.Binding("f1", "show_help", "Help", show=True),
         textual.binding.Binding("plus", "reorder_hint", "Change Priority", key_display="+/=/-", show=True),
@@ -68,7 +68,7 @@ class MacroEditPane(client_tui_base.EditListPane):
         return "Macro"
 
     @property
-    def items(self) -> list[Any]:
+    def items(self) -> list[typing.Any]:
         return self.macros
 
     def compose(self) -> textual.app.ComposeResult:

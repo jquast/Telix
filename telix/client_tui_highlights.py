@@ -4,7 +4,7 @@
 import os
 import re
 import shutil
-from typing import Any, NamedTuple
+import typing
 
 # 3rd party
 import rich.text
@@ -17,7 +17,7 @@ import textual.containers
 from . import client_repl, highlighter, client_tui_base
 
 
-class HighlightTuple(NamedTuple):
+class HighlightTuple(typing.NamedTuple):
     """Lightweight tuple for highlight rules in the TUI editor."""
 
     pattern: str
@@ -63,7 +63,7 @@ class HighlightEditPane(client_tui_base.EditListPane):
         return "Highlight"
 
     @property
-    def items(self) -> list[Any]:
+    def items(self) -> list[typing.Any]:
         return self.rules
 
     def item_label(self, idx: int) -> str:
@@ -297,7 +297,7 @@ class HighlightEditPane(client_tui_base.EditListPane):
             term = client_repl.get_term()
             ansi_text = getattr(term, highlight_val)("example text") + term.normal
             preview.update(rich.text.Text.from_ansi(ansi_text))
-        except Exception as exc:
+        except (AttributeError, TypeError) as exc:
             preview.update(f"invalid: {exc}")
 
     def on_input_changed(self, event: textual.widgets.Input.Changed) -> None:

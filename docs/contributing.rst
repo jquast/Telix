@@ -24,7 +24,7 @@ TUI interfaces.
 Architecture
 ------------
 
-Telix is a TUI Telnet client for MUD and BBS systems, layered on top of telnetlib3_, blessed_,
+Telix is a TUI Telnet, WebSocket, and SSH client for MUD and BBS systems, layered on top of telnetlib3_, blessed_,
 wcwidth_, and textual_::
 
     telix
@@ -65,6 +65,11 @@ Telix code file overview::
     ├── ws_transport.py         WebSocket reader/writer adapters
     ├── ws_client.py            WebSocket connection core (run_ws_client, build_parser)
     │
+    ├── ssh_transport.py        SSH reader/writer adapters
+    ├── ssh_client.py           SSH connection core (run_ssh_client)
+    │
+    ├── scripts.py              Async Python scripting engine
+    │
     ├── client_repl.py          blessed LineEditor REPL event loop
     ├── client_repl_render.py   Toolbar / status line rendering
     ├── client_repl_commands.py Command expansion and backtick dispatch
@@ -74,10 +79,17 @@ Telix code file overview::
     │
     ├── client_tui.py           Re-export hub (backwards compat)
     ├── client_tui_base.py      TUI foundation: sessions, base editors, app
-    ├── client_tui_editors.py   Macro/trigger/highlight/bar editors
-    ├── client_tui_dialogs.py   Rooms, caps, tabbed editor, dialogs
+    ├── client_tui_editors.py   Re-export hub (backwards compat)
+    ├── client_tui_app.py       Textual app entry point and session launcher
+    ├── client_tui_macros.py    Macro editor
+    ├── client_tui_triggers.py  Trigger editor
+    ├── client_tui_highlights.py Highlight editor
+    ├── client_tui_bars.py      Progress bar editor
+    ├── client_tui_rooms.py     Room browser TUI
+    ├── client_tui_captures.py  Capture window (Alt+C)
+    ├── client_tui_dialogs.py   Confirmation dialogs, walk dialogs, tabbed editor
     │
-    ├── trigger.py            Pattern-triggered automatic responses
+    ├── trigger.py              Pattern-triggered automatic responses
     ├── macros.py               Key-bound macro definitions
     ├── highlighter.py          Regex-based output highlighting + captures
     ├── rooms.py                GMCP Room.Info graph store (SQLite)
@@ -85,6 +97,13 @@ Telix code file overview::
     ├── directory.py            Bundled MUD/BBS directory loader
     ├── progressbars.py         Progress bar config loading/saving
     ├── gmcp_snapshot.py        GMCP snapshot persistence
+    │
+    ├── color_filter.py         ANSI/PETSCII/ATASCII color palette translation
+    ├── terminal.py             Terminal abstraction (Unix/Win32 dispatch)
+    ├── terminal_unix.py        Unix terminal operations (termios, PTY)
+    ├── terminal_win32.py       Windows terminal operations (msvcrt)
+    ├── mtts.py                 MTTS terminal type standard bitvector
+    ├── mslp.py                 MSLP multiline softlink parser
     │
     ├── paths.py                XDG base directory resolution
     ├── util.py                 Small internal helpers

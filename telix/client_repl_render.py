@@ -1,14 +1,14 @@
-"""Color math, vital-bar rendering, toolbar layout, and display helpers."""
+"""Vital-bar rendering, toolbar layout, and display helpers."""
 
 # std imports
 import time
 import random
+import typing
 import asyncio
 import logging
-import colorsys
 import collections
 import dataclasses
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import blessed
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 import wcwidth
 
 # local
-from .repl_theme import hex_to_rgb, get_repl_palette
+from . import repl_theme, client_repl_color, client_repl_sextant
 
 log = logging.getLogger(__name__)
 
@@ -40,41 +40,23 @@ def set_session_key(key: str) -> None:
 
 def pal(key: str) -> str:
     """Return ``#rrggbb`` hex string for palette *key*."""
-    return get_repl_palette(session_key)[key]
+    return repl_theme.get_repl_palette(session_key)[key]
 
 
 def idle_rgb() -> tuple[int, int, int]:
     """Normal input-line background as ``(r, g, b)``."""
-    return hex_to_rgb(pal("input_bg"))
+    return repl_theme.hex_to_rgb(pal("input_bg"))
 
 
 def idle_ar_rgb() -> tuple[int, int, int]:
     """Trigger input-line background as ``(r, g, b)``."""
-    return hex_to_rgb(pal("input_ar_bg"))
+    return repl_theme.hex_to_rgb(pal("input_ar_bg"))
 
 
-# Each sextant character (U+1FB00-U+1FB3B) encodes a 2x3 pixel grid.
-# Bits 0-5 map to top-left, top-right, mid-left, mid-right, bot-left, bot-right.
-# We build a 64-entry lookup: index = bitmask -> Unicode character.
-SEXTANT: list[str] = [" "] * 64
-SEXTANT[63] = "\u2588"  # FULL BLOCK
-for b in range(1, 63):
-    u = sum((1 << i) for i in range(6) if b & (1 << (5 - i)))
-    SEXTANT[b] = (
-        "\u258c" if u == 21 else "\u2590" if u == 42 else chr(0x1FB00 + u - 1 - sum(1 for x in (21, 42) if x < u))
-    )
-del b, u
-
-#: Non-space sextant characters for password scrambling.
-SEXTANT_VISIBLE = SEXTANT[1:]
-
-
-SCRAMBLE_LEN = 17
-
-
-def scramble_password(length: int = SCRAMBLE_LEN) -> str:
-    """Return *length* random sextant block characters."""
-    return "".join(random.choice(SEXTANT_VISIBLE) for _ in range(length))
+SEXTANT = client_repl_sextant.SEXTANT
+SEXTANT_VISIBLE = client_repl_sextant.SEXTANT_VISIBLE
+SCRAMBLE_LEN = client_repl_sextant.SCRAMBLE_LEN
+scramble_password = client_repl_sextant.scramble_password
 
 
 def editor_cursor_col(editor: "blessed.line_editor.LineEditor") -> int:
@@ -115,8 +97,8 @@ def activity_hint(engine: "trigger_mod.TriggerEngine | None", cols: int = 0) -> 
     if engine is None:
         return ""
     parts: list[str] = []
-    idx = getattr(engine, "exclusive_rule_index", None)
-    if idx is not None and idx != 0:
+    idx = engine.exclusive_rule_index
+    if idx != 0:
         parts.append(f"#{idx}")
     st = getattr(engine, "status_text", "")
     if st:
@@ -170,7 +152,7 @@ def write_hint(
         return
     if trigger:
         effective_bg = bg_sgr
-        dim = str(bt.color_rgb(*hex_to_rgb(pal("input_ar_suggestion"))))
+        dim = str(bt.color_rgb(*repl_theme.hex_to_rgb(pal("input_ar_suggestion"))))
         normal = bt.normal
         if progress is not None:
             split = int(len(hint) * progress + 0.5)
@@ -235,12 +217,12 @@ CURSOR = CursorSeq()
 
 def cursor_color_rgb() -> tuple[int, int, int]:
     """Cursor color from the theme palette."""
-    return hex_to_rgb(pal("cursor_color"))
+    return repl_theme.hex_to_rgb(pal("cursor_color"))
 
 
 def cursor_ar_rgb() -> tuple[int, int, int]:
     """Trigger cursor color from the theme palette."""
-    return hex_to_rgb(pal("cursor_ar_color"))
+    return repl_theme.hex_to_rgb(pal("cursor_ar_color"))
 
 
 def cursor_osc() -> str:
@@ -271,10 +253,10 @@ def make_styles() -> None:
     cursor_ar_fg = blessed_term.color_rgb(ar_cr, ar_cg, ar_cb)
     n_bg = idle_rgb()
     ar_bg = idle_ar_rgb()
-    txt = hex_to_rgb(pal("input_text"))
-    sug = hex_to_rgb(pal("input_suggestion"))
-    ar_txt = hex_to_rgb(pal("input_ar_text"))
-    ar_sug = hex_to_rgb(pal("input_ar_suggestion"))
+    txt = repl_theme.hex_to_rgb(pal("input_text"))
+    sug = repl_theme.hex_to_rgb(pal("input_suggestion"))
+    ar_txt = repl_theme.hex_to_rgb(pal("input_ar_text"))
+    ar_sug = repl_theme.hex_to_rgb(pal("input_ar_suggestion"))
     STYLE_NORMAL.clear()
     STYLE_NORMAL.update(
         {
@@ -297,75 +279,12 @@ def make_styles() -> None:
     )
 
 
-def hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
-    """Convert HSV (h in [0,360), s/v in [0,1]) to (r, g, b) in [0,255]."""
-    r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, v)
-    return (int(r * 255), int(g * 255), int(b * 255))
-
-
-def rgb_to_hsv(r: int, g: int, b: int) -> tuple[float, float, float]:
-    """Convert (r, g, b) in [0,255] to HSV (h in [0,360), s/v in [0,1])."""
-    h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
-    return (h * 360.0, s, v)
-
-
-def lerp_hsv(
-    hsv1: tuple[float, float, float], hsv2: tuple[float, float, float], t: float
-) -> tuple[float, float, float]:
-    """Linearly interpolate between two HSV colors using shortest-arc hue."""
-    h1, s1, v1 = hsv1
-    h2, s2, v2 = hsv2
-    dh = (h2 - h1) % 360.0
-    if dh > 180.0:
-        dh -= 360.0
-    h = (h1 + t * dh) % 360.0
-    return (h, s1 + t * (s2 - s1), v1 + t * (v2 - v1))
-
-
-@dataclasses.dataclass(frozen=True)
-class FlashTiming:
-    """Vital-bar flash animation timing constants."""
-
-    RAMP_UP: float = 0.100
-    HOLD: float = 0.200
-    RAMP_DOWN: float = 0.350
-    INTERVAL: float = 0.033
-
-    @property
-    def DURATION(self) -> float:  # noqa: N802
-        """Total flash duration (ramp_up + hold + ramp_down)."""
-        return self.RAMP_UP + self.HOLD + self.RAMP_DOWN
-
-
-FLASH = FlashTiming()
-
-
-def flash_color(base_hex: str, elapsed: float) -> str:
-    """
-    Compute the flash-animated color for *base_hex* at *elapsed* seconds.
-
-    :param base_hex: Original ``#rrggbb`` hex color.
-    :param elapsed: Seconds since flash started; negative means no flash.
-    :returns: Interpolated ``#rrggbb`` hex color.
-    """
-    if elapsed < 0.0 or elapsed >= FLASH.DURATION:
-        return base_hex
-    r = int(base_hex[1:3], 16)
-    g = int(base_hex[3:5], 16)
-    b = int(base_hex[5:7], 16)
-    hsv_orig = rgb_to_hsv(r, g, b)
-    # Flash toward white (same hue, zero saturation, full brightness)
-    # to avoid hue-interpolation artifacts (e.g. green→magenta goes through cyan).
-    hsv_inv = (hsv_orig[0], 0.0, 1.0)
-    if elapsed < FLASH.RAMP_UP:
-        t = elapsed / FLASH.RAMP_UP
-    elif elapsed < FLASH.RAMP_UP + FLASH.HOLD:
-        t = 1.0
-    else:
-        t = (FLASH.DURATION - elapsed) / FLASH.RAMP_DOWN
-    h, s, v = lerp_hsv(hsv_orig, hsv_inv, t)
-    cr, cg, cb = hsv_to_rgb(h, s, v)
-    return f"#{cr:02x}{cg:02x}{cb:02x}"
+hsv_to_rgb = client_repl_color.hsv_to_rgb
+rgb_to_hsv = client_repl_color.rgb_to_hsv
+lerp_hsv = client_repl_color.lerp_hsv
+FlashTiming = client_repl_color.FlashTiming
+FLASH = client_repl_color.FLASH
+flash_color = client_repl_color.flash_color
 
 
 def fmt_value(n: int) -> str:
@@ -433,7 +352,7 @@ def dmz_line(cols: int, active: bool = False) -> str:
     :param active: Use gold color when trigger/wander/discover is active.
     """
     blessed_term = get_term()
-    rgb = hex_to_rgb(pal("dmz_active") if active else pal("dmz_inactive"))
+    rgb = repl_theme.hex_to_rgb(pal("dmz_active") if active else pal("dmz_inactive"))
     color = blessed_term.color_rgb(*rgb)
     return str(color) + (DISPLAY.DMZ_CHAR * cols) + str(blessed_term.normal)
 
@@ -454,8 +373,8 @@ def sgr_bg(hexcolor: str) -> str:
 
 
 def vital_bar(
-    current: Any,
-    maximum: Any,
+    current: typing.Any,
+    maximum: typing.Any,
     width: int,
     kind: str,
     flash_elapsed: float = -1.0,
@@ -566,7 +485,7 @@ def center_truncate(text: str, avail: int) -> str:
     return "".join(result) + "\u2026"
 
 
-class ToolbarSlot(NamedTuple):
+class ToolbarSlot(typing.NamedTuple):
     """A single toolbar item with layout metadata."""
 
     priority: int
@@ -577,7 +496,7 @@ class ToolbarSlot(NamedTuple):
     min_width: int
     label: str
     growable: bool = False
-    grow_params: tuple[Any, ...] | None = None
+    grow_params: tuple[typing.Any, ...] | None = None
 
 
 BAR_GAP_WIDTH = 1
@@ -735,7 +654,7 @@ class VitalTracker:
         self.last_value: int | None = None
         self.flash_time: float = 0.0
 
-    def update(self, raw: Any, now: float) -> float:
+    def update(self, raw: typing.Any, now: float) -> float:
         """
         Update tracker with *raw* value at time *now*.
 
@@ -764,7 +683,7 @@ class XPTracker(VitalTracker):
         super().__init__()
         self.history: collections.deque[tuple[float, int]] = collections.deque()
 
-    def update(self, raw: Any, now: float) -> float:
+    def update(self, raw: typing.Any, now: float) -> float:
         """Update tracker, also maintaining XP history for ETA."""
         try:
             val = int(raw)
@@ -784,7 +703,7 @@ class XPTracker(VitalTracker):
         elapsed = now - self.flash_time
         return elapsed if elapsed < FLASH.DURATION else -1.0
 
-    def eta_fragments(self, maxxp: Any, now: float) -> list[tuple[str, str]] | None:
+    def eta_fragments(self, maxxp: typing.Any, now: float) -> list[tuple[str, str]] | None:
         """
         Compute ETA fragments from XP history.
 
@@ -822,7 +741,7 @@ class ToolbarRenderer:
     """
 
     def __init__(
-        self, ctx: "TelixSessionContext", scroll: Any, out: asyncio.StreamWriter, rprompt_text: str = ""
+        self, ctx: "TelixSessionContext", scroll: typing.Any, out: asyncio.StreamWriter, rprompt_text: str = ""
     ) -> None:
         """Initialize toolbar renderer for *ctx*."""
         self.ctx = ctx
@@ -847,7 +766,7 @@ class ToolbarRenderer:
     def is_trigger_bg(self, engine: "trigger_mod.TriggerEngine | None") -> bool:
         """Return whether the input row should use the trigger background."""
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.discover_active or self.ctx.randomwalk_active or ar
+        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or ar
 
     def render(self, trigger_engine: "trigger_mod.TriggerEngine | None") -> bool:
         """
@@ -862,8 +781,8 @@ class ToolbarRenderer:
 
         engine = trigger_engine
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        discover_active = self.ctx.discover_active
-        randomwalk_active = self.ctx.randomwalk_active
+        discover_active = self.ctx.walk.discover_active
+        randomwalk_active = self.ctx.walk.randomwalk_active
 
         now = time.monotonic()
         is_ar = self.is_trigger_bg(engine)
@@ -876,15 +795,15 @@ class ToolbarRenderer:
         """Initialize toolbar on first GMCP data; return ``False`` if no data yet."""
         from . import client_repl  # circular
 
-        gmcp_data: dict[str, Any] | None = self.ctx.gmcp_data or None
+        gmcp_data: dict[str, typing.Any] | None = self.ctx.gmcp_data or None  # inherited from TelnetSessionContext
         if not self.has_gmcp:
             if not gmcp_data:
                 return False
             self.has_gmcp = True
             self.scroll.grow_reserve(client_repl.RESERVE_WITH_TOOLBAR)
-            if self.ctx.on_gmcp_ready is not None:
-                self.ctx.on_gmcp_ready()
-                self.ctx.on_gmcp_ready = None
+            if self.ctx.gmcp.on_ready is not None:
+                self.ctx.gmcp.on_ready()
+                self.ctx.gmcp.on_ready = None
         return True
 
     def build_slots(
@@ -899,14 +818,14 @@ class ToolbarRenderer:
         """Build all toolbar slots and return ``(slots, needs_reflash)``."""
         slots: list[ToolbarSlot] = []
         needs_reflash = False
-        gmcp_data: dict[str, Any] | None = self.ctx.gmcp_data or None
+        gmcp_data: dict[str, typing.Any] | None = self.ctx.gmcp_data or None  # inherited from TelnetSessionContext
 
         if gmcp_data:
             status = gmcp_data.get("Char.Status")
             if isinstance(status, dict):
                 self.status_slots(status, slots, is_ar_bg)
 
-            bar_configs = self.ctx.progressbar_configs
+            bar_configs = self.ctx.progress.configs
             if bar_configs:
                 needs_reflash = self.config_driven_bars(gmcp_data, bar_configs, now, slots)
             else:
@@ -922,8 +841,8 @@ class ToolbarRenderer:
             if room_name:
                 self.rprompt_text = room_name
 
-        if self.ctx.chat_unread > 0:
-            badge = f"Chat:{self.ctx.chat_unread}"
+        if self.ctx.chat.unread > 0:
+            badge = f"Chat:{self.ctx.chat.unread}"
             slots.append(
                 ToolbarSlot(
                     priority=3,
@@ -939,7 +858,7 @@ class ToolbarRenderer:
         self.right_slot(engine, ar_active, discover_active, randomwalk_active, slots)
         return slots, needs_reflash
 
-    def default_bars(self, gmcp_data: dict[str, Any], now: float, slots: list[ToolbarSlot]) -> bool:
+    def default_bars(self, gmcp_data: dict[str, typing.Any], now: float, slots: list[ToolbarSlot]) -> bool:
         """Build HP/MP/XP bars using hardcoded aliases (backward compat)."""
         needs_reflash = False
         vitals = gmcp_data.get("Char.Vitals")
@@ -968,7 +887,7 @@ class ToolbarRenderer:
 
     def config_driven_bars(
         self,
-        gmcp_data: dict[str, Any],
+        gmcp_data: dict[str, typing.Any],
         bar_configs: "list[progressbars.BarConfig]",
         now: float,
         slots: list[ToolbarSlot],
@@ -996,7 +915,7 @@ class ToolbarRenderer:
             kind = cfg.name
             priority = i + 1
             order = cfg.display_order if cfg.display_order else i + 2
-            side = getattr(cfg, "side", "left")
+            side = cfg.side
             # Compute color from config (theme or custom).
             try:
                 mx = int(maxval) if maxval is not None else 0
@@ -1025,7 +944,7 @@ class ToolbarRenderer:
                 needs_reflash = True
         return needs_reflash
 
-    def status_slots(self, status: dict[str, Any], slots: list[ToolbarSlot], is_ar_bg: bool) -> None:
+    def status_slots(self, status: dict[str, typing.Any], slots: list[ToolbarSlot], is_ar_bg: bool) -> None:
         """Add Level and Money slots from ``Char.Status``."""
         color = "#222222" if is_ar_bg else pal("muted")
         fg = sgr_fg(color)
@@ -1065,8 +984,8 @@ class ToolbarRenderer:
     @staticmethod
     def vital_slot(
         tracker: VitalTracker,
-        raw: Any,
-        maxval: Any,
+        raw: typing.Any,
+        maxval: typing.Any,
         width: int,
         kind: str,
         priority: int,
@@ -1120,7 +1039,7 @@ class ToolbarRenderer:
         )
         return needs_reflash
 
-    def xp_eta_slot(self, maxxp: Any, now: float, slots: list[ToolbarSlot]) -> None:
+    def xp_eta_slot(self, maxxp: typing.Any, now: float, slots: list[ToolbarSlot]) -> None:
         """
         Append an ETA slot from cached fragments.
 
@@ -1154,9 +1073,11 @@ class ToolbarRenderer:
     ) -> None:
         """Append the right-side slot (walk mode, trigger, or room name)."""
         if randomwalk_active:
-            self.travel_bar_slot(self.ctx.randomwalk_current, self.ctx.randomwalk_total, 24, "randomwalk", slots)
+            self.travel_bar_slot(
+                self.ctx.walk.randomwalk_current, self.ctx.walk.randomwalk_total, 24, "randomwalk", slots
+            )
         elif discover_active:
-            self.travel_bar_slot(self.ctx.discover_current, self.ctx.discover_total, 20, "discover", slots)
+            self.travel_bar_slot(self.ctx.walk.discover_current, self.ctx.walk.discover_total, 20, "discover", slots)
         elif ar_active:
             idx = getattr(engine, "exclusive_rule_index", None)
             ar_label = f"Trigger #{idx}" if idx is not None else "Trigger"
@@ -1191,12 +1112,14 @@ class ToolbarRenderer:
                     )
                 )
 
-    def travel_bar_slot(self, cur: Any, tot: Any, width: int, kind: str, slots: list[ToolbarSlot]) -> None:
+    def travel_bar_slot(
+        self, cur: typing.Any, tot: typing.Any, width: int, kind: str, slots: list[ToolbarSlot]
+    ) -> None:
         """Append a travel progress bar slot, using config colors when available."""
         from . import progressbars  # circular
 
         travel_cfg = None
-        for cfg in self.ctx.progressbar_configs or []:
+        for cfg in self.ctx.progress.configs or []:
             if cfg.name == progressbars.TRAVEL_BAR_NAME or (cfg.name and not cfg.gmcp_package):
                 travel_cfg = cfg
                 break
@@ -1248,7 +1171,7 @@ class ToolbarRenderer:
 
         if is_trigger_bg:
             ar_bg = idle_ar_rgb()
-            ar_fg = hex_to_rgb(pal("input_ar_text"))
+            ar_fg = repl_theme.hex_to_rgb(pal("input_ar_text"))
             bg_sgr = blessed_term.on_color_rgb(*ar_bg) + blessed_term.color_rgb(*ar_fg)
         else:
             bg_sgr = blessed_term.on_color_rgb(*idle_rgb())
@@ -1317,8 +1240,8 @@ class ToolbarRenderer:
                     self.out.write((bt.move_yx(dmz_row, 0) + dmz_line(bt.width, is_ar_bg)).encode())
 
             cq = self.ctx.command_queue
-            ac = self.ctx.active_command
-            ac_elapsed = time.monotonic() - self.ctx.active_command_time
+            ac = self.ctx.walk.active_command
+            ac_elapsed = time.monotonic() - self.ctx.walk.active_command_time
             show_cmd = cq is not None or (ac is not None and ac_elapsed < FLASH.DURATION)
             if show_cmd:
                 from . import client_repl_commands  # circular
@@ -1419,7 +1342,7 @@ class ToolbarRenderer:
             if not self.has_gmcp:
                 self.eta_refresh_active = False
                 return
-            gmcp_data = self.ctx.gmcp_data or {}
+            gmcp_data = self.ctx.gmcp_data or {}  # inherited from TelnetSessionContext
             status = gmcp_data.get("Char.Vitals", gmcp_data.get("Char.Status", {}))
             if isinstance(status, dict):
                 maxxp = status.get("maxxp", status.get("maxXP", status.get("max_xp", status.get("maxexp"))))
@@ -1433,7 +1356,7 @@ class ToolbarRenderer:
                 self.last_eta_text = eta_text
                 self.out.write(bt.hide_cursor.encode())
                 self.render(trigger_engine)
-                has_command = self.ctx.command_queue is not None or self.ctx.active_command is not None
+                has_command = self.ctx.command_queue is not None or self.ctx.walk.active_command is not None
                 if not has_command:
                     cursor_col = editor_cursor_col(editor)
                     input_row = self.scroll.input_row

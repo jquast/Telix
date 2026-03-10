@@ -6,7 +6,8 @@ from __future__ import annotations
 import datetime
 
 # local
-from telix.util import relative_time
+import pytest
+from telix.util import relative_time, erase_eol
 
 
 def test_relative_time_empty():
@@ -35,3 +36,20 @@ def test_relative_time_days():
 def test_relative_time_invalid():
     result = relative_time("not-a-date")
     assert result == "not-a-date"[:10]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("line\r\n", "line\x1b[K\r\n"),
+        ("line\r\r\n", "line\x1b[K\r\r\n"),
+        ("line\r\nmore", "line\x1b[K\r\nmore"),
+        ("\x1b[2H\x1b[0;1;40;36m\r\n", "\x1b[2H\x1b[0;1;40;36m\r\n"),
+        ("\x1b[2H\x1b[0;1;40;36m\r\nline", "\x1b[2H\x1b[0;1;40;36m\r\nline"),
+        ("no newline", "no newline"),
+        ("", ""),
+    ],
+)
+def test_erase_eol(text, expected):
+    """erase_eol inserts \\x1b[K before \\r+\\n only on lines with visible content."""
+    assert erase_eol(text) == expected

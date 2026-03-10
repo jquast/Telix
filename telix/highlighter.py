@@ -8,9 +8,7 @@ while preserving existing SGR sequences, and persistence via
 """
 
 # std imports
-import os
 import re
-import json
 import typing
 import logging
 import datetime
@@ -21,7 +19,7 @@ from typing import TYPE_CHECKING
 import wcwidth
 import wcwidth.sgr_state
 
-from . import paths
+from . import util
 
 if TYPE_CHECKING:
     import blessed
@@ -139,10 +137,7 @@ def load_highlights(path: str, session_key: str) -> list[HighlightRule]:
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid or regex fails.
     """
-    with open(path, encoding="utf-8") as fh:
-        data: dict[str, typing.Any] = json.load(fh)
-    session_data: dict[str, typing.Any] = data.get(session_key, {})
-    entries: list[dict[str, typing.Any]] = session_data.get("highlights", [])
+    entries = util.load_json_entries(path, session_key, "highlights")
     return parse_entries(entries)
 
 
@@ -156,29 +151,22 @@ def save_highlights(path: str, rules: list[HighlightRule], session_key: str) -> 
     :param rules: List of :class:`HighlightRule` instances to save.
     :param session_key: Session identifier (``"host:port"``).
     """
-    data: dict[str, typing.Any] = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    data[session_key] = {
-        "highlights": [
-            {
-                "pattern": r.pattern.pattern,
-                "highlight": r.highlight,
-                "enabled": r.enabled,
-                "stop_movement": r.stop_movement,
-                "builtin": r.builtin,
-                **({"case_sensitive": True} if r.case_sensitive else {}),
-                **({"multiline": True} if r.multiline else {}),
-                **({"captured": True} if r.captured else {}),
-                **({"capture_name": r.capture_name} if r.captured and r.capture_name != "captures" else {}),
-                **({"captures": r.captures} if r.captures else {}),
-            }
-            for r in rules
-        ]
-    }
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    paths.atomic_json_write(path, data)
+    entries = [
+        {
+            "pattern": r.pattern.pattern,
+            "highlight": r.highlight,
+            "enabled": r.enabled,
+            "stop_movement": r.stop_movement,
+            "builtin": r.builtin,
+            **({"case_sensitive": True} if r.case_sensitive else {}),
+            **({"multiline": True} if r.multiline else {}),
+            **({"captured": True} if r.captured else {}),
+            **({"capture_name": r.capture_name} if r.captured and r.capture_name != "captures" else {}),
+            **({"captures": r.captures} if r.captures else {}),
+        }
+        for r in rules
+    ]
+    util.save_json_entries(path, session_key, "highlights", entries)
 
 
 class CompiledRuleSet:
@@ -381,7 +369,7 @@ class HighlightEngine:
                 "line": plain,
                 "highlight": rule.highlight,
             }
-            ctx.capture_log.setdefault(channel, []).append(entry)
+            ctx.highlights.capture_log.setdefault(channel, []).append(entry)
             if not rule.captures or rematch is None:
                 continue
             for cap in rule.captures:
@@ -391,7 +379,7 @@ class HighlightEngine:
                     continue
                 resolved = group_ref.sub(lambda m2: rematch.group(int(m2.group(1))) or "", value_tmpl)
                 try:
-                    ctx.captures[key] = int(resolved)
+                    ctx.highlights.captures[key] = int(resolved)
                 except (ValueError, TypeError):
                     pass
 
@@ -408,18 +396,18 @@ class HighlightEngine:
         for span in spans:
             if not span.stop_movement:
                 continue
-            if ctx.discover_active and ctx.discover_task is not None:
-                ctx.discover_task.cancel()
-                ctx.discover_active = False
-                ctx.discover_current = 0
-                ctx.discover_total = 0
+            if ctx.walk.discover_active and ctx.walk.discover_task is not None:
+                ctx.walk.discover_task.cancel()
+                ctx.walk.discover_active = False
+                ctx.walk.discover_current = 0
+                ctx.walk.discover_total = 0
                 cancelled.append("discover")
                 log.info("highlighter: stop_movement cancelled discover")
-            if ctx.randomwalk_active and ctx.randomwalk_task is not None:
-                ctx.randomwalk_task.cancel()
-                ctx.randomwalk_active = False
-                ctx.randomwalk_current = 0
-                ctx.randomwalk_total = 0
+            if ctx.walk.randomwalk_active and ctx.walk.randomwalk_task is not None:
+                ctx.walk.randomwalk_task.cancel()
+                ctx.walk.randomwalk_active = False
+                ctx.walk.randomwalk_current = 0
+                ctx.walk.randomwalk_total = 0
                 cancelled.append("random walk")
                 log.info("highlighter: stop_movement cancelled randomwalk")
             break

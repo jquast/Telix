@@ -9,7 +9,6 @@ with delay/chaining support.
 # std imports
 import os
 import re
-import json
 import time
 import typing
 import asyncio
@@ -23,19 +22,12 @@ from collections.abc import Callable, Awaitable
 import wcwidth
 
 # local
-from . import paths, client_repl_render
+from . import util, client_repl_render
 
 if TYPE_CHECKING:
     from .session_context import TelixSessionContext
 
-__all__ = (
-    "TriggerEngine",
-    "TriggerRule",
-    "SearchBuffer",
-    "check_condition",
-    "load_triggers",
-    "save_triggers",
-)
+__all__ = ("SearchBuffer", "TriggerEngine", "TriggerRule", "check_condition", "load_triggers", "save_triggers")
 
 GROUP_RE = re.compile(r"\\(\d+)")
 COND_RE = re.compile(r"^(>=|<=|>|<|=)(\d+)$")
@@ -284,11 +276,7 @@ def load_triggers(path: str, session_key: str) -> list[TriggerRule]:
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid or regex fails.
     """
-    with open(path, encoding="utf-8") as fh:
-        data: dict[str, typing.Any] = json.load(fh)
-
-    session_data: dict[str, typing.Any] = data.get(session_key, {})
-    entries: list[dict[str, str]] = session_data.get("triggers", [])
+    entries = util.load_json_entries(path, session_key, "triggers")
     return parse_entries(entries)
 
 
@@ -302,28 +290,20 @@ def save_triggers(path: str, rules: list[TriggerRule], session_key: str) -> None
     :param rules: List of :class:`TriggerRule` instances to save.
     :param session_key: Session identifier (``"host:port"``).
     """
-    data: dict[str, typing.Any] = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-
-    data[session_key] = {
-        "triggers": [
-            {
-                "pattern": r.pattern.pattern,
-                "reply": r.reply,
-                **({"always": True} if r.always else {}),
-                **({"enabled": False} if not r.enabled else {}),
-                **({"when": dict(r.when)} if r.when else {}),
-                **({"immediate": True} if r.immediate else {}),
-                **({"case_sensitive": True} if r.case_sensitive else {}),
-                **({"last_fired": r.last_fired} if r.last_fired else {}),
-            }
-            for r in rules
-        ]
-    }
-    content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    paths.atomic_write(path, content)
+    entries = [
+        {
+            "pattern": r.pattern.pattern,
+            "reply": r.reply,
+            **({"always": True} if r.always else {}),
+            **({"enabled": False} if not r.enabled else {}),
+            **({"when": dict(r.when)} if r.when else {}),
+            **({"immediate": True} if r.immediate else {}),
+            **({"case_sensitive": True} if r.case_sensitive else {}),
+            **({"last_fired": r.last_fired} if r.last_fired else {}),
+        }
+        for r in rules
+    ]
+    util.save_json_entries(path, session_key, "triggers", entries)
 
 
 def extract_group_source(pattern_src: str, group_num: int) -> str | None:
@@ -969,7 +949,7 @@ class TriggerEngine:
         """
         if not cmd or not cmd.strip():
             return
-        if self.ctx.randomwalk_auto_evaluate and self.ctx.randomwalk_active:
+        if self.ctx.walk.randomwalk_auto_evaluate and self.ctx.walk.randomwalk_active:
             m = KILL_RE.match(cmd)
             if m:
                 consider_cmd = f"consider {m.group(1)}"
@@ -986,10 +966,10 @@ class TriggerEngine:
             self.echo_fn(cmd)
         writer = self.ctx.writer
         if writer is not None and getattr(writer, "will_echo", False):
-            self.ctx.active_command = client_repl_render.scramble_password(len(cmd))
+            self.ctx.walk.active_command = client_repl_render.scramble_password(len(cmd))
         else:
-            self.ctx.active_command = cmd
-        self.ctx.active_command_time = time.monotonic()
+            self.ctx.walk.active_command = cmd
+        self.ctx.walk.active_command_time = time.monotonic()
         assert self.ctx.writer is not None
         self.ctx.writer.write(cmd + "\r\n")
 

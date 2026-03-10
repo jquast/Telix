@@ -30,13 +30,13 @@ def stub_terminal(monkeypatch):
 
 def make_ctx():
     ctx = TelixSessionContext(session_key="host:1234")
-    ctx.macros_file = "/tmp/macros.json"
-    ctx.triggers_file = "/tmp/triggers.json"
-    ctx.highlights_file = "/tmp/highlights.json"
-    ctx.chat_file = "/tmp/chat.json"
-    ctx.chat_messages = [{"channel": "ooc", "text": "hi"}]
-    ctx.rooms_file = "/tmp/rooms.db"
-    ctx.current_room_file = "/tmp/current_room"
+    ctx.macros.file = "/tmp/macros.json"
+    ctx.triggers.file = "/tmp/triggers.json"
+    ctx.highlights.file = "/tmp/highlights.json"
+    ctx.chat.file = "/tmp/chat.json"
+    ctx.chat.messages = [{"channel": "ooc", "text": "hi"}]
+    ctx.room.file = "/tmp/rooms.db"
+    ctx.room.current_file = "/tmp/current_room"
     return ctx
 
 
@@ -60,14 +60,14 @@ class TestLauncherCallsThread:
 
         monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", fake_run_in_thread)
         monkeypatch.setattr("os.path.exists", lambda p: False)
-        monkeypatch.setattr("telix.client_repl_dialogs.read_fasttravel", lambda p: ([], False))
+        monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([], False))
         monkeypatch.setattr("sys.stdout", MagicMock(write=MagicMock(), flush=MagicMock()))
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
         monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
 
         ctx_arg = [a for a in args if isinstance(a, TelixSessionContext)]
         if ctx_arg:
-            ctx_arg[0].room_graph = None
+            ctx_arg[0].room.graph = None
 
         launcher(*args)
         assert len(called) == 1
@@ -82,13 +82,13 @@ class TestLauncherCallsThread:
 
         monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", fake_run_in_thread)
         monkeypatch.setattr("os.path.exists", lambda p: False)
-        monkeypatch.setattr("telix.client_repl_dialogs.read_fasttravel", lambda p: ([], False))
+        monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([], False))
         monkeypatch.setattr("sys.stdout", MagicMock(write=MagicMock(), flush=MagicMock()))
         monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
         monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
 
         ctx = make_ctx()
-        ctx.room_graph = None
+        ctx.room.graph = None
         launch_unified_editor("macros", ctx)
         assert len(called) == 1
         assert callable(called[0])

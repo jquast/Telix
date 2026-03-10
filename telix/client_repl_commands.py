@@ -11,7 +11,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 from collections.abc import Callable, Awaitable
 
-from .repl_theme import hex_to_rgb, get_repl_palette
+from . import repl_theme
 
 # local
 from .client_repl_render import DISPLAY, get_term, wcswidth, write_hint, session_key
@@ -32,9 +32,10 @@ WHEN_RE = re.compile(r"^`when\s+(\w+%?)\s*(>=|<=|>|<|=)\s*(\d+)`$", re.IGNORECAS
 UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 
-REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint)`$", re.IGNORECASE)
+REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint|captures)`$", re.IGNORECASE)
 SCRIPT_CMD_RE = re.compile(r"^`script\s+(.+)`$", re.IGNORECASE)
 STOPSCRIPT_CMD_RE = re.compile(r"^`stopscript(?:\s+(\S+))?`$", re.IGNORECASE)
+SCRIPTS_CMD_RE = re.compile(r"^`scripts`$", re.IGNORECASE)
 EDIT_RE = re.compile(r"^`edit\s+(\w+)`$", re.IGNORECASE)
 TOGGLE_RE = re.compile(r"^`toggle\s+(\w+)`$", re.IGNORECASE)
 WALK_DIALOG_RE = re.compile(r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE)
@@ -165,7 +166,7 @@ def expand_commands_ex(line: str) -> ExpandedCommands:
 
         m = REPEAT_RE.match(stripped)
         if m:
-            count = min(int(m.group(1)), 200)
+            count = min(int(m.group(1)), 200)  # cap history at 200 entries to bound memory use
             cmd = m.group(2)
             first_idx = len(result)
             result.extend([cmd] * count)
@@ -211,7 +212,7 @@ def get_search_buffer(ctx: "TelixSessionContext") -> typing.Any | None:
     :param ctx: Session context.
     :returns: The engine's :class:`SearchBuffer`, or ``None``.
     """
-    engine = ctx.trigger_engine
+    engine = ctx.triggers.engine
     if engine is not None:
         return engine.buffer
     return None
@@ -317,7 +318,7 @@ async def dispatch_one(
 
     sm = SCRIPT_CMD_RE.match(cmd)
     if sm:
-        mgr = hooks.ctx.script_manager
+        mgr = hooks.ctx.scripts.manager
         if mgr is not None:
             try:
                 mgr.start_script(hooks.ctx, sm.group(1))
@@ -327,13 +328,25 @@ async def dispatch_one(
 
     ss = STOPSCRIPT_CMD_RE.match(cmd)
     if ss:
-        mgr = hooks.ctx.script_manager
+        mgr = hooks.ctx.scripts.manager
         if mgr is not None:
             stopped = mgr.stop_script(ss.group(1))
-            echo = hooks.echo_fn or hooks.ctx.echo_command
+            echo = hooks.echo_fn or hooks.ctx.prompt.echo
             if echo is not None:
                 for sname in stopped:
                     echo(f"[stopscript] stopped: {sname}")
+        return StepResult.HANDLED
+
+    if SCRIPTS_CMD_RE.match(cmd):
+        mgr = hooks.ctx.scripts.manager
+        echo = hooks.echo_fn or hooks.ctx.prompt.echo
+        if mgr is not None and echo is not None:
+            active = mgr.active_scripts()
+            if active:
+                for sname in active:
+                    echo(f"[scripts] running: {sname}")
+            else:
+                echo("[scripts] no scripts running")
         return StepResult.HANDLED
 
     if sent_count > 0 and idx not in immediate_set:
@@ -364,10 +377,10 @@ def is_known_exit(cmd: str, ctx: "TelixSessionContext") -> bool:
     Falls back to ``True`` when room data is unavailable so that
     movement pacing is used conservatively.
     """
-    room_num = ctx.current_room_num
+    room_num = ctx.room.current
     if not room_num:
         return True
-    graph = ctx.room_graph
+    graph = ctx.room.graph
     if graph is None:
         return True
     exits = graph.adj.get(room_num)
@@ -402,12 +415,12 @@ def collapse_runs(commands: list[str], start: int = 0) -> list[tuple[str, int, i
 
 def active_cmd_fg() -> str:
     """Return the active command foreground color from the palette."""
-    return get_repl_palette(session_key)["active_cmd"]
+    return repl_theme.get_repl_palette(session_key)["active_cmd"]
 
 
 def pending_cmd_rgb() -> tuple[int, int, int]:
     """Return the pending command RGB color from the palette."""
-    return hex_to_rgb(get_repl_palette(session_key)["pending_cmd"])
+    return repl_theme.hex_to_rgb(repl_theme.get_repl_palette(session_key)["pending_cmd"])
 
 
 def render_active_command(
@@ -459,7 +472,7 @@ def clear_command_queue(ctx: "TelixSessionContext") -> None:
     cq = ctx.command_queue
     if cq is not None:
         ctx.command_queue = None
-        ctx.active_command = None
+        ctx.walk.active_command = None
 
 
 def render_command_queue(
@@ -562,10 +575,10 @@ async def send_chained(
     :param queue: Optional command queue for display and cancellation.
     :param immediate_set: Indices of commands that skip GA/EOR wait.
     """
-    wait_fn = ctx.wait_for_prompt
-    echo_fn = ctx.echo_command
-    prompt_ready = ctx.prompt_ready
-    room_changed = ctx.room_changed
+    wait_fn = ctx.prompt.wait_fn
+    echo_fn = ctx.prompt.echo
+    prompt_ready = ctx.prompt.ready
+    room_changed = ctx.room.changed
 
     is_repeated = len(commands) > 1 and len(set(commands)) == 1
 
@@ -586,7 +599,7 @@ async def send_chained(
 
     for idx, cmd in enumerate(commands[1:], 1):
         if queue is not None:
-            if queue.cancelled:
+            if queue.cancel_event.is_set():
                 return
             queue.current_idx = idx
             queue.render()
@@ -607,7 +620,7 @@ async def send_chained(
         prev_cmd = commands[idx - 1] if idx > 0 else ""
         is_run = is_repeated or cmd == prev_cmd
         use_move_pacing = is_run and moves_room.get(cmd, is_known_exit(cmd, ctx))
-        prev_room = ctx.current_room_num if use_move_pacing else ""
+        prev_room = ctx.room.current if use_move_pacing else ""
 
         if not use_move_pacing:
             if is_run:
@@ -624,9 +637,9 @@ async def send_chained(
             log.debug("chained command: %r", cmd)
             if echo_fn is not None:
                 echo_fn(cmd)
-            ctx.active_command_time = time.monotonic()
+            ctx.walk.active_command_time = time.monotonic()
             ctx.writer.write(cmd + "\r\n")
-            ts = ctx.typescript_file
+            ts = ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None and ctx.writer is not None and not ctx.writer.will_echo:
                 ts.write(cmd + "\r\n")
                 ts.flush()
@@ -634,7 +647,7 @@ async def send_chained(
 
         # Repeated commands: delay + room-change pacing with retry.
         for attempt in range(MOVE_MAX_RETRIES + 1):
-            if queue is not None and queue.cancelled:
+            if queue is not None and queue.cancel_event.is_set():
                 return
             # Always delay -- the first repeated command needs spacing
             # from the caller's initial send, and retries need a longer
@@ -652,9 +665,9 @@ async def send_chained(
                     echo_fn(cmd)
             else:
                 log.info("chained retry %d: %r", attempt, cmd)
-            ctx.active_command_time = time.monotonic()
+            ctx.walk.active_command_time = time.monotonic()
             ctx.writer.write(cmd + "\r\n")
-            ts = ctx.typescript_file
+            ts = ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None and ctx.writer is not None and not ctx.writer.will_echo:
                 ts.write(cmd + "\r\n")
                 ts.flush()
@@ -665,7 +678,7 @@ async def send_chained(
             # Wait briefly for room change -- GMCP typically arrives
             # within 100-200ms.  A short timeout keeps movement brisk
             # while still detecting rate-limit rejections.
-            actual = ctx.current_room_num
+            actual = ctx.room.current
             if actual != prev_room:
                 moves_room[cmd] = True
                 break
@@ -674,7 +687,7 @@ async def send_chained(
                     await asyncio.wait_for(room_changed.wait(), timeout=0.5)
                 except asyncio.TimeoutError:
                     pass
-                actual = ctx.current_room_num
+                actual = ctx.room.current
             if actual != prev_room:
                 moves_room[cmd] = True
                 break
@@ -704,10 +717,10 @@ def macro_send(ctx: "TelixSessionContext", log: logging.Logger, cmd: str) -> Non
     """
     log.info("macro: sending %r", cmd)
     if ctx.writer is not None and getattr(ctx.writer, "will_echo", False):
-        ctx.active_command = "\u2593" * len(cmd)
+        ctx.walk.active_command = "\u2593" * len(cmd)
     else:
-        ctx.active_command = cmd
-    ctx.active_command_time = time.monotonic()
+        ctx.walk.active_command = cmd
+    ctx.walk.active_command_time = time.monotonic()
     ctx.writer.write(cmd + "\r\n")
 
 
@@ -722,7 +735,7 @@ def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Log
     am = REPL_ACTION_RE.match(cmd)
     if am:
         name = am.group(1).lower()
-        action = ctx.repl_actions.get(name)
+        action = ctx.repl.actions.get(name)
         if action is not None:
             action()
         else:
@@ -732,7 +745,7 @@ def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Log
     em = EDIT_RE.match(cmd)
     if em:
         tab = em.group(1).lower()
-        action = ctx.repl_actions.get("edit")
+        action = ctx.repl.actions.get("edit")
         if action is not None:
             action(tab)
         else:
@@ -742,7 +755,7 @@ def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Log
     tm = TOGGLE_RE.match(cmd)
     if tm:
         name = tm.group(1).lower()
-        action = ctx.repl_actions.get(f"toggle_{name}")
+        action = ctx.repl.actions.get(f"toggle_{name}")
         if action is not None:
             action()
         else:
@@ -752,9 +765,9 @@ def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Log
     wdm = WALK_DIALOG_RE.match(cmd)
     if wdm:
         name = wdm.group(1).lower()
-        action = ctx.repl_actions.get(f"{name}_dialog")
+        action = ctx.repl.actions.get(f"{name}_dialog")
         if action is None:
-            action = ctx.repl_actions.get(f"{name}_walk")
+            action = ctx.repl.actions.get(f"{name}_walk")
         if action is not None:
             action()
         else:
@@ -786,15 +799,15 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
     if not parts:
         return
 
-    ctx.macro_start_room = ctx.current_room_num
+    ctx.walk.macro_start_room = ctx.room.current
 
     hooks = DispatchHooks(
         ctx=ctx,
         log=log,
-        wait_fn=ctx.wait_for_prompt,
+        wait_fn=ctx.prompt.wait_fn,
         send_fn=lambda cmd: macro_send(ctx, log, cmd),
-        echo_fn=ctx.echo_command,
-        prompt_ready=ctx.prompt_ready,
+        echo_fn=ctx.prompt.echo,
+        prompt_ready=ctx.prompt.ready,
         search_buffer=get_search_buffer(ctx),
     )
     sent_count = 0
@@ -822,4 +835,4 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
             sent_count += 1
         idx += 1
 
-    ctx.macro_start_room = ""
+    ctx.walk.macro_start_room = ""

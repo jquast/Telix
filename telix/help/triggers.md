@@ -1,5 +1,12 @@
 ## Trigger Editor
 
+**Default key:** Alt+T -- **Toggle all triggers:** Alt+Shift+A
+
+**Warning:** Triggers fire automatically on every matching server line.
+A badly written or over-broad trigger pattern can send commands in a tight
+loop, flooding the server -- a "server storm".  Press **Alt+Shift+A** to
+disable all triggers immediately without opening the editor.
+
 Triggers automatically send commands when a **regex pattern** matches
 server output.  Rules are evaluated in priority order (top to bottom);
 the first match wins unless a rule is marked **Always**.
@@ -11,7 +18,7 @@ the first match wins unless a rule is marked **Always**.
 | **#** | Priority order (1 = highest) |
 | **Pattern** | Regex matched against server output |
 | **Reply** | Command sequence sent when the pattern matches |
-| **Flags** | **A** = Always, **I** = Immediate, **C** = Case-sensitive, **W** = When condition, **(off)** = disabled |
+| **Flags** | **A** = Always, **I** = Immediate, **C** = Case-sensitive, **W** = When condition, **X** = disabled |
 | **Last** | Timestamp of the last time this rule fired |
 
 ### Flags Explained
@@ -26,7 +33,7 @@ the first match wins unless a rule is marked **Always**.
 - **C (Case-sensitive)** -- match the pattern case-sensitively instead of
   the default case-insensitive matching.
 - **W (When)** -- a vital-percentage condition gate is set on this rule.
-- **(off)** -- the rule is disabled and won't match.  Toggle via the
+- **X (disabled)** -- the rule is disabled and won't match.  Toggle via the
   Enabled switch in the form, or use Alt+Shift+A in-session to disable
   all triggers globally.
 
@@ -34,8 +41,8 @@ the first match wins unless a rule is marked **Always**.
 
 - **Enabled** -- toggle the rule on/off
 - **Always** -- match even during another rule's exclusive chain
-- **Imm** (Immediate) -- reply without waiting for prompt
-- **Case** -- case-sensitive pattern matching (default: off)
+- **Immediate** -- reply without waiting for prompt
+- **Case Sensitive** -- case-sensitive pattern matching (default: off)
 - **Pattern** -- Python regex (case-insensitive by default, DOTALL,
   MULTILINE); use capture groups `(...)` for backreferences
 - **Reply** -- command sequence; use `\1`, `\2` for captured groups
@@ -45,7 +52,7 @@ the first match wins unless a rule is marked **Always**.
 ### Pattern Syntax (Python Regex)
 
 Patterns use Python's `re` module with flags `MULTILINE | DOTALL`
-(and `IGNORECASE` unless the **Case** toggle is enabled).
+(and `IGNORECASE` unless the **Case Sensitive** toggle is enabled).
 
 | Pattern | Matches |
 |---------|---------|

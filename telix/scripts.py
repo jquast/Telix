@@ -14,18 +14,19 @@ import os
 import re
 import sys
 import shlex
+import typing
 import asyncio
 import logging
 import importlib
 import collections
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 # 3rd party
 import wcwidth
 
 if TYPE_CHECKING:
-    from .session_context import TelixSessionContext
     from . import rooms
+    from .session_context import TelixSessionContext
 
 log = logging.getLogger(__name__)
 
@@ -212,34 +213,34 @@ class ScriptContext:
         self._log = log_inst
 
     @property
-    def gmcp(self) -> dict[str, Any]:
+    def gmcp(self) -> dict[str, typing.Any]:
         """The full GMCP data dict from the session context."""
         return self._ctx.gmcp_data
 
     @property
     def room_id(self) -> str:
         """Current room number string."""
-        return self._ctx.current_room_num
+        return self._ctx.room.current
 
     @property
     def room_graph(self) -> "rooms.RoomStore | None":
         """The :class:`~telix.rooms.RoomStore` for this session, or ``None``."""
-        return self._ctx.room_graph
+        return self._ctx.room.graph
 
     @property
-    def captures(self) -> dict[str, Any]:
+    def captures(self) -> dict[str, typing.Any]:
         """Highlight capture variables for this session."""
-        return self._ctx.captures
+        return self._ctx.highlights.captures
 
     @property
     def room(self) -> "rooms.Room | None":
         """The current :class:`~telix.rooms.Room`, or ``None`` if unknown."""
-        rg = self._ctx.room_graph
-        if rg is None or not self._ctx.current_room_num:
+        rg = self._ctx.room.graph
+        if rg is None or not self._ctx.room.current:
             return None
-        return rg.get_room(self._ctx.current_room_num)
+        return rg.get_room(self._ctx.room.current)
 
-    def gmcp_get(self, dotted_path: str) -> Any:
+    def gmcp_get(self, dotted_path: str) -> typing.Any:
         """
         Retrieve a value from the GMCP data dict by dot-separated path.
 
@@ -252,7 +253,7 @@ class ScriptContext:
         :returns: The value at that path, or ``None`` if not found.
         """
         parts = dotted_path.split(".")
-        node = self._ctx.gmcp_data
+        node = self._ctx.gmcp_data  # inherited attr, stays top-level
         i = 0
         while i < len(parts):
             if not isinstance(node, dict):
@@ -276,7 +277,7 @@ class ScriptContext:
         :param num: Room number string.
         :returns: :class:`~telix.rooms.Room` or ``None``.
         """
-        rg = self._ctx.room_graph
+        rg = self._ctx.room.graph
         if rg is None:
             return None
         return rg.get_room(str(num))
@@ -287,10 +288,10 @@ class ScriptContext:
 
         :returns: ``{direction: room_num}`` dict, empty if unknown.
         """
-        rg = self._ctx.room_graph
-        if rg is None or not self._ctx.current_room_num:
+        rg = self._ctx.room.graph
+        if rg is None or not self._ctx.room.current:
             return {}
-        return dict(rg.adj.get(self._ctx.current_room_num, {}))
+        return dict(rg.adj.get(self._ctx.room.current, {}))
 
     def find_path(self, dst: str) -> "list[str] | None":
         """
@@ -299,10 +300,10 @@ class ScriptContext:
         :param dst: Destination room number string.
         :returns: List of direction strings, or ``None`` if no path found.
         """
-        rg = self._ctx.room_graph
-        if rg is None or not self._ctx.current_room_num:
+        rg = self._ctx.room.graph
+        if rg is None or not self._ctx.room.current:
             return None
-        return rg.find_path(self._ctx.current_room_num, str(dst))
+        return rg.find_path(self._ctx.room.current, str(dst))
 
     async def send(self, line: str) -> None:
         """
@@ -317,10 +318,10 @@ class ScriptContext:
         hooks = client_repl_commands.DispatchHooks(
             ctx=self._ctx,
             log=self._log,
-            wait_fn=self._ctx.wait_for_prompt,
+            wait_fn=self._ctx.prompt.wait_fn,
             send_fn=self._send,
-            echo_fn=self._ctx.echo_command,
-            prompt_ready=self._ctx.prompt_ready,
+            echo_fn=self._ctx.prompt.echo,
+            prompt_ready=self._ctx.prompt.ready,
             search_buffer=self._buf,
         )
         sent_count = 0
@@ -414,7 +415,7 @@ class ScriptContext:
 
         :param text: Text to display.
         """
-        echo = self._ctx.echo_command
+        echo = self._ctx.prompt.echo
         if echo is not None:
             echo(text)
         else:
@@ -427,6 +428,74 @@ class ScriptContext:
         :param msg: Message text.
         """
         self._log.info("script: %s", msg)
+
+    @property
+    def session_key(self) -> str:
+        """Session identifier string (``"host:port"``)."""
+        return self._ctx.session_key
+
+    @property
+    def previous_room_id(self) -> str:
+        """Room number string of the room visited before the current one."""
+        return self._ctx.room.previous
+
+    @property
+    def capture_log(self) -> dict[str, list[dict[str, typing.Any]]]:
+        """Full capture event history: ``{variable: [{value, time, ...}, ...]}``.
+
+        Unlike :attr:`captures` (which holds only the current value), this dict
+        accumulates every capture event so scripts can track trends over time.
+        """
+        return self._ctx.highlights.capture_log
+
+    @property
+    def chat_messages(self) -> list[dict[str, typing.Any]]:
+        """List of received chat/tell message dicts for this session."""
+        return self._ctx.chat.messages
+
+    @property
+    def chat_unread(self) -> int:
+        """Number of unread chat messages since the last read."""
+        return self._ctx.chat.unread
+
+    @property
+    def chat_channels(self) -> list[dict[str, typing.Any]]:
+        """List of available chat channel dicts for this session."""
+        return self._ctx.chat.channels
+
+    async def room_changed(self, timeout: float = 30.0) -> bool:
+        """
+        Wait until the next room transition (GMCP Room.Info received).
+
+        Captures a reference to the current ``room.changed`` event before
+        awaiting, so the caller is woken exactly once per transition even if
+        another change fires immediately after.
+
+        :param timeout: Maximum seconds to wait.
+        :returns: ``True`` if a transition occurred; ``False`` on timeout.
+        """
+        evt = self._ctx.room.changed
+        try:
+            await asyncio.wait_for(evt.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
+    @property
+    def walk_active(self) -> bool:
+        """``True`` if any automated walk (autodiscover, randomwalk, travel) is running."""
+        w = self._ctx.walk
+        return any(
+            t is not None and not t.done()
+            for t in (w.discover_task, w.randomwalk_task, w.travel_task)
+        )
+
+    def stop_walk(self) -> None:
+        """Cancel all active automated walk tasks (autodiscover, randomwalk, travel)."""
+        w = self._ctx.walk
+        for task in (w.discover_task, w.randomwalk_task, w.travel_task):
+            if task is not None and not task.done():
+                task.cancel()
 
 
 class ScriptManager:
@@ -444,11 +513,11 @@ class ScriptManager:
         """Initialize ScriptManager."""
         self.scripts_dir = scripts_dir
         self._log = log or logging.getLogger(__name__)
-        self._tasks: dict[str, asyncio.Task[Any]] = {}
+        self._tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._buffers: dict[str, ScriptOutputBuffer] = {}
         self._mtimes: dict[str, float] = {}
 
-    def _load_module(self, module_path: str) -> Any:
+    def _load_module(self, module_path: str) -> typing.Any:
         """
         Import (or reload) a module from the scripts search path.
 
@@ -497,7 +566,7 @@ class ScriptManager:
 
         return mod
 
-    def start_script(self, session_ctx: "TelixSessionContext", spec: str) -> "asyncio.Task[Any]":
+    def start_script(self, session_ctx: "TelixSessionContext", spec: str) -> "asyncio.Task[typing.Any]":
         """
         Load and start a script.
 
@@ -551,7 +620,7 @@ class ScriptManager:
         self._tasks[task_key] = task
         self._buffers[task_key] = buf
 
-        def on_done(t: asyncio.Task[Any]) -> None:
+        def on_done(t: asyncio.Task[typing.Any]) -> None:
             self._tasks.pop(task_key, None)
             self._buffers.pop(task_key, None)
             self._log.info("script %r finished", task_key)

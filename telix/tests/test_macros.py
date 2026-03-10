@@ -277,9 +277,15 @@ def test_build_dispatch_routes_ctrl_to_seq():
 
 
 def test_builtin_macros_constant():
-    assert len(BUILTIN_MACROS) == 15
+    assert len(BUILTIN_MACROS) == 16
     names = [m.builtin_name for m in BUILTIN_MACROS]
     assert len(names) == len(set(names))
+
+
+def test_builtin_stopscript_macro():
+    stopscript = next(m for m in BUILTIN_MACROS if m.builtin_name == "stopscript")
+    assert stopscript.key == "KEY_ALT_Q"
+    assert stopscript.text == "`stopscript`"
 
 
 @pytest.mark.parametrize(
@@ -288,6 +294,8 @@ def test_builtin_macros_constant():
         ("`help`", True),
         ("`disconnect`", True),
         ("`repaint`", True),
+        ("`captures`", True),
+        ("`CAPTURES`", True),
         ("`HELP`", True),
         ("`look`", False),
         ("help", False),
@@ -318,11 +326,7 @@ def test_edit_re(cmd, expected_tab):
 
 @pytest.mark.parametrize(
     "cmd, expected_name",
-    [
-        ("`toggle highlights`", "highlights"),
-        ("`toggle triggers`", "triggers"),
-        ("`Toggle Highlights`", "highlights"),
-    ],
+    [("`toggle highlights`", "highlights"), ("`toggle triggers`", "triggers"), ("`Toggle Highlights`", "highlights")],
 )
 def test_toggle_re(cmd, expected_name):
     m = TOGGLE_RE.match(cmd)
@@ -347,7 +351,7 @@ def test_walk_dialog_re(cmd, expected_action):
 
 def test_dispatch_repl_action_calls_help():
     called = []
-    ctx = types.SimpleNamespace(repl_actions={"help": lambda: called.append("help")})
+    ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"help": lambda: called.append("help")}))
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`help`", ctx, log) is True
     assert called == ["help"]
@@ -355,7 +359,7 @@ def test_dispatch_repl_action_calls_help():
 
 def test_dispatch_repl_action_calls_edit():
     called = []
-    ctx = types.SimpleNamespace(repl_actions={"edit": called.append})
+    ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"edit": called.append}))
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`edit macros`", ctx, log) is True
     assert called == ["macros"]
@@ -363,20 +367,22 @@ def test_dispatch_repl_action_calls_edit():
 
 def test_dispatch_repl_action_calls_toggle():
     called = []
-    ctx = types.SimpleNamespace(repl_actions={"toggle_highlights": lambda: called.append("th")})
+    ctx = types.SimpleNamespace(
+        repl=types.SimpleNamespace(actions={"toggle_highlights": lambda: called.append("th")})
+    )
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`toggle highlights`", ctx, log) is True
     assert called == ["th"]
 
 
 def test_dispatch_repl_action_returns_false_for_plain():
-    ctx = types.SimpleNamespace(repl_actions={})
+    ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={}))
     log = logging.getLogger("test")
     assert _dispatch_repl_action("look", ctx, log) is False
 
 
 def test_dispatch_repl_action_noop_when_missing():
-    ctx = types.SimpleNamespace(repl_actions={})
+    ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={}))
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`help`", ctx, log) is True
 

@@ -4,7 +4,8 @@
 import os
 import json
 import shutil
-from typing import TYPE_CHECKING, Any, NamedTuple
+import typing
+from typing import TYPE_CHECKING
 
 # 3rd party
 import rich.text
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     RichText = rich.text.Text
 
 
-class ProgressBarTuple(NamedTuple):
+class ProgressBarTuple(typing.NamedTuple):
     """Lightweight tuple for progress bar configs in the TUI editor."""
 
     name: str = ""
@@ -83,7 +84,7 @@ class ProgressBarEditPane(client_tui_base.EditListPane):
         self.bars: list[ProgressBarTuple] = []
         self.gmcp_packages: list[str] = []
         self.gmcp_fields: dict[str, list[str]] = {}
-        self.preview_timer: Any = None
+        self.preview_timer: typing.Any = None
         self.preview_phase: float = 0.0
         self.populating_form: bool = False
         self.form_source_pkg: str = ""
@@ -102,7 +103,7 @@ class ProgressBarEditPane(client_tui_base.EditListPane):
         return "Progress Bars"
 
     @property
-    def items(self) -> list[Any]:
+    def items(self) -> list[typing.Any]:
         return self.bars
 
     def item_label(self, idx: int) -> str:
@@ -687,7 +688,7 @@ class ThemeEditPane(textual.containers.Vertical):
     #theme-modal-buttons Button { margin-right: 1; min-width: 0; }
     """
 
-    def __init__(self, session_key: str = "", modal: bool = False, **kwargs: Any) -> None:
+    def __init__(self, session_key: str = "", modal: bool = False, **kwargs: typing.Any) -> None:
         """Initialize theme editor."""
         super().__init__(**kwargs)
         self.session_key = session_key

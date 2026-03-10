@@ -164,7 +164,7 @@ def test_save_preserves_other_sessions(tmp_path):
 
 def test_bar_color_theme_mode():
     bar = BarConfig("HP", "V", "hp", "mhp", color_mode="theme")
-    color = bar_color_at(1.0, bar, theme_accent=(0, 200, 0))
+    color = bar_color_at(1.0, bar)
     assert color.startswith("#")
     assert len(color) == 7
 
@@ -204,7 +204,7 @@ def test_bar_color_longest_path():
 
 def test_bar_color_theme_none_accent():
     bar = BarConfig("HP", "V", "hp", "mhp", color_mode="theme")
-    color = bar_color_at(0.5, bar, theme_accent=None)
+    color = bar_color_at(0.5, bar)
     assert color.startswith("#")
 
 
