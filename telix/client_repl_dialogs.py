@@ -195,16 +195,12 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
         confirm, or ``None`` on cancel.
     """
     default_visit_level = 2
-    default_auto_search = False
-    default_auto_evaluate = False
-    default_auto_survey = False
+    default_room_change_cmd = ""
     default_triggers = True
     if session_key:
         prefs = rooms.load_prefs(session_key)
         default_visit_level = int(prefs.get("randomwalk_visit_level", 2))
-        default_auto_search = bool(prefs.get("randomwalk_auto_search", False))
-        default_auto_evaluate = bool(prefs.get("randomwalk_auto_evaluate", False))
-        default_auto_survey = bool(prefs.get("randomwalk_auto_survey", False))
+        default_room_change_cmd = str(prefs.get("randomwalk_room_change_cmd", ""))
         default_triggers = bool(prefs.get("randomwalk_triggers", True))
 
     from . import client_tui_dialogs
@@ -218,9 +214,7 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
         lambda: client_tui_dialogs.run_randomwalk_dialog(
             result_path,
             default_visit_level,
-            default_auto_search,
-            default_auto_evaluate,
-            default_auto_survey,
+            default_room_change_cmd,
             default_triggers,
         ),
         replay_buf=replay_buf,
@@ -236,9 +230,7 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
             save_data["randomwalk_visit_level"] = int(  # type: ignore[assignment]
                 data.get("visit_level", default_visit_level)
             )
-            save_data["randomwalk_auto_search"] = bool(data.get("auto_search", default_auto_search))
-            save_data["randomwalk_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
-            save_data["randomwalk_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
+            save_data["randomwalk_room_change_cmd"] = str(data.get("room_change_cmd", default_room_change_cmd))
             save_data["randomwalk_triggers"] = bool(data.get("triggers", default_triggers))
             rooms.save_prefs(session_key, save_data)
         return str(data.get("command", f"`randomwalk 999 {default_visit_level}`"))
@@ -262,18 +254,14 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
         confirm, or ``None`` on cancel.
     """
     default_strategy = "bfs"
-    default_auto_search = False
-    default_auto_evaluate = False
-    default_auto_survey = False
+    default_room_change_cmd = ""
     default_triggers = True
     if session_key:
         prefs = rooms.load_prefs(session_key)
         saved = prefs.get("autodiscover_strategy", "bfs")
         if saved in ("bfs", "dfs"):
             default_strategy = str(saved)
-        default_auto_search = bool(prefs.get("autodiscover_auto_search", False))
-        default_auto_evaluate = bool(prefs.get("autodiscover_auto_evaluate", False))
-        default_auto_survey = bool(prefs.get("autodiscover_auto_survey", False))
+        default_room_change_cmd = str(prefs.get("autodiscover_room_change_cmd", ""))
         default_triggers = bool(prefs.get("autodiscover_triggers", True))
 
     from . import client_tui_dialogs
@@ -287,9 +275,7 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
         lambda: client_tui_dialogs.run_autodiscover_dialog(
             result_path,
             default_strategy,
-            default_auto_search,
-            default_auto_evaluate,
-            default_auto_survey,
+            default_room_change_cmd,
             default_triggers,
         ),
         replay_buf=replay_buf,
@@ -303,9 +289,7 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
         if session_key:
             save_data = rooms.load_prefs(session_key)
             save_data["autodiscover_strategy"] = str(data.get("strategy", default_strategy))
-            save_data["autodiscover_auto_search"] = bool(data.get("auto_search", default_auto_search))
-            save_data["autodiscover_auto_evaluate"] = bool(data.get("auto_evaluate", default_auto_evaluate))
-            save_data["autodiscover_auto_survey"] = bool(data.get("auto_survey", default_auto_survey))
+            save_data["autodiscover_room_change_cmd"] = str(data.get("room_change_cmd", default_room_change_cmd))
             save_data["autodiscover_triggers"] = bool(data.get("triggers", default_triggers))
             rooms.save_prefs(session_key, save_data)
         return str(data.get("command", f"`autodiscover {default_strategy}`"))

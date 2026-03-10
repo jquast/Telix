@@ -52,9 +52,7 @@ class WalkState:
     randomwalk_current: int = 0
     randomwalk_total: int = 0
     randomwalk_task: "asyncio.Task[None] | None" = None
-    randomwalk_auto_search: bool = False
-    randomwalk_auto_evaluate: bool = False
-    randomwalk_auto_survey: bool = False
+    randomwalk_room_change_cmd: str = ""
     travel_task: "asyncio.Task[None] | None" = None
     active_command: str | None = None
     active_command_time: float = 0.0

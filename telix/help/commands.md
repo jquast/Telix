@@ -116,40 +116,40 @@ in the room browser (Alt+R) using the Home button.
 ### Autodiscover
 
 BFS-explore unvisited exits from nearby rooms.  Optional arguments
-(in any order after the verb):
+(in any order after the verb, except ``roomcmd`` which must be last):
 
 - **limit** -- maximum exits to explore (default 999)
 - **bfs** / **dfs** -- search strategy (default bfs)
-- **autosearch** -- send ``search`` in each new room
-- **autoevaluate** -- enable consider-before-kill trigger logic
-- **autosurvey** -- send ``survey`` in each new room
 - **noreply** -- completely disable trigger processing during the walk
+- **roomcmd** *cmds* -- semicolon-separated commands to send in each new room
+  (everything after ``roomcmd`` is treated as the command string)
 
 | Example | Effect |
 |---------|--------|
 | `` `autodiscover` `` | Explore up to 999 unvisited exits |
 | `` `autodiscover 50` `` | Explore up to 50 exits |
 | `` `autodiscover dfs noreply` `` | DFS explore with triggers disabled |
-| `` `autodiscover autosearch autosurvey` `` | Explore with auto search and survey |
+| `` `autodiscover roomcmd search;survey` `` | Explore, running search and survey in each room |
+| `` `autodiscover noreply roomcmd script hunt` `` | Explore with triggers off, running a hunt script |
 
 ### Random Walk
 
 Walk randomly, preferring rooms with unvisited exits.  Optional
-arguments (in any order after the verb):
+arguments (in any order after the verb, except ``roomcmd`` which must be last):
 
 - **limit** -- maximum steps (default 999)
 - **visit_level** -- minimum visits per room before stopping (default 2)
-- **autosearch** -- send ``search`` in each new room
-- **autoevaluate** -- enable consider-before-kill trigger logic
-- **autosurvey** -- send ``survey`` in each new room
 - **noreply** -- completely disable trigger processing during the walk
+- **roomcmd** *cmds* -- semicolon-separated commands to send in each new room
+  (everything after ``roomcmd`` is treated as the command string)
 
 | Example | Effect |
 |---------|--------|
 | `` `randomwalk` `` | Random walk up to 999 steps |
 | `` `randomwalk 100` `` | Random walk up to 100 steps |
-| `` `randomwalk noreply autosearch` `` | Walk with triggers disabled, auto-search |
-| `` `randomwalk autosearch autosurvey` `` | Walk with auto search and survey |
+| `` `randomwalk noreply` `` | Walk with triggers disabled |
+| `` `randomwalk roomcmd search;survey` `` | Walk, running search and survey in each room |
+| `` `randomwalk noreply roomcmd search;survey;script hunt` `` | Walk with triggers off and full room sweep |
 
 ### Script
 

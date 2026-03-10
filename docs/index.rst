@@ -8,6 +8,7 @@ Telix
 
    intro
    user-manual
+   commands
    files
    scripting
    contributing

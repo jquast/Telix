@@ -29,7 +29,7 @@ This should produce example output::
     [demo] Exits: west
 
 
-The script runs as a background async task.  Use ``\`stopscript\``` to cancel it,
+The script runs as a background async task.  Use ```stopscript``` to cancel it,
 or press **Alt+Q** (the default ``stopscript`` macro keybinding).
 
 Script search path
@@ -49,9 +49,9 @@ Triggering scripts
 
 Scripts can be triggered from any command surface that supports backtick commands:
 
-- **REPL**: type ``\`script module.fn\``` at the prompt.
-- **Trigger reply field**: set the reply to ``\`script module.fn\```.
-- **Macro text**: include ``\`script module.fn\``` in macro text.
+- **REPL**: type ```script module.fn``` at the prompt.
+- **Trigger reply field**: set the reply to ```script module.fn```.
+- **Macro text**: include ```script module.fn``` in macro text.
 - **Chained command**: `` look;`script combat.hunt goblin`;north ``
 
 The ``ctx`` object
@@ -72,38 +72,8 @@ Sending commands
     - ``|`` -- send a command immediately without waiting for a prompt
     - Leading number repeats the command: ``3n`` expands to ``n;n;n``
 
-    **Backtick directives** (processed by the client, not sent to the server)
-
-    ============================== ================================================
-    Directive                      Effect
-    ============================== ================================================
-    ``\`delay 1s\```               Pause 1 second (also ``500ms``, ``0.5s``)
-    ``\`when HP%>=80\```           Stop the chain unless condition is met.
-                                   Keys: ``HP%``, ``MP%``, ``HP``, ``MP``, or any
-                                   captured variable.  Ops: ``>=``, ``<=``, ``>``,
-                                   ``<``, ``=``
-    ``\`until died\.\```           Wait up to 4 s (default) for a regex pattern.
-    ``\`until 10 pattern\```       Wait up to 10 s.  Pattern is case-insensitive.
-    ``\`untils 2 DEAD\```          Same as ``until`` but case-sensitive.
-    ``\`travel abc123\```          Navigate to a room by GMCP room ID.
-    ``\`travel abc123 noreply\```  Travel with triggers disabled.
-    ``\`return\```                 Return to the room where the current macro started.
-    ``\`home\```                   Fast-travel to the home room of the current area.
-    ``\`autodiscover\```           BFS-explore unvisited exits (add ``limit N``,
-                                   ``dfs``, ``autosearch``, ``noreply``, etc.).
-    ``\`randomwalk\```             Random walk preferring unvisited exits (same
-                                   optional args as ``autodiscover``).
-    ``\`resume\```                 Resume the last autodiscover/randomwalk.
-    ``\`script module.fn\```       Start a script as a background task.
-    ``\`scripts\```                List all currently running scripts.
-    ``\`stopscript\```             Cancel all running scripts.
-    ============================== ================================================
-
-    Most directive names are case-insensitive, so ``\`SCRIPT demo\```,
-    ``\`Travel abc123\```, and ``\`STOPSCRIPT\``` all work.  The exceptions are
-    ``\`delay\```, ``\`until\```, and ``\`untils\```, which require lowercase.
-
-    Full command syntax and more examples: :ref:`user-manual:command syntax`.
+    Backtick directives are processed by the client, not sent to the server.
+    See :ref:`backtick commands` for the full reference.
 
 Prompt waiting
 ~~~~~~~~~~~~~~
@@ -269,13 +239,13 @@ Module / function naming
 The last dot-separated segment of the first token is the function name;
 everything before it is the importable module path:
 
-- ``\`script demo\``` -- imports ``demo``, calls ``run(ctx)``
-- ``\`script combat.hunt\``` -- imports ``combat``, calls ``hunt(ctx)``
+- ```script demo``` -- imports ``demo``, calls ``run(ctx)``
+- ```script combat.hunt``` -- imports ``combat``, calls ``hunt(ctx)``
 
 Listing scripts
 ---------------
 
-``\`scripts\```
+```scripts```
     Echo the names of all currently running scripts to the terminal::
 
         [scripts] running: combat.hunt
@@ -286,18 +256,18 @@ Listing scripts
 Stopping scripts
 ----------------
 
-``\`stopscript\```
+```stopscript```
     Cancel all running scripts.  Each cancelled script name is echoed to the
     terminal: ``[stopscript] stopped: combat.hunt``.  Nothing is printed if no
     scripts were running.
 
-``\`stopscript combat.hunt\```
+```stopscript combat.hunt```
     Cancel only the named script (same feedback line).
 
 Chaining scripts
 ----------------
 
-``\`script hunt\``` is itself a backtick command, so ``ctx.send`` can launch
+```script hunt``` is itself a backtick command, so ``ctx.send`` can launch
 a script from inside another script::
 
     await ctx.send("`script hunt`")

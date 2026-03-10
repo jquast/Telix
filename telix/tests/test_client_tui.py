@@ -667,33 +667,64 @@ def test_randomwalk_dialog_command_field(tmp_path: Any) -> None:
     """The randomwalk dialog result includes a command string."""
     result_file = str(tmp_path / "result.json")
     screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 3, auto_search=True, auto_evaluate=False)
+    screen.write_result(True, 3, room_change_cmd="search")
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
-    assert data["command"] == "`randomwalk 999 3 autosearch`"
-
-
-def test_randomwalk_dialog_command_all_flags(tmp_path: Any) -> None:
-    """The command string includes both autosearch and autoevaluate."""
-    result_file = str(tmp_path / "result.json")
-    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 5, auto_search=True, auto_evaluate=True)
-
-    with open(result_file, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["command"] == "`randomwalk 999 5 autosearch autoevaluate`"
+    assert data["command"] == "`randomwalk 999 3 roomcmd search`"
 
 
 def test_randomwalk_dialog_command_no_flags(tmp_path: Any) -> None:
-    """The command string omits flags when both are off."""
+    """The command string omits roomcmd when empty."""
     result_file = str(tmp_path / "result.json")
     screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, auto_search=False, auto_evaluate=False)
+    screen.write_result(True, 2)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
     assert data["command"] == "`randomwalk 999 2`"
+
+
+def test_randomwalk_dialog_room_change_cmd(tmp_path: Any) -> None:
+    """The command string includes roomcmd with semicolon-separated commands."""
+    result_file = str(tmp_path / "result.json")
+    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=3)
+    screen.write_result(True, 3, room_change_cmd="search;survey;script hunt")
+
+    with open(result_file, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 3 roomcmd search;survey;script hunt`"
+    assert data["room_change_cmd"] == "search;survey;script hunt"
+
+
+def test_randomwalk_dialog_noreply(tmp_path: Any) -> None:
+    """The noreply flag is appended when triggers is False."""
+    result_file = str(tmp_path / "result.json")
+    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
+    screen.write_result(True, 2, triggers=False)
+
+    with open(result_file, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 2 noreply`"
+    assert data["triggers"] is False
+
+
+def test_randomwalk_dialog_noreply_with_room_change_cmd(tmp_path: Any) -> None:
+    """The noreply flag precedes roomcmd in the command string."""
+    result_file = str(tmp_path / "result.json")
+    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
+    screen.write_result(True, 2, room_change_cmd="search", triggers=False)
+
+    with open(result_file, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["command"] == "`randomwalk 999 2 noreply roomcmd search`"
+
+
+def test_randomwalk_dialog_default_room_change_cmd() -> None:
+    """The dialog stores the default room change command."""
+    screen = RandomwalkDialogScreen(default_room_change_cmd="search;survey", default_triggers=False)
+    assert screen.default_room_change_cmd == "search;survey"
+    assert screen.default_triggers is False
 
 
 def test_autodiscover_dialog_writes_bfs(tmp_path: Any) -> None:
@@ -735,17 +766,16 @@ def test_autodiscover_dialog_default_strategy() -> None:
     assert screen.default_strategy == "dfs"
 
 
-def test_autodiscover_dialog_all_flags(tmp_path: Any) -> None:
+def test_autodiscover_dialog_room_change_cmd(tmp_path: Any) -> None:
+    """The command string includes roomcmd when set."""
     result_file = str(tmp_path / "result.json")
     screen = AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
-    screen.write_result(True, "bfs", auto_search=True, auto_evaluate=True, auto_survey=True, triggers=True)
+    screen.write_result(True, "bfs", room_change_cmd="search;survey;script hunt", triggers=True)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
-    assert data["command"] == "`autodiscover bfs autosearch autoevaluate autosurvey`"
-    assert data["auto_search"] is True
-    assert data["auto_evaluate"] is True
-    assert data["auto_survey"] is True
+    assert data["command"] == "`autodiscover bfs roomcmd search;survey;script hunt`"
+    assert data["room_change_cmd"] == "search;survey;script hunt"
     assert data["triggers"] is True
 
 
@@ -760,71 +790,21 @@ def test_autodiscover_dialog_noreply(tmp_path: Any) -> None:
     assert data["triggers"] is False
 
 
-def test_autodiscover_dialog_autosurvey_only(tmp_path: Any) -> None:
+def test_autodiscover_dialog_noreply_with_room_change_cmd(tmp_path: Any) -> None:
+    """noreply precedes roomcmd in the autodiscover command string."""
     result_file = str(tmp_path / "result.json")
     screen = AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
-    screen.write_result(True, "bfs", auto_survey=True)
+    screen.write_result(True, "bfs", room_change_cmd="search", triggers=False)
 
     with open(result_file, encoding="utf-8") as f:
         data = json.load(f)
-    assert data["command"] == "`autodiscover bfs autosurvey`"
+    assert data["command"] == "`autodiscover bfs noreply roomcmd search`"
 
 
-def test_autodiscover_dialog_default_booleans() -> None:
-    screen = AutodiscoverDialogScreen(
-        default_auto_search=True, default_auto_evaluate=True, default_auto_survey=True, default_triggers=False
-    )
-    assert screen.default_auto_search is True
-    assert screen.default_auto_evaluate is True
-    assert screen.default_auto_survey is True
-    assert screen.default_triggers is False
-
-
-def test_randomwalk_dialog_autosurvey(tmp_path: Any) -> None:
-    result_file = str(tmp_path / "result.json")
-    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, auto_survey=True)
-
-    with open(result_file, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["command"] == "`randomwalk 999 2 autosurvey`"
-    assert data["auto_survey"] is True
-
-
-def test_randomwalk_dialog_noreply(tmp_path: Any) -> None:
-    result_file = str(tmp_path / "result.json")
-    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, triggers=False)
-
-    with open(result_file, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["command"] == "`randomwalk 999 2 noreply`"
-    assert data["triggers"] is False
-
-
-def test_randomwalk_dialog_all_new_flags(tmp_path: Any) -> None:
-    result_file = str(tmp_path / "result.json")
-    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=3)
-    screen.write_result(True, 3, auto_search=True, auto_evaluate=True, auto_survey=True, triggers=True)
-
-    with open(result_file, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["command"] == "`randomwalk 999 3 autosearch autoevaluate autosurvey`"
-
-
-def test_randomwalk_dialog_noreply_with_flags(tmp_path: Any) -> None:
-    result_file = str(tmp_path / "result.json")
-    screen = RandomwalkDialogScreen(result_file=result_file, default_visit_level=2)
-    screen.write_result(True, 2, auto_search=True, triggers=False)
-
-    with open(result_file, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["command"] == "`randomwalk 999 2 autosearch noreply`"
-
-
-def test_randomwalk_dialog_default_triggers() -> None:
-    screen = RandomwalkDialogScreen(default_auto_survey=True, default_triggers=False)
-    assert screen.default_auto_survey is True
+def test_autodiscover_dialog_default_room_change_cmd() -> None:
+    """The dialog stores the default room change command."""
+    screen = AutodiscoverDialogScreen(default_room_change_cmd="search;survey", default_triggers=False)
+    assert screen.default_room_change_cmd == "search;survey"
     assert screen.default_triggers is False
 
 

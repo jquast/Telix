@@ -29,12 +29,6 @@ Advanced REPL
 .. include:: ../telix/help/keybindings.md
    :parser: myst_parser.sphinx_
 
-Backtick Commands
------------------
-
-.. include:: ../telix/help/commands.md
-   :parser: myst_parser.sphinx_
-
 Macros
 ------
 

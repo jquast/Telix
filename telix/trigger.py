@@ -949,15 +949,6 @@ class TriggerEngine:
         """
         if not cmd or not cmd.strip():
             return
-        if self.ctx.walk.randomwalk_auto_evaluate and self.ctx.walk.randomwalk_active:
-            m = KILL_RE.match(cmd)
-            if m:
-                consider_cmd = f"consider {m.group(1)}"
-                self.log.info("trigger: injecting %r before %r", consider_cmd, cmd)
-                if self.echo_fn is not None:
-                    self.echo_fn(consider_cmd)
-                assert self.ctx.writer is not None
-                self.ctx.writer.write(consider_cmd + "\r\n")
         self.log.info("trigger: sending %r", cmd)
         self.sent_commands.add(cmd.strip())
         if len(self.sent_commands) > self.sent_commands_max:

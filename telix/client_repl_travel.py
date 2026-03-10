@@ -426,9 +426,7 @@ async def autodiscover(
     resume: bool = False,
     strategy: str = "bfs",
     noreply: bool = False,
-    auto_search: bool = False,
-    auto_evaluate: bool = False,
-    auto_survey: bool = False,
+    room_change_cmd: str = "",
 ) -> None:
     """
     Explore unvisited exits reachable from the current room.
@@ -445,9 +443,7 @@ async def autodiscover(
     :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
         deepest-first ordering.
     :param noreply: Completely disable the trigger engine during the walk.
-    :param auto_search: Send ``search`` in each newly discovered room.
-    :param auto_evaluate: Enable consider-before-kill trigger logic.
-    :param auto_survey: Send ``survey`` in each newly discovered room.
+    :param room_change_cmd: Semicolon-separated commands to send in each newly discovered room.
     """
     if ctx.walk.discover_active:
         return
@@ -479,10 +475,6 @@ async def autodiscover(
     if noreply and engine is not None:
         engine_was_enabled = engine.enabled
         engine.enabled = False
-
-    prev_auto_evaluate = ctx.walk.randomwalk_auto_evaluate
-    if auto_evaluate:
-        ctx.walk.randomwalk_auto_evaluate = True
 
     ctx.walk.discover_active = True
     ctx.walk.discover_total = len(branches)
@@ -622,31 +614,22 @@ async def autodiscover(
             if ar_fired and wait_fn is not None:
                 await wait_fn()
 
-            if auto_search:
-                if echo_fn is not None:
-                    echo_fn("search")
-                ctx.walk.active_command = "search"
-                ctx.walk.active_command_time = time.monotonic()
-                if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
-                    ctx.writer.write("search\r\n")
-                else:
-                    ctx.writer.write(b"search\r\n")
-                if wait_fn is not None:
-                    await wait_fn()
-                ctx.walk.active_command = None
-
-            if auto_survey:
-                if echo_fn is not None:
-                    echo_fn("survey")
-                ctx.walk.active_command = "survey"
-                ctx.walk.active_command_time = time.monotonic()
-                if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
-                    ctx.writer.write("survey\r\n")
-                else:
-                    ctx.writer.write(b"survey\r\n")
-                if wait_fn is not None:
-                    await wait_fn()
-                ctx.walk.active_command = None
+            if room_change_cmd:
+                for sub_cmd in room_change_cmd.split(";"):
+                    sub_cmd = sub_cmd.strip()
+                    if not sub_cmd:
+                        continue
+                    if echo_fn is not None:
+                        echo_fn(sub_cmd)
+                    ctx.walk.active_command = sub_cmd
+                    ctx.walk.active_command_time = time.monotonic()
+                    if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
+                        ctx.writer.write(sub_cmd + "\r\n")
+                    else:
+                        ctx.writer.write((sub_cmd + "\r\n").encode("utf-8"))
+                    if wait_fn is not None:
+                        await wait_fn()
+                    ctx.walk.active_command = None
 
             # Stay where we are -- next iteration re-discovers branches
             # from current position, so nearby clusters get swept without
@@ -656,7 +639,6 @@ async def autodiscover(
     finally:
         if noreply and engine is not None:
             engine.enabled = engine_was_enabled
-        ctx.walk.randomwalk_auto_evaluate = prev_auto_evaluate
         ctx.walk.last_walk_mode = "autodiscover"
         ctx.walk.last_walk_room = ctx.room.current
         ctx.walk.last_walk_strategy = strategy
@@ -897,31 +879,22 @@ async def randomwalk(
             visited.add(actual)
             ctx.walk.randomwalk_current = count_filled()
 
-            if ctx.walk.randomwalk_auto_search:
-                if echo_fn is not None:
-                    echo_fn("search")
-                ctx.walk.active_command = "search"
-                ctx.walk.active_command_time = time.monotonic()
-                if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
-                    ctx.writer.write("search\r\n")
-                else:
-                    ctx.writer.write(b"search\r\n")
-                if wait_fn is not None:
-                    await wait_fn()
-                ctx.walk.active_command = None
-
-            if ctx.walk.randomwalk_auto_survey:
-                if echo_fn is not None:
-                    echo_fn("survey")
-                ctx.walk.active_command = "survey"
-                ctx.walk.active_command_time = time.monotonic()
-                if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
-                    ctx.writer.write("survey\r\n")
-                else:
-                    ctx.writer.write(b"survey\r\n")
-                if wait_fn is not None:
-                    await wait_fn()
-                ctx.walk.active_command = None
+            if ctx.walk.randomwalk_room_change_cmd:
+                for sub_cmd in ctx.walk.randomwalk_room_change_cmd.split(";"):
+                    sub_cmd = sub_cmd.strip()
+                    if not sub_cmd:
+                        continue
+                    if echo_fn is not None:
+                        echo_fn(sub_cmd)
+                    ctx.walk.active_command = sub_cmd
+                    ctx.walk.active_command_time = time.monotonic()
+                    if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
+                        ctx.writer.write(sub_cmd + "\r\n")
+                    else:
+                        ctx.writer.write((sub_cmd + "\r\n").encode("utf-8"))
+                    if wait_fn is not None:
+                        await wait_fn()
+                    ctx.walk.active_command = None
 
             # Bounce detection: if we returned to the room we were in
             # 2 steps ago, we are ping-ponging between two rooms.
@@ -1012,9 +985,7 @@ async def randomwalk(
         ctx.walk.last_walk_noreply = noreply
         ctx.walk.last_walk_visited = visited
         ctx.walk.randomwalk_active = False
-        ctx.walk.randomwalk_auto_search = False
-        ctx.walk.randomwalk_auto_evaluate = False
-        ctx.walk.randomwalk_auto_survey = False
+        ctx.walk.randomwalk_room_change_cmd = ""
         ctx.walk.randomwalk_current = 0
         ctx.walk.randomwalk_total = 0
         ctx.walk.randomwalk_task = None
@@ -1085,23 +1056,19 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
         if verb in ("autodiscover", "randomwalk", "resume"):
             walk_limit = DEFAULT_WALK_LIMIT
             walk_visit_level = 2
-            auto_search = False
-            auto_evaluate = False
-            auto_survey = False
+            room_change_cmd = ""
             walk_strategy = "bfs"
             noreply = False
             if arg:
                 arg_parts = arg.split()
+                roomcmd_idx = next((i for i, p in enumerate(arg_parts) if p.lower() == "roomcmd"), -1)
+                if roomcmd_idx >= 0:
+                    room_change_cmd = " ".join(arg_parts[roomcmd_idx + 1:])
+                    arg_parts = arg_parts[:roomcmd_idx]
                 numeric_idx = 0
                 for ap in arg_parts:
                     low = ap.lower()
-                    if low == "autosearch":
-                        auto_search = True
-                    elif low == "autoevaluate":
-                        auto_evaluate = True
-                    elif low == "autosurvey":
-                        auto_survey = True
-                    elif low == "noreply":
+                    if low == "noreply":
                         noreply = True
                     elif low in ("bfs", "dfs"):
                         walk_strategy = low
@@ -1144,15 +1111,11 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                     resume=do_resume,
                     strategy=walk_strategy,
                     noreply=noreply,
-                    auto_search=auto_search,
-                    auto_evaluate=auto_evaluate,
-                    auto_survey=auto_survey,
+                    room_change_cmd=room_change_cmd,
                 )
 
             else:
-                ctx.walk.randomwalk_auto_search = auto_search
-                ctx.walk.randomwalk_auto_evaluate = auto_evaluate
-                ctx.walk.randomwalk_auto_survey = auto_survey
+                ctx.walk.randomwalk_room_change_cmd = room_change_cmd
                 await randomwalk(
                     ctx, log, limit=walk_limit, resume=do_resume, visit_level=walk_visit_level, noreply=noreply
                 )

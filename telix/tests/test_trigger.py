@@ -327,8 +327,6 @@ def mock_writer():
             active_command=None,
             active_command_time=0.0,
             randomwalk_active=False,
-            randomwalk_auto_evaluate=False,
-            randomwalk_auto_survey=False,
         ),
     )
     ctx.log = logging.getLogger("test")
@@ -1034,8 +1032,6 @@ def mock_writer_with_vitals(hp: int, maxhp: int, mp: int, maxmp: int):
             active_command=None,
             active_command_time=0.0,
             randomwalk_active=False,
-            randomwalk_auto_evaluate=False,
-            randomwalk_auto_survey=False,
         ),
         gmcp_data={"Char.Vitals": {"hp": str(hp), "maxhp": str(maxhp), "mp": str(mp), "maxmp": str(maxmp)}},
     )
@@ -1370,7 +1366,7 @@ async def test_trigger_engine_stamps_last_fired():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rule = TriggerRule(pattern=re.compile("hello"), reply="world;")
@@ -1520,7 +1516,7 @@ def test_status_text_initially_empty():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     engine = TriggerEngine(rules=[], ctx=ctx, log=logging.getLogger("test"))
@@ -1533,7 +1529,7 @@ async def test_status_text_during_until():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
@@ -1553,7 +1549,7 @@ async def test_status_text_during_delay():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
@@ -1573,7 +1569,7 @@ async def test_status_text_cleared_on_cancel():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
@@ -1591,7 +1587,7 @@ async def test_until_progress_tracks_elapsed():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
@@ -1615,7 +1611,7 @@ async def test_until_progress_cleared_on_timeout():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
@@ -1635,7 +1631,7 @@ async def test_status_text_masks_send_when_will_echo():
         writer=types.SimpleNamespace(write=sent.append, will_echo=True),
         gmcp_data={},
         walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False, randomwalk_auto_evaluate=False
+            active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
     )
     rules = [TriggerRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]

@@ -468,30 +468,13 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
     }
     .rw-option Input {
         width: 8;
+        margin-right: 2;
     }
     .rw-option Switch {
         width: auto;
     }
-    #rw-switches {
-        height: auto;
-        margin-bottom: 1;
-        border: round $surface-lighten-2;
-        padding: 0 1;
-    }
-    .rw-switch-row {
-        height: 3;
-    }
-    .rw-switch-cell {
+    #rw-room-change-cmd {
         width: 1fr;
-        height: 3;
-    }
-    .rw-switch-cell Label {
-        padding-top: 1;
-        width: auto;
-        margin-right: 1;
-    }
-    .rw-switch-cell Switch {
-        width: auto;
     }
     #rw-error {
         color: $error;
@@ -512,17 +495,13 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         self,
         result_file: str = "",
         default_visit_level: int = 2,
-        default_auto_search: bool = False,
-        default_auto_evaluate: bool = False,
-        default_auto_survey: bool = False,
+        default_room_change_cmd: str = "",
         default_triggers: bool = True,
     ) -> None:
         super().__init__()
         self.result_file = result_file
         self.default_visit_level = default_visit_level
-        self.default_auto_search = default_auto_search
-        self.default_auto_evaluate = default_auto_evaluate
-        self.default_auto_survey = default_auto_survey
+        self.default_room_change_cmd = default_room_change_cmd
         self.default_triggers = default_triggers
 
     def compose(self) -> textual.app.ComposeResult:
@@ -550,32 +529,21 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
             yield textual.widgets.Static(
                 "Tip: Use the Block button in the Rooms screen to exclude dangerous areas.", id="rw-hint"
             )
-            with textual.containers.Vertical(id="rw-options-col"), textual.containers.Horizontal(classes="rw-option"):
-                lbl = textual.widgets.Label("Visit level:")
-                lbl.tooltip = "Minimum number of times each reachable room must be visited before the walk stops."
-                yield lbl
-                yield textual.widgets.Input(value=str(self.default_visit_level), id="rw-visit-level", type="integer")
-            with textual.containers.Vertical(id="rw-switches"):
-                with textual.containers.Horizontal(classes="rw-switch-row"):
-                    with textual.containers.Horizontal(classes="rw-switch-cell"):
-                        yield textual.widgets.Label("Auto search:")
-                        yield textual.widgets.Switch(value=(self.default_auto_search), id="rw-auto-search")
-                    with textual.containers.Horizontal(classes="rw-switch-cell"):
-                        yield textual.widgets.Label("Auto consider:")
-                        yield textual.widgets.Switch(
-                            value=(self.default_auto_evaluate),
-                            id="rw-auto-consider",
-                            disabled=(not self.default_triggers),
-                        )
-                with textual.containers.Horizontal(classes="rw-switch-row"):
-                    with textual.containers.Horizontal(classes="rw-switch-cell"):
-                        yield textual.widgets.Label("Auto survey:")
-                        yield textual.widgets.Switch(
-                            value=(self.default_auto_survey), id="rw-auto-survey", disabled=(not self.default_triggers)
-                        )
-                    with textual.containers.Horizontal(classes="rw-switch-cell"):
-                        yield textual.widgets.Label("Triggers:")
-                        yield textual.widgets.Switch(value=(self.default_triggers), id="rw-triggers")
+            with textual.containers.Vertical(id="rw-options-col"):
+                with textual.containers.Horizontal(classes="rw-option"):
+                    lbl = textual.widgets.Label("Visit level:")
+                    lbl.tooltip = "Minimum number of times each reachable room must be visited before the walk stops."
+                    yield lbl
+                    yield textual.widgets.Input(value=str(self.default_visit_level), id="rw-visit-level", type="integer")
+                    yield textual.widgets.Label("Triggers:")
+                    yield textual.widgets.Switch(value=self.default_triggers, id="rw-triggers")
+                with textual.containers.Horizontal(classes="rw-option"):
+                    yield textual.widgets.Label("Room change command:")
+                    yield textual.widgets.Input(
+                        value=self.default_room_change_cmd,
+                        id="rw-room-change-cmd",
+                        placeholder="e.g. search;survey;script hunt",
+                    )
             yield textual.widgets.Static("", id="rw-error")
             with textual.containers.Horizontal(id="rw-buttons"):
                 yield textual.widgets.Button("Help", variant="primary", id="rw-help")
@@ -590,12 +558,6 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         """Show room-mapping help screen."""
         self.app.push_screen(client_tui_base.CommandHelpScreen(topic="room-mapping"))
 
-    def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
-        """Disable consider/survey switches when triggers is OFF."""
-        if event.switch.id == "rw-triggers":
-            self.query_one("#rw-auto-consider", textual.widgets.Switch).disabled = not event.value
-            self.query_one("#rw-auto-survey", textual.widgets.Switch).disabled = not event.value
-
     def validate_and_dismiss(self) -> None:
         raw = self.query_one("#rw-visit-level", textual.widgets.Input).value.strip()
         try:
@@ -606,11 +568,9 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         if level < 1:
             self.query_one("#rw-error", textual.widgets.Static).update("Visit level must be at least 1.")
             return
-        auto_search = self.query_one("#rw-auto-search", textual.widgets.Switch).value
-        auto_evaluate = self.query_one("#rw-auto-consider", textual.widgets.Switch).value
-        auto_survey = self.query_one("#rw-auto-survey", textual.widgets.Switch).value
+        room_change_cmd = self.query_one("#rw-room-change-cmd", textual.widgets.Input).value.strip()
         triggers = self.query_one("#rw-triggers", textual.widgets.Switch).value
-        self.write_result(True, level, auto_search, auto_evaluate, auto_survey, triggers)
+        self.write_result(True, level, room_change_cmd, triggers)
         self.dismiss(True)
 
     def on_button_pressed(self, event: textual.widgets.Button.Pressed) -> None:
@@ -620,56 +580,34 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         elif event.button.id == "rw-ok":
             self.validate_and_dismiss()
         elif event.button.id == "rw-cancel":
-            self.write_result(
-                False,
-                self.default_visit_level,
-                self.default_auto_search,
-                self.default_auto_evaluate,
-                self.default_auto_survey,
-                self.default_triggers,
-            )
+            self.write_result(False, self.default_visit_level, self.default_room_change_cmd, self.default_triggers)
             self.dismiss(False)
 
     def action_cancel(self) -> None:
         """Cancel the dialog and write default values."""
-        self.write_result(
-            False,
-            self.default_visit_level,
-            self.default_auto_search,
-            self.default_auto_evaluate,
-            self.default_auto_survey,
-            self.default_triggers,
-        )
+        self.write_result(False, self.default_visit_level, self.default_room_change_cmd, self.default_triggers)
         self.dismiss(False)
 
     def write_result(
         self,
         confirmed: bool,
         visit_level: int,
-        auto_search: bool = False,
-        auto_evaluate: bool = False,
-        auto_survey: bool = False,
+        room_change_cmd: str = "",
         triggers: bool = True,
     ) -> None:
         if not self.result_file:
             return
         cmd = f"`randomwalk 999 {visit_level}"
-        if auto_search:
-            cmd += " autosearch"
-        if auto_evaluate:
-            cmd += " autoevaluate"
-        if auto_survey:
-            cmd += " autosurvey"
         if not triggers:
             cmd += " noreply"
+        if room_change_cmd:
+            cmd += f" roomcmd {room_change_cmd}"
         cmd += "`"
         result = json.dumps(
             {
                 "confirmed": confirmed,
                 "visit_level": visit_level,
-                "auto_search": auto_search,
-                "auto_evaluate": auto_evaluate,
-                "auto_survey": auto_survey,
+                "room_change_cmd": room_change_cmd,
                 "triggers": triggers,
                 "command": cmd,
             }
@@ -681,9 +619,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
 def run_randomwalk_dialog(
     result_file: str,
     default_visit_level: int = 2,
-    default_auto_search: bool = False,
-    default_auto_evaluate: bool = False,
-    default_auto_survey: bool = False,
+    default_room_change_cmd: str = "",
     default_triggers: bool = True,
 ) -> None:
     """
@@ -691,18 +627,14 @@ def run_randomwalk_dialog(
 
     :param result_file: Path to the JSON file where the result is written.
     :param default_visit_level: Initial visit-level selection.
-    :param default_auto_search: Initial auto-search toggle state.
-    :param default_auto_evaluate: Initial auto-evaluate toggle state.
-    :param default_auto_survey: Initial auto-survey toggle state.
+    :param default_room_change_cmd: Initial room change command string.
     :param default_triggers: Initial triggers toggle state.
     """
     client_tui_base.launch_editor_in_thread(
         RandomwalkDialogScreen(
             result_file=result_file,
             default_visit_level=default_visit_level,
-            default_auto_search=default_auto_search,
-            default_auto_evaluate=default_auto_evaluate,
-            default_auto_survey=default_auto_survey,
+            default_room_change_cmd=default_room_change_cmd,
             default_triggers=default_triggers,
         )
     )
@@ -711,9 +643,7 @@ def run_randomwalk_dialog(
 def randomwalk_dialog_main(
     result_file: str = "",
     default_visit_level: str = "2",
-    default_auto_search: str = "0",
-    default_auto_evaluate: str = "0",
-    default_auto_survey: str = "0",
+    default_room_change_cmd: str = "",
     default_triggers: str = "1",
     logfile: str = "",
 ) -> None:
@@ -724,9 +654,7 @@ def randomwalk_dialog_main(
     screen = RandomwalkDialogScreen(
         result_file=result_file,
         default_visit_level=int(default_visit_level),
-        default_auto_search=(default_auto_search == "1"),
-        default_auto_evaluate=(default_auto_evaluate == "1"),
-        default_auto_survey=(default_auto_survey == "1"),
+        default_room_change_cmd=default_room_change_cmd,
         default_triggers=(default_triggers == "1"),
     )
     app = client_tui_base.EditorApp(screen)  # type: ignore[arg-type]
@@ -775,26 +703,17 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         width: 1fr;
         height: auto;
     }
-    #ad-switches {
-        height: auto;
+    .ad-option {
+        height: 3;
         margin-bottom: 1;
-        border: round $surface-lighten-2;
-        padding: 0 1;
     }
-    .ad-switch-row {
-        height: 3;
-    }
-    .ad-switch-cell {
-        width: 1fr;
-        height: 3;
-    }
-    .ad-switch-cell Label {
+    .ad-option Label {
         padding-top: 1;
         width: auto;
         margin-right: 1;
     }
-    .ad-switch-cell Switch {
-        width: auto;
+    #ad-room-change-cmd {
+        width: 1fr;
     }
     #ad-buttons {
         height: 3;
@@ -811,17 +730,13 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         self,
         result_file: str = "",
         default_strategy: str = "bfs",
-        default_auto_search: bool = False,
-        default_auto_evaluate: bool = False,
-        default_auto_survey: bool = False,
+        default_room_change_cmd: str = "",
         default_triggers: bool = True,
     ) -> None:
         super().__init__()
         self.result_file = result_file
         self.default_strategy = default_strategy
-        self.default_auto_search = default_auto_search
-        self.default_auto_evaluate = default_auto_evaluate
-        self.default_auto_survey = default_auto_survey
+        self.default_room_change_cmd = default_room_change_cmd
         self.default_triggers = default_triggers
 
     def compose(self) -> textual.app.ComposeResult:
@@ -848,34 +763,23 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
             yield textual.widgets.Static(
                 "Tip: Use the Block button in the Rooms screen to exclude dangerous areas.", id="ad-hint"
             )
-            with textual.containers.Horizontal(id="ad-strategy-row"), textual.widgets.RadioSet(id="ad-strategy-set"):
-                yield textual.widgets.RadioButton(
-                    "BFS: explore nearest exits first", id="ad-bfs", value=(self.default_strategy == "bfs")
+            with textual.containers.Horizontal(id="ad-strategy-row"):
+                with textual.widgets.RadioSet(id="ad-strategy-set"):
+                    yield textual.widgets.RadioButton(
+                        "BFS: explore nearest exits first", id="ad-bfs", value=(self.default_strategy == "bfs")
+                    )
+                    yield textual.widgets.RadioButton(
+                        "DFS: explore farthest exits first", id="ad-dfs", value=(self.default_strategy == "dfs")
+                    )
+                yield textual.widgets.Label("Triggers:")
+                yield textual.widgets.Switch(value=self.default_triggers, id="ad-triggers")
+            with textual.containers.Horizontal(classes="ad-option"):
+                yield textual.widgets.Label("Room change command:")
+                yield textual.widgets.Input(
+                    value=self.default_room_change_cmd,
+                    id="ad-room-change-cmd",
+                    placeholder="e.g. search;survey;script hunt",
                 )
-                yield textual.widgets.RadioButton(
-                    "DFS: explore farthest exits first", id="ad-dfs", value=(self.default_strategy == "dfs")
-                )
-            with textual.containers.Vertical(id="ad-switches"):
-                with textual.containers.Horizontal(classes="ad-switch-row"):
-                    with textual.containers.Horizontal(classes="ad-switch-cell"):
-                        yield textual.widgets.Label("Auto search:")
-                        yield textual.widgets.Switch(value=(self.default_auto_search), id="ad-auto-search")
-                    with textual.containers.Horizontal(classes="ad-switch-cell"):
-                        yield textual.widgets.Label("Auto consider:")
-                        yield textual.widgets.Switch(
-                            value=(self.default_auto_evaluate),
-                            id="ad-auto-consider",
-                            disabled=(not self.default_triggers),
-                        )
-                with textual.containers.Horizontal(classes="ad-switch-row"):
-                    with textual.containers.Horizontal(classes="ad-switch-cell"):
-                        yield textual.widgets.Label("Auto survey:")
-                        yield textual.widgets.Switch(
-                            value=(self.default_auto_survey), id="ad-auto-survey", disabled=(not self.default_triggers)
-                        )
-                    with textual.containers.Horizontal(classes="ad-switch-cell"):
-                        yield textual.widgets.Label("Triggers:")
-                        yield textual.widgets.Switch(value=(self.default_triggers), id="ad-triggers")
             with textual.containers.Horizontal(id="ad-buttons"):
                 yield textual.widgets.Button("Help", variant="primary", id="ad-help")
                 yield textual.widgets.Button("Cancel", variant="error", id="ad-cancel")
@@ -895,75 +799,45 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
             return "dfs"
         return "bfs"
 
-    def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
-        """Disable consider/survey switches when triggers is OFF."""
-        if event.switch.id == "ad-triggers":
-            self.query_one("#ad-auto-consider", textual.widgets.Switch).disabled = not event.value
-            self.query_one("#ad-auto-survey", textual.widgets.Switch).disabled = not event.value
-
     def on_button_pressed(self, event: textual.widgets.Button.Pressed) -> None:
         """Handle OK and Cancel button presses."""
         if event.button.id == "ad-help":
             self.action_show_help()
         elif event.button.id == "ad-ok":
-            auto_search = self.query_one("#ad-auto-search", textual.widgets.Switch).value
-            auto_evaluate = self.query_one("#ad-auto-consider", textual.widgets.Switch).value
-            auto_survey = self.query_one("#ad-auto-survey", textual.widgets.Switch).value
+            room_change_cmd = self.query_one("#ad-room-change-cmd", textual.widgets.Input).value.strip()
             triggers = self.query_one("#ad-triggers", textual.widgets.Switch).value
-            self.write_result(True, self.get_strategy(), auto_search, auto_evaluate, auto_survey, triggers)
+            self.write_result(True, self.get_strategy(), room_change_cmd, triggers)
             self.dismiss(True)
         elif event.button.id == "ad-cancel":
-            self.write_result(
-                False,
-                self.default_strategy,
-                self.default_auto_search,
-                self.default_auto_evaluate,
-                self.default_auto_survey,
-                self.default_triggers,
-            )
+            self.write_result(False, self.default_strategy, self.default_room_change_cmd, self.default_triggers)
             self.dismiss(False)
 
     def action_cancel(self) -> None:
         """Cancel the dialog and write default values."""
-        self.write_result(
-            False,
-            self.default_strategy,
-            self.default_auto_search,
-            self.default_auto_evaluate,
-            self.default_auto_survey,
-            self.default_triggers,
-        )
+        self.write_result(False, self.default_strategy, self.default_room_change_cmd, self.default_triggers)
         self.dismiss(False)
 
     def write_result(
         self,
         confirmed: bool,
         strategy: str,
-        auto_search: bool = False,
-        auto_evaluate: bool = False,
-        auto_survey: bool = False,
+        room_change_cmd: str = "",
         triggers: bool = True,
     ) -> None:
         """Write result JSON to disk for the parent process."""
         if not self.result_file:
             return
         cmd = f"`autodiscover {strategy}"
-        if auto_search:
-            cmd += " autosearch"
-        if auto_evaluate:
-            cmd += " autoevaluate"
-        if auto_survey:
-            cmd += " autosurvey"
         if not triggers:
             cmd += " noreply"
+        if room_change_cmd:
+            cmd += f" roomcmd {room_change_cmd}"
         cmd += "`"
         result = json.dumps(
             {
                 "confirmed": confirmed,
                 "strategy": strategy,
-                "auto_search": auto_search,
-                "auto_evaluate": auto_evaluate,
-                "auto_survey": auto_survey,
+                "room_change_cmd": room_change_cmd,
                 "triggers": triggers,
                 "command": cmd,
             }
@@ -975,9 +849,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
 def run_autodiscover_dialog(
     result_file: str,
     default_strategy: str = "bfs",
-    default_auto_search: bool = False,
-    default_auto_evaluate: bool = False,
-    default_auto_survey: bool = False,
+    default_room_change_cmd: str = "",
     default_triggers: bool = True,
 ) -> None:
     """
@@ -985,18 +857,14 @@ def run_autodiscover_dialog(
 
     :param result_file: Path to the JSON file where the result is written.
     :param default_strategy: Initial strategy selection (``"bfs"`` or ``"dfs"``).
-    :param default_auto_search: Initial auto-search toggle state.
-    :param default_auto_evaluate: Initial auto-evaluate toggle state.
-    :param default_auto_survey: Initial auto-survey toggle state.
+    :param default_room_change_cmd: Initial room change command string.
     :param default_triggers: Initial triggers toggle state.
     """
     client_tui_base.launch_editor_in_thread(
         AutodiscoverDialogScreen(
             result_file=result_file,
             default_strategy=default_strategy,
-            default_auto_search=default_auto_search,
-            default_auto_evaluate=default_auto_evaluate,
-            default_auto_survey=default_auto_survey,
+            default_room_change_cmd=default_room_change_cmd,
             default_triggers=default_triggers,
         )
     )
@@ -1005,9 +873,7 @@ def run_autodiscover_dialog(
 def autodiscover_dialog_main(
     result_file: str = "",
     default_strategy: str = "bfs",
-    default_auto_search: str = "0",
-    default_auto_evaluate: str = "0",
-    default_auto_survey: str = "0",
+    default_room_change_cmd: str = "",
     default_triggers: str = "1",
     logfile: str = "",
 ) -> None:
@@ -1018,9 +884,7 @@ def autodiscover_dialog_main(
     screen = AutodiscoverDialogScreen(
         result_file=result_file,
         default_strategy=default_strategy,
-        default_auto_search=(default_auto_search == "1"),
-        default_auto_evaluate=(default_auto_evaluate == "1"),
-        default_auto_survey=(default_auto_survey == "1"),
+        default_room_change_cmd=default_room_change_cmd,
         default_triggers=(default_triggers == "1"),
     )
     app = client_tui_base.EditorApp(screen)  # type: ignore[arg-type]
