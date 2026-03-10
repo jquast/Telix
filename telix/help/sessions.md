@@ -6,6 +6,11 @@ The session manager displays a searchable list of saved telnet and MUD
 sessions.  Sessions are sorted by bookmark status, then most recently
 connected, then name.
 
+To connect to a system, use the mouse to click the selected entry, or select
+using keyboard and press return.
+
+Once connected, disconnect using ``Control  + ]``, which returns to the session manager.
+
 ### Buttons
 
 | Button | Action |
@@ -63,3 +68,19 @@ Press **E** or click Edit to open the session editor.  The editor
 allows you to change all session options including host, port, encoding,
 connection mode, triggers, macros, and more.  Press **N** or click
 New to create a new session with default settings.
+
+
+### Server type
+
+The session editor has a **Server Type** radio (BBS / MUD) that applies
+recommended defaults for the connection:
+
+**BBS** sets Color Palette to vga, iCE Colors on, Raw mode, REPL off,
+and MCCP Compression to passive.  Most BBSs require an 80-column by
+25-line terminal.
+
+**MUD** sets MCCP Compression on, Line mode, REPL on, Color Palette
+to none, and iCE Colors off.  Most MUDs expect a screen width of 100
+or 120 columns.
+
+These are starting points -- all fields remain editable after selection.

@@ -284,24 +284,6 @@ class TestScriptContextGmcpGet:
         assert ctx.gmcp_get("No.Such.Key") is None
 
 
-class TestScriptContextNeighbors:
-    """ScriptContext.neighbors returns exit dict."""
-
-    def test_has_exits(self):
-        session_ctx = make_ctx()
-        buf = scripts.ScriptOutputBuffer()
-        ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
-        exits = ctx.neighbors()
-        assert exits == {"north": "43", "south": "41"}
-
-    def test_no_room_graph(self):
-        session_ctx = make_ctx()
-        session_ctx.room.graph = None
-        buf = scripts.ScriptOutputBuffer()
-        ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
-        assert ctx.neighbors() == {}
-
-
 class TestScriptContextPrint:
     """ScriptContext.print calls echo_command."""
 
@@ -562,6 +544,50 @@ class TestScriptContextRoomChanged:
         session_ctx.room.changed = asyncio.Event()
         ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
         assert await ctx.room_changed(timeout=0.05) is False
+
+
+class TestScriptContextGmcpChanged:
+    """ScriptContext.gmcp_changed awaitable."""
+
+    @pytest.mark.asyncio
+    async def test_fires_when_event_set(self):
+        session_ctx = make_ctx()
+        session_ctx.gmcp.package_events = {}
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def pulse():
+            await asyncio.sleep(0.05)
+            evt = session_ctx.gmcp.package_events.get("Char.Vitals")
+            if evt is not None:
+                evt.set()
+                evt.clear()
+
+        asyncio.ensure_future(pulse())
+        assert await ctx.gmcp_changed("Char.Vitals", timeout=1.0) is True
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_false(self):
+        session_ctx = make_ctx()
+        session_ctx.gmcp.package_events = {}
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert await ctx.gmcp_changed("Char.Vitals", timeout=0.05) is False
+
+    @pytest.mark.asyncio
+    async def test_different_packages_independent(self):
+        session_ctx = make_ctx()
+        session_ctx.gmcp.package_events = {}
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def pulse():
+            await asyncio.sleep(0.05)
+            evt = session_ctx.gmcp.package_events.get("Char.Vitals")
+            if evt is not None:
+                evt.set()
+                evt.clear()
+
+        asyncio.ensure_future(pulse())
+        assert await ctx.gmcp_changed("Room.Info", timeout=0.02) is False
+        assert await ctx.gmcp_changed("Char.Vitals", timeout=1.0) is True
 
 
 class TestScriptContextWalk:

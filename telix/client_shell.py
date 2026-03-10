@@ -379,6 +379,10 @@ async def telix_client_shell(
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        evt = ctx.gmcp.package_events.get(package)
+        if evt is not None:
+            evt.set()
+            evt.clear()
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.GMCP, on_gmcp)
 
@@ -614,6 +618,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        evt = ctx.gmcp.package_events.get(package)
+        if evt is not None:
+            evt.set()
+            evt.clear()
 
     ws_writer.set_ext_callback(ws_transport.GMCP, on_gmcp)
 

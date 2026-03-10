@@ -552,6 +552,9 @@ async def autodiscover(
             await asyncio.sleep(client_repl_commands.COMMAND_DELAY)
             ctx.walk.active_command = direction
             ctx.walk.active_command_time = time.monotonic()
+            prompt_ready = ctx.prompt.ready
+            if prompt_ready is not None:
+                prompt_ready.clear()
             send = ctx.repl.send_line
             if send is not None:
                 send(direction)
@@ -611,7 +614,7 @@ async def autodiscover(
                         break
                     settle += 1
 
-            if ar_fired and wait_fn is not None:
+            if wait_fn is not None and (ar_fired or room_change_cmd):
                 await wait_fn()
 
             if room_change_cmd:
@@ -866,6 +869,8 @@ async def randomwalk(
             ctx.walk.randomwalk_current = count_filled()
 
             if ctx.walk.randomwalk_room_change_cmd:
+                if wait_fn is not None:
+                    await wait_fn()
                 await client_repl_commands.execute_macro_commands(ctx.walk.randomwalk_room_change_cmd, ctx, log)
 
             # Bounce detection: if we returned to the room we were in

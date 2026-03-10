@@ -2,98 +2,78 @@
 Scripting
 =========
 
-Telix scripts are Python files that send commands, wait for responses, and
-react to what the server says -- all in plain Python.  Scripts are good for
-anything too complex or too repetitive to do by hand: hunting loops, healing
-routines, mapping runs, or any sequence that depends on timing or server output.
+Telix scripts are Python files that run asynchronously using the asyncio
+interface.  They are useful for logic that goes beyond the "find pattern and
+respond" capability of Triggers_: hunting loops, healing routines, mapping
+runs, or any sequence that depends on timing or server output.
+
+Triggering scripts
+------------------
+
+Scripts are started by the `` `async` `` or `` `await` `` commands (see
+`Launching scripts`_ below).
+
+Run a script and wait for completion::
+
+    await module.func_name
+
+Run a script asynchronously (in the background)::
+
+    async module.func_name
+
+These commands can be used anywhere that Commands_ may be used:
+
+- **REPL**: type `` `async module.fn` `` at the prompt
+- **Trigger reply field**: set reply as `` `async module.fn` ``
+- **Macro text**: include `` `async module.fn` `` in macro text
+- **autowalk** and **autodiscover**: include `` `async module.fn` `` in room-change command.
 
 Quickstart
-----------
+~~~~~~~~~~
 
 Create a file named ``demo.py`` in the current directory where ``telix`` is
-launched, or in ``~/.config/telix/scripts/``::
+launched or in ``~/.config/telix/scripts/``::
 
     from telix.scripts import ScriptContext
 
     async def run(ctx: ScriptContext) -> None:
         room = ctx.room
         ctx.print(f"[demo] You are in: {room.name} ({room.area})")
-        exits = ctx.neighbors()
-        ctx.print(f"[demo] Exits: {', '.join(exits)}")
+        ctx.print(f"[demo] Exits: {', '.join(room.exits)}")
 
 Then in the Telix REPL, run it::
 
-    `script demo`
+    `async demo`
 
 Example output::
 
     [demo] You are in: Mayor's office (caladan)
     [demo] Exits: west
 
-
-Triggering scripts
-------------------
-
-Scripts can be started from anywhere you can type a command:
-
-- **REPL**: type ```script module.fn``` at the prompt.
-- **Trigger reply field**: set the reply to ```script module.fn```.
-- **Macro text**: include ```script module.fn``` in macro text.
-- **Chained command**: `` look;`script combat.hunt goblin`;north ``
-
 Lifecycle
 ---------
 
-Each script runs in the background while you continue playing.  Multiple
-scripts can be running at the same time -- a healer, a combat loop, and a room
-tracker all at once.  Because they all share the same connection, it is easy to
-accidentally flood the server with conflicting commands.  Use the commands below
-to keep track of what is running.  To stop everything immediately, press
-**Alt+Q**.
+If you wish, multiple scripts can run at the same time. Asynchronous programming
+is very useful but can also get out of control, and may accidentally flood the server
+with bad commands.
 
-Listing scripts
-~~~~~~~~~~~~~~~
+To stop everything immediately, press **Alt + Q**.
 
-```scripts```
-    Show the names of all currently running scripts::
+Launching scripts
+~~~~~~~~~~~~~~~~~
 
-        [scripts] running: combat.hunt
-        [scripts] running: healer.top_up
+`` `async NAME` ``
+    Start a script in the background and return immediately.  The script runs
+    concurrently with everything else::
 
-    If nothing is running: ``[scripts] no scripts running``.
+        `async combat.hunt`
 
-Stopping scripts
-~~~~~~~~~~~~~~~~
+`` `await NAME` ``
+    Start a script and block until it finishes before continuing.  Useful
+    inside ``roomcmd`` sequences where you need the script to complete before
+    the walk moves on::
 
-```stopscript```
-    Stop all running scripts.  Each name is printed as it stops:
-    ``[stopscript] stopped: combat.hunt``.
-
-```stopscript combat.hunt```
-    Stop only the named script.
-
-Chaining scripts
-~~~~~~~~~~~~~~~~
-
-You can start a script from inside another script using ``ctx.send``::
-
-    await ctx.send("`script hunt`")
-
-This starts ``hunt`` in the background and returns immediately -- both scripts
-then run at the same time.
-
-To run scripts one after another instead, import and call the function
-directly::
-
-    import combat
-    await combat.hunt(ctx, "goblin")   # waits for hunt to finish
-
-Reloading
-~~~~~~~~~
-
-Every time a script is started, telix checks whether the source file has
-changed.  If it has, the module is reloaded automatically before running.
-Edit the file, run the script again -- no restart needed.
+        `await combat.hunt`
 
 Search path
 ~~~~~~~~~~~
@@ -108,16 +88,59 @@ Telix looks for scripts in this order:
 The last part of the script name is the function to call; everything before
 it is the file to load:
 
-- ```script demo``` -- loads ``demo.py``, calls ``run(ctx)``
-- ```script combat.hunt``` -- loads ``combat.py``, calls ``hunt(ctx)``
+- `` `async demo` `` -- loads ``demo.py``, calls ``run(ctx)``
+- `` `async combat.hunt` `` -- loads ``combat.py``, calls ``hunt(ctx)``
 
-IDE support and type checking
------------------------------
+Reloading
+~~~~~~~~~
 
-Adding a type annotation to ``ctx`` gives your editor autocomplete for every
-``ctx.`` method, and lets tools like mypy or Pylance catch mistakes before you
-run the script -- including the easy-to-miss error of forgetting ``await`` on
-an async call::
+Every time a script is launched, telix will check whether the file has been modified and reload if
+necessary. Save a script file at any time and then call it to see any new changes (or errors!).
+
+Listing active scripts
+~~~~~~~~~~~~~~~~~~~~~~
+
+`` `scripts` ``
+    Show the names of all currently running scripts::
+
+        [scripts] running: combat.hunt
+        [scripts] running: healer.top_up
+
+    If nothing is running: ``[scripts] no scripts running``.
+
+Stopping
+~~~~~~~~
+
+`` `stopscript` ``
+    Stop all running scripts.  Each name is printed as it stops:
+    ``[stopscript] stopped: combat.hunt``.
+
+    This command is bound to **Alt + Q** by default.
+
+`` `stopscript combat.hunt` ``
+    Stop only the named script.
+
+Chaining
+~~~~~~~~
+
+You could launch a another script by sending a command through ``ctx.send``::
+
+    await ctx.send("`async hunt`")
+
+Or run another script to completion::
+
+    await ctx.send("`await hunt`")
+
+As python scripts, you may also just import and call functions directly::
+
+    import combat
+    await combat.hunt(ctx, "goblin")
+
+IDE support
+-----------
+
+Adding a type annotation to ``ctx`` should provide auto-complete and type checking to an IDE, or
+otherwise use a linter (mypy, flake8) is suggested to catch mistakes before running scripts::
 
     from __future__ import annotations
     from typing import TYPE_CHECKING
@@ -132,8 +155,9 @@ an async call::
 The ``ctx`` object
 ------------------
 
-Every script receives a ``ctx`` argument -- your handle on everything telix
-knows about the current session.
+Every script receives a ``ctx`` argument. This is a "God variable", and provides
+access to all known information about the MUD Session and scripting capabilities
+of Telix.
 
 Sending commands
 ~~~~~~~~~~~~~~~~
@@ -143,11 +167,10 @@ Sending commands
 
     - ``;`` between commands waits for the server's prompt before sending the next
     - ``|`` sends immediately without waiting
-    - A leading number repeats: ``3n`` sends ``n`` three times
+    - A leading number repeats: ``3north`` will send ``north`` times
 
-    Backtick directives like ```script``` and ```until``` are handled by the
-    client, not sent to the server.  See :ref:`backtick commands` for the full
-    list.
+    Backtick directives like `` `async` `` and `` `until` `` are handled by the client, not sent to
+    the server.  See Commands_ for the full list of available backtick commands.
 
 Prompt waiting
 ~~~~~~~~~~~~~~
@@ -211,6 +234,17 @@ GMCP data
     Read a value out of the GMCP data by path, e.g.
     ``ctx.gmcp_get("Char.Vitals.hp")``.  Returns ``None`` if not found.
 
+``await ctx.gmcp_changed(package, timeout=30.0)``
+    Wait until the next GMCP packet for *package* is received.  Returns
+    ``True`` if a packet arrived within the timeout, ``False`` otherwise::
+
+        async def watch_vitals(ctx: ScriptContext) -> None:
+            while True:
+                if not await ctx.gmcp_changed("Char.Vitals", timeout=60.0):
+                    break
+                hp = ctx.gmcp_get("Char.Vitals.hp")
+                ctx.print(f"[vitals] HP: {hp}")
+
 Room graph
 ~~~~~~~~~~
 
@@ -221,8 +255,12 @@ Room graph
     The number of the room you were in before the current one.
 
 ``ctx.room``
-    The current :class:`~telix.rooms.Room` object (name, area, exits), or
-    ``None`` if telix does not yet know what room you are in.
+    The current :class:`~telix.rooms.Room` object, or ``None`` if telix does
+    not yet know what room you are in.  The room object has:
+
+    - ``room.name`` -- room name string
+    - ``room.area`` -- area name string
+    - ``room.exits`` -- ``{direction: room_num}`` dict of known exits
 
 ``ctx.room_graph``
     The full :class:`~telix.rooms.RoomStore` -- all rooms telix has mapped for
@@ -230,9 +268,6 @@ Room graph
 
 ``ctx.get_room(num)``
     Look up any room by its number.
-
-``ctx.neighbors()``
-    Return the exits from the current room as ``{direction: room_num}``.
 
 ``ctx.find_path(dst)``
     Find directions from the current room to *dst*.  Returns a list of
@@ -296,8 +331,8 @@ Arguments
 Anything you type after the script name is passed to the function as
 positional string arguments::
 
-    `script rooms.goto 12345`
-    `script combat.hunt goblin "dark lair"`
+    `async rooms.goto 12345`
+    `async combat.hunt goblin "dark lair"`
 
 In the script, receive them via ``*args``::
 
@@ -374,7 +409,7 @@ Room info script::
             ctx.print("[demo] No room data")
             return
         ctx.print(f"[demo] Room: {room.name} ({room.area})")
-        ctx.print(f"[demo] Exits: {', '.join(ctx.neighbors())}")
+        ctx.print(f"[demo] Exits: {', '.join(room.exits)}")
 
 Travel to a room by number::
 
@@ -382,7 +417,7 @@ Travel to a room by number::
 
     async def goto(ctx: ScriptContext, *args: str) -> None:
         if not args:
-            ctx.print("[rooms] Usage: `script rooms.goto <room_id>`")
+            ctx.print("[rooms] Usage: `async rooms.goto <room_id>`")
             return
         path = ctx.find_path(args[0])
         if path is None:

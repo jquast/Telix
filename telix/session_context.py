@@ -118,6 +118,7 @@ class GmcpState:
     dirty: bool = False
     on_ready: typing.Any | None = None
     on_room_info: typing.Any | None = None
+    package_events: dict[str, asyncio.Event] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass

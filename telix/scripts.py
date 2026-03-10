@@ -283,17 +283,6 @@ class ScriptContext:
             return None
         return rg.get_room(str(num))
 
-    def neighbors(self) -> dict[str, str]:
-        """
-        Return the exits from the current room.
-
-        :returns: ``{direction: room_num}`` dict, empty if unknown.
-        """
-        rg = self._ctx.room.graph
-        if rg is None or not self._ctx.room.current:
-            return {}
-        return dict(rg.adj.get(self._ctx.room.current, {}))
-
     def find_path(self, dst: str) -> "list[str] | None":
         """
         Find a path of directions from the current room to *dst*.
@@ -480,6 +469,27 @@ class ScriptContext:
         :returns: ``True`` if a transition occurred; ``False`` on timeout.
         """
         evt = self._ctx.room.changed
+        try:
+            await asyncio.wait_for(evt.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
+    async def gmcp_changed(self, package: str, timeout: float = 30.0) -> bool:
+        """
+        Wait until the next GMCP packet for *package* is received.
+
+        Creates a per-package event on first call; subsequent calls for the
+        same package reuse it.
+
+        :param package: GMCP package name, e.g. ``"Char.Vitals"``.
+        :param timeout: Maximum seconds to wait.
+        :returns: ``True`` if a packet arrived; ``False`` on timeout.
+        """
+        events = self._ctx.gmcp.package_events
+        if package not in events:
+            events[package] = asyncio.Event()
+        evt = events[package]
         try:
             await asyncio.wait_for(evt.wait(), timeout=timeout)
             return True

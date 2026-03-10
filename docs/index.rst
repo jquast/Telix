@@ -7,9 +7,10 @@ Telix
    :caption: User Guide
 
    intro
-   user-manual
+   session-manager
    commands
    scripting
+   user-manual
    files
    protocols
    contributing

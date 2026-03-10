@@ -1054,6 +1054,7 @@ class SessionListScreen(textual.screen.Screen[None]):
             sys.stdout.write(f"\x1b[{tsize.lines};{tsize.columns}H\r\n")
             sys.stdout.flush()
             proc = None
+            _elapsed = 0.0
             try:
                 # stderr must NOT be piped -- the child may launch
                 # Textual subprocesses (F8/F9 editors) that write all
@@ -1091,6 +1092,13 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # or alternate screen active.
                 sys.stdout.write(TERMINAL_CLEANUP)
                 sys.stdout.flush()
+                # If the session exited very quickly, the child likely crashed
+                # before fully starting.  Pause so the error output is visible
+                # rather than being wiped by the TUI redraw.
+                if _elapsed < 5.0:
+                    sys.stdout.write("\r\n[press Enter to return to session manager]\r\n")
+                    sys.stdout.flush()
+                    sys.stdin.readline()
         self.refresh_table()
         self.select_row(key)
         # Textual's app.suspend() re-enters the alternate screen buffer
@@ -1266,7 +1274,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         height: auto;
     }
     #port {
-        width: 9;
+        width: 13;
     }
     #ws-path-row {
         height: auto;

@@ -8,16 +8,19 @@ A modern Telnet, WebSocket, and SSH client designed especially for BBSs_ and MUD
 Features
 --------
 
-- **Session Manager** for configuring and bookmarking connections, bundled with an up-to-date
+- **Session Manager** For configuring and bookmarking connections, bundled with an up-to-date
   directory of over 1,700+ MUDs_ and BBSs_.
-- **Advanced Telnet** support for popular BBS and MUD protocols, NAWS (:rfc:`1073`), `GMCP`_,
-  `MCCP`_, BINARY (:rfc:`856`), SGA (:rfc:`858`), ECHO (:rfc:`857`), EOR (:rfc:`885`), GA
-  (:rfc:`854`), TTYPE (:rfc:`1091`), ENVIRON (:rfc:`1408`) / NEW_ENVIRON (:rfc:`1572`), and CHARSET
-  (:rfc:`2066`).
-- **WebSocket** support for ``telnet.``, ``terminal.``, and ``gmcp.mudstandards.org`` `websocket
-  subprotocols`_, `TELNETS`_ (Telnet + TLS/SSL), and **SSH** protocols are also supported.
-- **MUD Features**: easy-to-use TUI interface to create macros, triggers, highlights, room mapping,
-  travel, random walk, autodiscover, progress bars, chat/captures.
+- **Advanced Telnet** Support for popular BBS and MUD `Protocols
+  <https://telix.readthedocs.io/en/latest/protocols.html>`_
+- **WebSocket** support for BBS and MUD `websocket subprotocols`_, `TELNETS`_ (Telnet + SSL),
+  and SSH protocols are also supported.
+- **MUD Features** Easy-to-use TUI interface to create macros, triggers, highlights, room mapping,
+  fast travel, random walk, autodiscover, progress bars, chat, and captures through a common
+  `Command <https://telix.readthedocs.io/en/latest/commands.html>`_ interface, or advanced
+  programming with asyncio python `Scripting
+  <https://telix.readthedocs.io/en/latest/scripting.html>`_.
+
+
 - **BBS/Scene Art** support for `CP437`_, `PETSCII`_, `ATASCII`_, `iCE colors`_, by translation of
   ANSI color codes and legacy encodings to modern 24-bit color codes and terminal encoding (usually
   utf-8).
@@ -78,19 +81,15 @@ Connect directly via WebSocket::
 .. begin-cli-help
 .. code-block:: text
 
-    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT]
-                 [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
-                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N]
-                 [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
-                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
-                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL]
-                 [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
-                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify]
-                 [--term TERM] [--typescript FILE]
-                 [--typescript-mode {append,rewrite}] [--key-file FILE]
-                 [--username USER] [--background-color COLOR] [--bbs]
-                 [--color-brightness N] [--color-contrast N]
-                 [--colormatch PALETTE] [--mud] [--no-ice-colors]
+    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT]
+                 [--ansi-keys] [--ascii-eol] [--compression] [--connect-maxwait N] [--connect-minwait N]
+                 [--connect-timeout N] [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
+                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE] [--logfile-mode {append,rewrite}]
+                 [--loglevel LOGLEVEL] [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
+                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM]
+                 [--typescript FILE] [--typescript-mode {append,rewrite}] [--key-file FILE]
+                 [--username USER] [--background-color COLOR] [--bbs] [--color-brightness N]
+                 [--color-contrast N] [--colormatch PALETTE] [--mud] [--no-ice-colors]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -105,16 +104,11 @@ Connect directly via WebSocket::
       -h, --help            show this help message and exit
 
     Connection options:
-      --always-do OPT       always send DO for this option (comma-separated, named
-                            like GMCP)
-      --always-dont OPT     always send DONT for this option, refusing even
-                            natively supported
-      --always-will OPT     always send WILL for this option (comma-separated,
-                            named like MXP)
-      --always-wont OPT     always send WONT for this option, refusing even
-                            natively supported
-      --ansi-keys           transmit raw ANSI escape sequences for arrow/function
-                            keys
+      --always-do OPT       always send DO for this option (comma-separated, named like GMCP)
+      --always-dont OPT     always send DONT for this option, refusing even natively supported
+      --always-will OPT     always send WILL for this option (comma-separated, named like MXP)
+      --always-wont OPT     always send WONT for this option, refusing even natively supported
+      --ansi-keys           transmit raw ANSI escape sequences for arrow/function keys
       --ascii-eol           use ASCII CR/LF instead of encoding-native EOL
       --compression         request MCCP compression
       --connect-maxwait N   timeout for pending negotiation (default: 4.0)
@@ -132,8 +126,7 @@ Connect directly via WebSocket::
       --loglevel LOGLEVEL   logging level (default: warn)
       --no-repl             disable the interactive REPL (raw I/O only)
       --raw-mode            force raw-mode input (default: auto-detect)
-      --send-environ VARS   comma-separated environment variables to send via NEW-
-                            ENVIRON
+      --send-environ VARS   comma-separated environment variables to send via NEW-ENVIRON
       --shell SHELL         dotted path to shell coroutine
       --speed N             terminal speed to report (default: 38400)
       --ssl                 enable SSL/TLS (telnet only)
@@ -150,13 +143,11 @@ Connect directly via WebSocket::
 
     Telix options:
       --background-color COLOR
-                            terminal background color as #RRGGBB (default:
-                            #000000)
+                            terminal background color as #RRGGBB (default: #000000)
       --bbs                 apply BBS connection presets
       --color-brightness N  color brightness multiplier (default: 1.0)
       --color-contrast N    color contrast multiplier (default: 1.0)
-      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
-                            disable)
+      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to disable)
       --mud                 apply MUD connection presets
       --no-ice-colors       disable iCE color (blink as bright background) support
 
@@ -167,9 +158,6 @@ Documentation
 -------------
 
 Full documentation at https://telix.readthedocs.org/.
-
-- `Scripting <https://telix.readthedocs.io/en/latest/scripting.html>`_
-- `Protocols <https://telix.readthedocs.io/en/latest/protocols.html>`_
 
 .. |pypi_downloads| image:: https://img.shields.io/pypi/dm/telix.svg?logo=pypi
     :alt: Downloads

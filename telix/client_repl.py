@@ -350,7 +350,8 @@ def repaint_screen(
     except OSError:
         return
     if scroll is not None:
-        scroll.update_size(tsize.lines, tsize.columns)
+        scroll.rows = tsize.lines
+        scroll.cols = tsize.columns
     was_blocking = terminal.set_blocking_stdout(True)
     try:
         blessed_term = get_term()
@@ -1118,7 +1119,8 @@ class ReplSession:
         ar_active = engine is not None and (engine.exclusive_active or engine.reply_pending)
         disc = self.ctx.walk.discover_active
         rwalk = self.ctx.walk.randomwalk_active
-        style = STYLE_TRIGGER if (disc or rwalk or ar_active) else STYLE_NORMAL
+        await_script = bool(self.ctx.walk.await_script)
+        style = STYLE_TRIGGER if (disc or rwalk or ar_active or await_script) else STYLE_NORMAL
         changed = self.last_input_style is not style
         self.last_input_style = style
         for attr, val in style.items():
@@ -1143,7 +1145,7 @@ class ReplSession:
         """Return ``True`` when the input line uses the trigger color scheme."""
         engine = self.trigger_engine
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or ar
+        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
 
     @property
     def bg_sgr(self) -> str:
@@ -1723,10 +1725,12 @@ class ReplSession:
                                     self.telnet_writer.log.error("script error: %s", exc)
                                 else:
                                     self.ctx.walk.await_script = aw.group(1)
+                                    self.update_input_style()
                                     try:
                                         await task
                                     finally:
                                         self.ctx.walk.await_script = ""
+                                        self.update_input_style()
                                         if not task.done():
                                             task.cancel()
                             parts = parts[1:]
