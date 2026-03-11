@@ -10,7 +10,12 @@ Telix
    session-manager
    commands
    scripting
-   user-manual
+   keybindings
+   macros
+   triggers
+   highlights
+   room-mapping
+   progressbars
    files
    protocols
    contributing

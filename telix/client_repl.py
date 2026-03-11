@@ -1590,6 +1590,7 @@ class ReplSession:
                         self.replay_buf.append(colored.encode())
                         self.stdout.write(bt.save.encode())
                         self.telnet_writer.write(cmd + "\r\n")  # type: ignore[arg-type]
+                        self.ctx.commands.record(cmd)
                         if self.ga_detected:
                             self.prompt_ready.clear()
                         self.stdout.write(bt.hide_cursor.encode())
@@ -1762,12 +1763,14 @@ class ReplSession:
                                 self.telnet_writer.write(
                                     remainder[0] + "\r\n"  # type: ignore[arg-type]
                                 )
+                                self.ctx.commands.record(remainder[0])
                                 if self.ga_detected:
                                     self.prompt_ready.clear()
                                 if len(remainder) > 1:
                                     self.submit_command_queue(remainder, chained_task_ref)
                         elif parts:
                             self.telnet_writer.write(parts[0] + "\r\n")  # type: ignore[arg-type]
+                            self.ctx.commands.record(parts[0])
                             if self.ga_detected:
                                 self.prompt_ready.clear()
                             if len(parts) > 1:

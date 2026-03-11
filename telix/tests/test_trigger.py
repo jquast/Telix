@@ -27,6 +27,7 @@ from telix.trigger import (
     resolve_group_value,
     extract_group_source,
 )
+from telix import session_context
 
 
 def test_search_buffer_add_text_strips_ansi():
@@ -328,6 +329,7 @@ def mock_writer():
             active_command_time=0.0,
             randomwalk_active=False,
         ),
+        commands=session_context.CommandState(),
     )
     ctx.log = logging.getLogger("test")
     return ctx, written
@@ -1034,6 +1036,7 @@ def mock_writer_with_vitals(hp: int, maxhp: int, mp: int, maxmp: int):
             randomwalk_active=False,
         ),
         gmcp_data={"Char.Vitals": {"hp": str(hp), "maxhp": str(maxhp), "mp": str(mp), "maxmp": str(maxmp)}},
+        commands=session_context.CommandState(),
     )
     return ctx, written
 
@@ -1531,6 +1534,7 @@ async def test_status_text_during_until():
         walk=types.SimpleNamespace(
             active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
+        commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1551,6 +1555,7 @@ async def test_status_text_during_delay():
         walk=types.SimpleNamespace(
             active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
+        commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1571,6 +1576,7 @@ async def test_status_text_cleared_on_cancel():
         walk=types.SimpleNamespace(
             active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
+        commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1589,6 +1595,7 @@ async def test_until_progress_tracks_elapsed():
         walk=types.SimpleNamespace(
             active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
+        commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
@@ -1613,6 +1620,7 @@ async def test_until_progress_cleared_on_timeout():
         walk=types.SimpleNamespace(
             active_command=None, active_command_time=0.0, randomwalk_active=False
         ),
+        commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))

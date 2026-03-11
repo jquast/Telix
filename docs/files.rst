@@ -39,5 +39,5 @@ of ``host:port``:
 - ``chat-<hash>.json`` - GMCP Comm.Channel.Text history
 - ``gmcp-<hash>.json`` - rolling GMCP data snapshot with per-package timestamps
 - ``prefs-<hash>.json`` - per-session runtime preferences
-- ``.current-room-<hash>`` - current room number (shared with TUI subprocesses)
-- ``.fasttravel-<hash>`` - queued fast-travel steps
+- ``.current-room-<hash>`` - current room number (read by the room browser)
+- ``.fasttravel-<hash>`` - queued fast-travel steps (written by the room browser, read by the REPL)

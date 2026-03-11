@@ -23,7 +23,7 @@ Architecture
 
 Telix is primarily a TUI interface for MUD scripting over Telnet. It also includes support for
 BBS, and the WebSocket and SSH protocol. Telix is mainly a TUI and automation/scripting layer
-above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_ ::
+above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_.
 
 wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.  wcwidth_ is used to
 measure the width of strings containing sequences and complex unicode. blessed_ is depended on for
@@ -365,4 +365,6 @@ the telnet reader's internal buffer and consumed by the first
 .. _rich: https://github.com/Textualize/rich
 .. _pytest: https://pytest.org
 .. _ruff: https://docs.astral.sh/ruff/
+.. _asyncssh: https://asyncssh.readthedocs.io/
+.. _websockets: https://websockets.readthedocs.io/
 .. _jinxed: https://github.com/rockhopper-Technologies/jinxed

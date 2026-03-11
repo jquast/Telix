@@ -4,7 +4,7 @@ Scripting
 
 Telix scripts are Python files that run asynchronously using the asyncio
 interface.  They are useful for logic that goes beyond the "find pattern and
-respond" capability of Triggers_: hunting loops, healing routines, mapping
+respond" capability of :ref:`user-manual:Triggers`: hunting loops, healing routines, mapping
 runs, or any sequence that depends on timing or server output.
 
 Quickstart
@@ -69,7 +69,7 @@ And receive them as optional arguments::
     async def hunt(ctx: ScriptContext, target: Optional[str] = None, room_id: Optional[str] = None) -> None:
         ...
 
-These can be used anywhere Commands_ are accepted:
+These can be used anywhere :doc:`commands` are accepted:
 
 - **REPL**: type `` `async module.func_name` `` at the prompt
 - **Trigger reply field**: set reply as `` `async module.func_name` ``
@@ -140,7 +140,7 @@ Send
     - A leading number repeats: ``3north`` will send ``north`` times
 
     Backtick directives like `` `async` `` and `` `until` `` are handled by the client, not sent to
-    the server.  See Commands_ for the full list of available backtick commands.
+    the server.  See :doc:`commands` for the full list of available backtick commands.
 
 Prompts
 ~~~~~~~
@@ -152,8 +152,8 @@ Prompts
 ``await ctx.prompts(n, timeout=30.0)``
     Wait for *n* prompts in a row.  Useful for pacing a sequence of commands.
 
-Output
-~~~~~~
+Server Output
+~~~~~~~~~~~~~
 
 ``ctx.output(clear=True)``
     Return everything the server has sent since the script started, as a single
@@ -164,6 +164,17 @@ Output
     Return the last *n* chunks of server output, split at each prompt.  Useful
     when you want to inspect the response to a specific command.
 
+Terminal output
+~~~~~~~~~~~~~~~
+
+``ctx.print(*args, sep=" ")``
+    Print a message to the terminal in cyan.  Works like Python's built-in ``print``: pass multiple
+    values and they are joined with *sep* and coerced to string.
+
+``ctx.log(msg)``
+    Write a message to the log file at INFO level.
+
+
 Pattern matching
 ~~~~~~~~~~~~~~~~
 
@@ -171,8 +182,8 @@ Pattern matching
     Wait for a line of server output matching *pattern* (a regular expression).
     Returns the match object when found, or ``None`` on timeout.
 
-Condition polling
-~~~~~~~~~~~~~~~~~
+Conditions
+~~~~~~~~~~
 
 ``await ctx.condition_met(key, op, threshold, poll_interval=0.25)``
     Wait until a numeric condition becomes true, checking every
@@ -184,9 +195,8 @@ Condition polling
     1. **Common vitals** -- ``"HP%"``, ``"MP%"``, ``"HP"``, ``"MP"`` are
        computed from ``Char.Vitals`` using a set of known field aliases
        (``hp``/``maxhp``, ``mana``/``maxmp``, etc.).
-    2. **Any GMCP percentage** -- append ``%`` to any field name and telix
-       searches every GMCP package for a matching ``Foo`` / ``MaxFoo`` pair
-       and computes the ratio.  Both fields must live in the same package
+    2. **Any GMCP percentage** -- append ``%`` to any field name performs a search for a matching
+       ``Foo`` / ``MaxFoo`` pair and computes the ratio.  Both fields must live in the same package
        dict::
 
            await ctx.condition_met("Water%", "<", 50)
@@ -196,16 +206,6 @@ Condition polling
        package dicts.
     4. **Highlight capture variable** -- any variable captured by a
        highlight rule, by name (or ``Name`` / ``MaxName`` for ``%``).
-
-Terminal output
-~~~~~~~~~~~~~~~
-
-``ctx.print(*args, sep=" ")``
-    Print a message to the terminal in cyan.  Works like Python's built-in
-    ``print``: pass multiple values and they are joined with *sep*.
-
-``ctx.log(msg)``
-    Write a message to the telix log file at INFO level.
 
 GMCP data
 ~~~~~~~~~
@@ -238,16 +238,15 @@ Room graph
     The number of the room you were in before the current one.
 
 ``ctx.room``
-    The current :class:`~telix.rooms.Room` object, or ``None`` if telix does
-    not yet know what room you are in.  The room object has:
+    The current :class:`~telix.rooms.Room` object, or ``None`` if
+    GMCP room data has been received.  The room object has:
 
     - ``room.name`` -- room name string
     - ``room.area`` -- area name string
     - ``room.exits`` -- ``{direction: room_num}`` dict of known exits
 
 ``ctx.room_graph``
-    The full :class:`~telix.rooms.RoomStore` -- all rooms telix has mapped for
-    this session.
+    The full :class:`~telix.rooms.RoomStore` -- *all* rooms mapped for this session.
 
 ``ctx.get_room(num)``
     Look up any room by its number.
@@ -304,6 +303,15 @@ Walk control
         async def scout(ctx: ScriptContext, *args: str) -> None:
             if ctx.walk_active:
                 ctx.stop_walk()
+
+Script control
+~~~~~~~~~~~~~~
+
+``ctx.running_scripts``
+    A list of the names of all currently running scripts, e.g.
+    ``["combat.hunt", "healer"]``.  The name is the first token
+    of the spec used to start the script.  The calling script's
+    own name is included in the list.
 
 Multi-condition waits
 ---------------------
@@ -402,11 +410,11 @@ Wait for a pattern then react::
 Room
 ----
 
-.. automodule:: telnetlib3.server_base
-   :members: Room
+.. autoclass:: telix.rooms.Room
+   :members:
 
 RoomStore
 ---------
 
-.. automodule:: telnetlib3.server_base
-   :members: RoomStore
+.. autoclass:: telix.rooms.RoomStore
+   :members:

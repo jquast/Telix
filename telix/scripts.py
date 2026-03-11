@@ -17,6 +17,7 @@ import shlex
 import typing
 import asyncio
 import logging
+import warnings
 import traceback
 import importlib
 import collections
@@ -53,6 +54,7 @@ class ScriptOutputBuffer:
         self._output_event: asyncio.Event = asyncio.Event()
         self._prompt_event: asyncio.Event = asyncio.Event()
         self._waiters: list[tuple[re.Pattern[str], asyncio.Future[re.Match[str] | None]]] = []
+        self._cursor: int = 0
         self.max_lines = max_lines
 
     def feed(self, text: str) -> None:
@@ -80,7 +82,9 @@ class ScriptOutputBuffer:
         self._lines.extend(new_lines)
         self._current_turn_lines.extend(new_lines)
         if len(self._lines) > self.max_lines:
+            excess = len(self._lines) - self.max_lines
             self._lines = self._lines[-self.max_lines :]
+            self._cursor = max(0, self._cursor - excess)
 
         self._output_event.set()
         self._resolve_waiters()
@@ -107,13 +111,14 @@ class ScriptOutputBuffer:
         """Check all pending pattern waiters against the current buffer."""
         if not self._waiters:
             return
-        text = self._full_text()
         remaining = []
         for pattern, fut in self._waiters:
             if fut.done():
                 continue
+            text = self._text_from_cursor()
             m = pattern.search(text)
             if m:
+                self._advance_cursor(text, m.end())
                 fut.set_result(m)
             else:
                 remaining.append((pattern, fut))
@@ -126,9 +131,34 @@ class ScriptOutputBuffer:
             text = text + "\n" + self._partial if text else self._partial
         return text
 
+    def _text_from_cursor(self) -> str:
+        """Return buffered text from the cursor (first unconsumed line) onward."""
+        lines = self._lines[self._cursor :]
+        text = "\n".join(lines)
+        if self._partial:
+            text = text + "\n" + self._partial if text else self._partial
+        return text
+
+    def _advance_cursor(self, text: str, match_end: int) -> None:
+        """Advance the cursor past the content consumed by a match.
+
+        :param text: The text that was searched (result of :meth:`_text_from_cursor`).
+        :param match_end: End position of the match within *text*.
+        """
+        lines_from_cursor = self._lines[self._cursor :]
+        committed_len = sum(len(l) for l in lines_from_cursor) + max(0, len(lines_from_cursor) - 1)
+        newlines = text[:match_end].count("\n")
+        if match_end <= committed_len:
+            self._cursor = min(self._cursor + newlines + 1, len(self._lines))
+        else:
+            self._cursor = min(self._cursor + len(lines_from_cursor), len(self._lines))
+
     async def wait_for_pattern(self, pattern: re.Pattern[str], timeout: float | None) -> "re.Match[str] | None":
         """
         Wait for *pattern* to appear in the buffer within *timeout* seconds.
+
+        Each call consumes the matched content so subsequent calls cannot re-match the same text.
+        If the pattern appears multiple times between prompts it will match once per call.
 
         :param pattern: Compiled regex pattern to search for.
         :param timeout: Maximum seconds to wait.
@@ -137,10 +167,11 @@ class ScriptOutputBuffer:
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[re.Match[str] | None] = loop.create_future()
 
-        text = self._full_text()
+        text = self._text_from_cursor()
         if text:
             m = pattern.search(text)
             if m:
+                self._advance_cursor(text, m.end())
                 return m
 
         self._waiters.append((pattern, fut))
@@ -189,6 +220,7 @@ class ScriptOutputBuffer:
             self._lines.clear()
             self._partial = ""
             self._current_turn_lines.clear()
+            self._cursor = 0
         return text
 
     def turns(self, n: int = 5) -> list[str]:
@@ -317,6 +349,7 @@ class ScriptContext:
             wait_fn=self._ctx.prompt.wait_fn,
             send_fn=self._send,
             echo_fn=self._ctx.prompt.echo,
+            on_send=self._ctx.commands.record,
             prompt_ready=self._ctx.prompt.ready,
             search_buffer=self._buf,
         )
@@ -518,6 +551,43 @@ class ScriptContext:
             if task is not None and not task.done():
                 task.cancel()
 
+    @property
+    def running_scripts(self) -> list[str]:
+        """Names of all currently running scripts."""
+        mgr = self._ctx.scripts.manager
+        if mgr is None:
+            return []
+        return mgr.active_scripts()
+
+    @property
+    def command_history(self) -> list[str]:
+        """Recently sent commands (oldest first, up to 200 entries)."""
+        return list(self._ctx.commands.history)
+
+    @property
+    def last_command(self) -> str | None:
+        """Most recently issued command, or ``None`` if none yet."""
+        h = self._ctx.commands.history
+        return h[-1] if h else None
+
+    async def command_issued(self, timeout: float | None = 30.0) -> str | None:
+        """
+        Wait until the next command is sent by any source.
+
+        Returns the command string, or ``None`` on timeout.
+
+        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
+        """
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[str] = loop.create_future()
+        self._ctx.commands.waiters.append(fut)
+        try:
+            return await asyncio.wait_for(fut, timeout=timeout)
+        except asyncio.TimeoutError:
+            if not fut.done():
+                fut.cancel()
+            return None
+
 
 class ScriptManager:
     """
@@ -619,6 +689,10 @@ class ScriptManager:
 
         task_key = token
 
+        existing = self._tasks.get(task_key)
+        if existing is not None and not existing.done() and not existing.cancelling():
+            raise ValueError(f"script {task_key!r} is already running")
+
         buf = ScriptOutputBuffer()
         script_log = logging.getLogger(f"telix.script.{task_key}")
         ctx = ScriptContext(session_ctx, buf, script_log)
@@ -640,8 +714,14 @@ class ScriptManager:
             raise ValueError(f"script {module_path!r} has no function {fn_name!r}")
 
         async def run_script() -> None:
+            def on_warning(message, category, filename, lineno, file=None, line=None):
+                ctx.print(f"{filename}:{lineno}: {category.__name__}: {message}")
+
             try:
-                await fn(ctx, *args)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always")
+                    warnings.showwarning = on_warning
+                    await fn(ctx, *args)
             except asyncio.CancelledError:
                 script_log.info("script %r cancelled", task_key)
                 raise
@@ -655,8 +735,9 @@ class ScriptManager:
         self._buffers[task_key] = buf
 
         def on_done(t: asyncio.Task[typing.Any]) -> None:
-            self._tasks.pop(task_key, None)
-            self._buffers.pop(task_key, None)
+            if self._tasks.get(task_key) is t:
+                self._tasks.pop(task_key, None)
+                self._buffers.pop(task_key, None)
             self._log.info("script %r finished", task_key)
 
         task.add_done_callback(on_done)

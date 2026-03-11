@@ -72,6 +72,7 @@ class DispatchHooks:
     wait_fn: Callable[[], Awaitable[None]] | None
     send_fn: Callable[[str], None]
     echo_fn: Callable[[str], None] | None
+    on_send: Callable[[str], None] | None = None
     on_status: Callable[[str], None] | None = None
     on_progress: Callable[[float, float], None] | None = None
     on_progress_clear: Callable[[], None] | None = None
@@ -378,6 +379,8 @@ async def dispatch_one(
     if hooks.on_status is not None:
         hooks.on_status("send: (masked)" if mask_send else f"send: {cmd}")
     hooks.send_fn(cmd)
+    if hooks.on_send is not None and not mask_send:
+        hooks.on_send(cmd)
     if hooks.echo_fn is not None:
         hooks.echo_fn(cmd)
     return StepResult.SENT
@@ -658,6 +661,7 @@ async def send_chained(
                 echo_fn(cmd)
             ctx.walk.active_command_time = time.monotonic()
             ctx.writer.write(cmd + "\r\n")
+            ctx.commands.record(cmd)
             ts = ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None and ctx.writer is not None and not ctx.writer.will_echo:
                 ts.write(cmd + "\r\n")
@@ -686,6 +690,7 @@ async def send_chained(
                 log.info("chained retry %d: %r", attempt, cmd)
             ctx.walk.active_command_time = time.monotonic()
             ctx.writer.write(cmd + "\r\n")
+            ctx.commands.record(cmd)
             ts = ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None and ctx.writer is not None and not ctx.writer.will_echo:
                 ts.write(cmd + "\r\n")
@@ -826,6 +831,7 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
         wait_fn=ctx.prompt.wait_fn,
         send_fn=lambda cmd: macro_send(ctx, log, cmd),
         echo_fn=ctx.prompt.echo,
+        on_send=ctx.commands.record,
         prompt_ready=ctx.prompt.ready,
         search_buffer=get_search_buffer(ctx),
     )

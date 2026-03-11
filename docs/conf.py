@@ -70,6 +70,8 @@ latex_documents = [
 
 man_pages = [("index", "telix", "Telix Documentation", ["Jeff Quast"], 1)]
 
+autosectionlabel_prefix_document = True
+
 autodoc_member_order = "bysource"
 
 intersphinx_mapping = {

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from telix import scripts
+from telix import scripts, session_context
 from telix.client_repl_commands import (
     ASYNC_CMD_RE,
     AWAIT_CMD_RE,
@@ -214,6 +214,58 @@ class TestScriptOutputBufferWaitForPattern:
         m = await buf.wait_for_pattern(pattern, timeout=0.05)
         assert m is None
 
+    @pytest.mark.asyncio
+    async def test_match_not_reused(self):
+        """Second wait_for does not re-match the already-consumed line."""
+        buf = scripts.ScriptOutputBuffer()
+        buf.feed("poison line\n")
+        pattern = re.compile(r"poison", re.IGNORECASE)
+        m1 = await buf.wait_for_pattern(pattern, timeout=1.0)
+        assert m1 is not None
+        m2 = await buf.wait_for_pattern(pattern, timeout=0.05)
+        assert m2 is None
+
+    @pytest.mark.asyncio
+    async def test_two_occurrences_matched_separately(self):
+        """Two occurrences of the pattern are consumed one at a time."""
+        buf = scripts.ScriptOutputBuffer()
+        buf.feed("poison\nother line\npoison\n")
+        pattern = re.compile(r"poison", re.IGNORECASE)
+        m1 = await buf.wait_for_pattern(pattern, timeout=1.0)
+        assert m1 is not None
+        m2 = await buf.wait_for_pattern(pattern, timeout=1.0)
+        assert m2 is not None
+        m3 = await buf.wait_for_pattern(pattern, timeout=0.05)
+        assert m3 is None
+
+    @pytest.mark.asyncio
+    async def test_new_occurrence_wakes_next_wait(self):
+        """A line arriving after consumption wakes the subsequent wait_for."""
+        buf = scripts.ScriptOutputBuffer()
+        buf.feed("poison\n")
+        pattern = re.compile(r"poison", re.IGNORECASE)
+        await buf.wait_for_pattern(pattern, timeout=1.0)
+
+        async def feeder():
+            await asyncio.sleep(0.05)
+            buf.feed("poison\n")
+
+        asyncio.ensure_future(feeder())
+        m = await buf.wait_for_pattern(pattern, timeout=1.0)
+        assert m is not None
+
+    @pytest.mark.asyncio
+    async def test_cursor_resets_on_output_clear(self):
+        """Clearing output via output(clear=True) resets the cursor."""
+        buf = scripts.ScriptOutputBuffer()
+        buf.feed("poison\n")
+        pattern = re.compile(r"poison", re.IGNORECASE)
+        await buf.wait_for_pattern(pattern, timeout=1.0)
+        buf.output(clear=True)
+        buf.feed("poison\n")
+        m = await buf.wait_for_pattern(pattern, timeout=1.0)
+        assert m is not None
+
 
 class TestScriptOutputBufferWaitForPrompt:
     """ScriptOutputBuffer.wait_for_prompt async prompt counting."""
@@ -257,6 +309,7 @@ def make_ctx():
     ctx.prompt.ready = None
     ctx.script_manager = None
     ctx.writer = MagicMock()
+    ctx.commands = session_context.CommandState()
     return ctx
 
 
@@ -477,6 +530,39 @@ class TestScriptManagerStartStop:
             with pytest.raises(ValueError, match="no function"):
                 mgr.start_script(session_ctx, "bare_mod.nonexistent")
 
+    @pytest.mark.asyncio
+    async def test_duplicate_start_raises(self):
+        mod = make_fake_module("run", "await asyncio.sleep(10)")
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+
+        with patch.dict(sys.modules, {"dup_script": mod}):
+            mgr.start_script(session_ctx, "dup_script")
+            with pytest.raises(ValueError, match="already running"):
+                mgr.start_script(session_ctx, "dup_script")
+
+        assert mgr.active_scripts().count("dup_script") == 1
+        mgr.stop_script(None)
+
+    @pytest.mark.asyncio
+    async def test_restart_after_stop_succeeds(self):
+        """Stopping then immediately restarting a script does not raise."""
+        mod = make_fake_module("run", "await asyncio.sleep(10)")
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+
+        with patch.dict(sys.modules, {"restart_script": mod}):
+            mgr.start_script(session_ctx, "restart_script")
+            mgr.stop_script("restart_script")
+            task2 = mgr.start_script(session_ctx, "restart_script")
+
+        assert isinstance(task2, asyncio.Task)
+        await asyncio.sleep(0.05)
+        assert "restart_script" in mgr.active_scripts()
+        mgr.stop_script(None)
+        await asyncio.sleep(0.05)
+        assert mgr.active_scripts() == []
+
 
 class TestScriptContextNewProperties:
     """ScriptContext new simple property accessors."""
@@ -642,6 +728,24 @@ class TestScriptContextWalk:
         ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
         ctx.stop_walk()
         task.cancel.assert_not_called()
+
+
+class TestScriptContextRunningScripts:
+    """ScriptContext.running_scripts."""
+
+    def test_no_manager_returns_empty(self):
+        session_ctx = make_ctx()
+        session_ctx.scripts.manager = None
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.running_scripts == []
+
+    def test_delegates_to_active_scripts(self):
+        session_ctx = make_ctx()
+        mgr = MagicMock()
+        mgr.active_scripts.return_value = ["combat.hunt", "healer"]
+        session_ctx.scripts.manager = mgr
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.running_scripts == ["combat.hunt", "healer"]
 
 
 def make_dispatch_hooks(mgr, echoed):
@@ -830,6 +934,76 @@ class TestScriptManagerExceptionReporting:
         await asyncio.sleep(0.1)
         assert task.done()
 
+    @pytest.mark.asyncio
+    async def test_unawaited_coroutine_warning_captured(self, capsys):
+        """RuntimeWarning from an unawaited coroutine is captured by ctx.print, not stderr."""
+        received = []
+
+        async def bad_script(ctx, *args):
+            async def internal_coro():
+                pass
+            internal_coro()  # deliberately unawaited
+
+        mod = types.ModuleType("warn_test_script")
+        mod.run = bad_script
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+        session_ctx.prompt.echo.side_effect = received.append
+
+        with patch.dict(sys.modules, {"warn_test_script": mod}):
+            mgr.start_script(session_ctx, "warn_test_script")
+
+        await asyncio.sleep(0.1)
+        captured = capsys.readouterr()
+        assert "RuntimeWarning" not in captured.err
+        assert any("RuntimeWarning" in msg for msg in received)
+
+    @pytest.mark.asyncio
+    async def test_unawaited_coroutine_shows_location(self, capsys):
+        """The captured warning includes the source location (file:line)."""
+        received = []
+
+        async def locatable_script(ctx, *args):
+            async def inner():
+                pass
+            inner()  # unawaited
+
+        mod = types.ModuleType("loc_warn_script")
+        mod.run = locatable_script
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+        session_ctx.prompt.echo.side_effect = received.append
+
+        with patch.dict(sys.modules, {"loc_warn_script": mod}):
+            mgr.start_script(session_ctx, "loc_warn_script")
+
+        await asyncio.sleep(0.1)
+        assert any(":" in msg and "RuntimeWarning" in msg for msg in received)
+
+    @pytest.mark.asyncio
+    async def test_normal_exception_still_reported_with_warnings_active(self):
+        """Exception traceback is still printed even when warnings are redirected."""
+        received = []
+
+        async def failing_with_warning(ctx, *args):
+            async def inner():
+                pass
+            inner()  # unawaited coroutine
+            raise ValueError("deliberate error")
+
+        mod = types.ModuleType("mixed_script")
+        mod.run = failing_with_warning
+        mgr = scripts.ScriptManager()
+        session_ctx = make_ctx()
+        session_ctx.prompt.echo.side_effect = received.append
+
+        with patch.dict(sys.modules, {"mixed_script": mod}):
+            mgr.start_script(session_ctx, "mixed_script")
+
+        await asyncio.sleep(0.1)
+        assert any("ValueError" in msg for msg in received)
+        assert any("deliberate error" in msg for msg in received)
+
 
 class TestScriptManagerFeed:
     """ScriptManager.feed and on_prompt fan out to buffers."""
@@ -875,3 +1049,125 @@ class TestScriptManagerFeed:
         mgr.on_prompt()
         await asyncio.sleep(0.1)
         assert prompted == [True]
+
+
+# ---------------------------------------------------------------------------
+# CommandState tests
+# ---------------------------------------------------------------------------
+
+
+class TestCommandState:
+    """session_context.CommandState history and waiter notification."""
+
+    def test_record_appends_to_history(self):
+        cs = session_context.CommandState()
+        cs.record("look")
+        assert list(cs.history) == ["look"]
+
+    def test_record_filters_blank(self):
+        cs = session_context.CommandState()
+        cs.record("   ")
+        assert list(cs.history) == []
+
+    @pytest.mark.asyncio
+    async def test_record_notifies_single_waiter(self):
+        cs = session_context.CommandState()
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        cs.waiters.append(fut)
+        cs.record("inventory")
+        assert await fut == "inventory"
+
+    @pytest.mark.asyncio
+    async def test_record_notifies_multiple_waiters(self):
+        cs = session_context.CommandState()
+        loop = asyncio.get_running_loop()
+        fut1 = loop.create_future()
+        fut2 = loop.create_future()
+        cs.waiters.extend([fut1, fut2])
+        cs.record("score")
+        assert await fut1 == "score"
+        assert await fut2 == "score"
+
+    @pytest.mark.asyncio
+    async def test_record_clears_waiters_after_notify(self):
+        cs = session_context.CommandState()
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        cs.waiters.append(fut)
+        cs.record("hp")
+        assert cs.waiters == []
+
+
+# ---------------------------------------------------------------------------
+# ScriptContext command_history / last_command / command_issued tests
+# ---------------------------------------------------------------------------
+
+
+class TestScriptContextCommandHistory:
+    """ScriptContext command_history and last_command properties."""
+
+    def test_history_empty_initially(self):
+        session_ctx = make_ctx()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.command_history == []
+
+    def test_last_command_none_initially(self):
+        session_ctx = make_ctx()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.last_command is None
+
+    def test_last_command_after_record(self):
+        session_ctx = make_ctx()
+        session_ctx.commands.record("look")
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.last_command == "look"
+
+    def test_command_history_after_records(self):
+        session_ctx = make_ctx()
+        session_ctx.commands.record("look")
+        session_ctx.commands.record("inventory")
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert ctx.command_history == ["look", "inventory"]
+
+
+class TestScriptContextCommandIssued:
+    """ScriptContext.command_issued async primitive."""
+
+    @pytest.mark.asyncio
+    async def test_command_issued_times_out(self):
+        session_ctx = make_ctx()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        result = await ctx.command_issued(timeout=0.05)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_command_issued_returns_command_from_record(self):
+        session_ctx = make_ctx()
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def trigger_cmd():
+            await asyncio.sleep(0.05)
+            session_ctx.commands.record("kill goblin")
+
+        asyncio.ensure_future(trigger_cmd())
+        result = await ctx.command_issued(timeout=1.0)
+        assert result == "kill goblin"
+
+    @pytest.mark.asyncio
+    async def test_command_issued_multiple_waiters_all_receive(self):
+        session_ctx = make_ctx()
+        ctx1 = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        ctx2 = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def trigger_cmd():
+            await asyncio.sleep(0.05)
+            session_ctx.commands.record("flee")
+
+        asyncio.ensure_future(trigger_cmd())
+        r1, r2 = await asyncio.gather(
+            ctx1.command_issued(timeout=1.0),
+            ctx2.command_issued(timeout=1.0),
+        )
+        assert r1 == "flee"
+        assert r2 == "flee"

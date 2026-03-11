@@ -3,6 +3,7 @@
 import typing
 import asyncio
 import argparse
+import collections
 import dataclasses
 from collections.abc import Callable, Awaitable
 
@@ -156,6 +157,27 @@ class PromptState:
 
 
 @dataclasses.dataclass
+class CommandState:
+    """Sent-command history and waiting infrastructure for scripts."""
+
+    history: collections.deque = dataclasses.field(
+        default_factory=lambda: collections.deque(maxlen=200)
+    )
+    waiters: list = dataclasses.field(default_factory=list)
+
+    def record(self, cmd: str) -> None:
+        """Record a sent command; update history and wake any waiting scripts."""
+        if not cmd.strip():
+            return
+        self.history.append(cmd)
+        pending = self.waiters
+        self.waiters = []
+        for fut in pending:
+            if not fut.done():
+                fut.set_result(cmd)
+
+
+@dataclasses.dataclass
 class ScriptState:
     """Scripting engine state."""
 
@@ -219,6 +241,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.repl = ReplState()
         self.prompt = PromptState()
         self.scripts = ScriptState()
+        self.commands = CommandState()
 
         # asyncio.Event must be created after init (needs a running loop in some cases)
         # but dataclass default_factory handles this fine for non-async contexts.

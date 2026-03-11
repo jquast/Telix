@@ -923,6 +923,7 @@ class TriggerEngine:
             wait_fn=self.wait_fn,
             send_fn=self.send_command,
             echo_fn=None,
+            on_send=self.ctx.commands.record,
             on_status=self.set_status,
             on_progress=self.set_progress,
             on_progress_clear=self.clear_progress,
