@@ -293,14 +293,21 @@ class RoomBrowserPane(textual.containers.Vertical):
 
     def load_rooms(self) -> None:
         """Load room data from SQLite database."""
-        graph = telix.rooms.RoomStore(self.rooms_path, read_only=True)
-        self.graph = graph
-        self.all_rooms = graph.room_summaries()
+        if self.graph is not None:
+            self.graph.close()
+        self.graph = telix.rooms.RoomStore(self.rooms_path, read_only=True)
+        self.all_rooms = self.graph.room_summaries()
         self.last_visited = {num: lv for num, _, _, _, _, lv, _, _, _ in self.all_rooms if lv}
         if self.current_room_file:
             current = telix.rooms.read_current_room(self.current_room_file)
             if current:
-                self.current_area = graph.room_area(current)
+                self.current_area = self.graph.room_area(current)
+
+    def on_unmount(self) -> None:
+        """Close the room store when the pane is removed."""
+        if self.graph is not None:
+            self.graph.close()
+            self.graph = None
 
     def populate_area_dropdown(self) -> None:
         """Populate the area dropdown from loaded rooms."""

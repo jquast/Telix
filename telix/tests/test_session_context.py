@@ -184,6 +184,28 @@ def test_close_stops_script_manager():
     assert ctx.scripts.manager is None
 
 
+def test_close_clears_typescript_file():
+    """close() sets typescript_file to None so post-close code does not write to a closed file."""
+    ctx = TelixSessionContext()
+    ctx.typescript_file = MagicMock()
+
+    with patch.object(ctx, "flush_timestamps"):
+        ctx.close()
+
+    assert ctx.typescript_file is None
+
+
+def test_close_clears_prompt_echo():
+    """close() clears prompt.echo so scripts fall back to logging after session ends."""
+    ctx = TelixSessionContext()
+    ctx.prompt.echo = MagicMock()
+
+    with patch.object(ctx, "flush_timestamps"):
+        ctx.close()
+
+    assert ctx.prompt.echo is None
+
+
 def test_flush_timestamps_sync():
     """flush_timestamps_sync clears save_timer and delegates to flush_timestamps."""
     ctx = TelixSessionContext()

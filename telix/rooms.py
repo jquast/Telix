@@ -38,7 +38,12 @@ def strip_exit_dirs(name: str) -> str:
 
 @dataclasses.dataclass
 class Room:
-    """A single room in the GMCP room graph."""
+    """
+    A single room in the GMCP room graph.
+
+    Accessible in scripts as ``ctx.room`` (current room) or via
+    :meth:`~telix.rooms.RoomStore.get_room`.
+    """
 
     num: str
     name: str = ""
@@ -54,7 +59,11 @@ class Room:
 
 
 class RoomStore:
-    """SQLite-backed room graph with in-memory adjacency cache."""
+    """
+    SQLite-backed room graph with in-memory adjacency cache.
+
+    Accessible in scripts as ``ctx.room_graph``.
+    """
 
     def __init__(self, db_path: str, read_only: bool = False, session_key: str = "") -> None:
         """

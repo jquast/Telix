@@ -164,6 +164,10 @@ class CommandState:
         default_factory=lambda: collections.deque(maxlen=200)
     )
     waiters: list = dataclasses.field(default_factory=list)
+    buf: collections.deque = dataclasses.field(
+        default_factory=lambda: collections.deque(maxlen=32)
+    )
+    ever_had_waiter: bool = False
 
     def record(self, cmd: str) -> None:
         """Record a sent command; update history and wake any waiting scripts."""
@@ -172,9 +176,12 @@ class CommandState:
         self.history.append(cmd)
         pending = self.waiters
         self.waiters = []
-        for fut in pending:
-            if not fut.done():
-                fut.set_result(cmd)
+        if pending:
+            for fut in pending:
+                if not fut.done():
+                    fut.set_result(cmd)
+        elif self.ever_had_waiter:
+            self.buf.append(cmd)
 
 
 @dataclasses.dataclass
@@ -342,3 +349,8 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             self.save_timer.cancel()
             self.save_timer = None
         self.flush_timestamps()
+        if self.room.graph is not None:
+            self.room.graph.close()
+            self.room.graph = None
+        self.typescript_file = None
+        self.prompt.echo = None

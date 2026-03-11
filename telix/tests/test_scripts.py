@@ -1098,6 +1098,33 @@ class TestCommandState:
         cs.record("hp")
         assert cs.waiters == []
 
+    def test_record_does_not_buffer_before_first_waiter(self):
+        cs = session_context.CommandState()
+        cs.record("pre_script")
+        assert list(cs.buf) == []
+
+    def test_record_buffers_when_no_waiters_after_first_waiter(self):
+        cs = session_context.CommandState()
+        cs.ever_had_waiter = True
+        cs.record("look")
+        assert list(cs.buf) == ["look"]
+
+    def test_record_does_not_buffer_when_waiter_present(self):
+        cs = session_context.CommandState()
+        cs.ever_had_waiter = True
+        fut = MagicMock()
+        fut.done.return_value = False
+        cs.waiters.append(fut)
+        cs.record("look")
+        assert list(cs.buf) == []
+
+    def test_record_buffers_multiple_commands_in_order(self):
+        cs = session_context.CommandState()
+        cs.ever_had_waiter = True
+        cs.record("north")
+        cs.record("kill goblin")
+        assert list(cs.buf) == ["north", "kill goblin"]
+
 
 # ---------------------------------------------------------------------------
 # ScriptContext command_history / last_command / command_issued tests
@@ -1171,3 +1198,37 @@ class TestScriptContextCommandIssued:
         )
         assert r1 == "flee"
         assert r2 == "flee"
+
+    @pytest.mark.asyncio
+    async def test_command_issued_ignores_commands_before_first_call(self):
+        """Commands recorded before command_issued is ever called are not returned."""
+        session_ctx = make_ctx()
+        session_ctx.commands.record("login_trigger")
+        session_ctx.commands.record("pre_script_l")
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+
+        async def later():
+            await asyncio.sleep(0.05)
+            session_ctx.commands.record("new_command")
+
+        asyncio.ensure_future(later())
+        result = await ctx.command_issued(timeout=1.0)
+        assert result == "new_command"
+
+    @pytest.mark.asyncio
+    async def test_command_issued_returns_buffered_command_immediately(self):
+        session_ctx = make_ctx()
+        session_ctx.commands.ever_had_waiter = True
+        session_ctx.commands.buf.append("buffered")
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        result = await ctx.command_issued(timeout=0.0)
+        assert result == "buffered"
+
+    @pytest.mark.asyncio
+    async def test_command_issued_drains_buffer_in_order(self):
+        session_ctx = make_ctx()
+        session_ctx.commands.ever_had_waiter = True
+        session_ctx.commands.buf.extend(["first", "second"])
+        ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
+        assert await ctx.command_issued(timeout=0.0) == "first"
+        assert await ctx.command_issued(timeout=0.0) == "second"

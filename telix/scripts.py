@@ -574,13 +574,20 @@ class ScriptContext:
         """
         Wait until the next command is sent by any source.
 
-        Returns the command string, or ``None`` on timeout.
+        Returns the command string, or ``None`` on timeout.  If a command was
+        issued while no waiter was registered (e.g. during the event-loop gap
+        between one call completing and the next being set up), it is buffered
+        and returned immediately by the next call.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
         """
+        cs = self._ctx.commands
+        cs.ever_had_waiter = True
+        if cs.buf:
+            return cs.buf.popleft()
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[str] = loop.create_future()
-        self._ctx.commands.waiters.append(fut)
+        cs.waiters.append(fut)
         try:
             return await asyncio.wait_for(fut, timeout=timeout)
         except asyncio.TimeoutError:

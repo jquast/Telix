@@ -1154,21 +1154,19 @@ class ReplSession:
             return STYLE_TRIGGER["bg_sgr"]
         return STYLE_NORMAL["bg_sgr"]
 
-    HELP_HINT = "press F1 for help"
-
     def activity_hint(self) -> str:
         """Build a short status string for the current activity."""
         return activity_hint(self.trigger_engine, self.blessed_term.width)
 
     def hint_text(self) -> str:
-        """Return the current hint string (activity or help)."""
+        """Return the current hint string (activity or tab completion)."""
         ar = self.is_trigger_bg
-        hint = self.activity_hint() if ar else self.HELP_HINT
+        hint = self.activity_hint() if ar else ""
         n = self.ctx.mslp_collector.count
         if n > 0 and not ar:
             tab_hint = f"TAB to cycle {n} commands"
             hint = f"{hint} - {tab_hint}" if hint else tab_hint
-        return hint if hint else self.HELP_HINT
+        return hint
 
     def input_width(self) -> int:
         """Return editor width, reserving space for the right-aligned hint."""

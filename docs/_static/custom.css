@@ -11,3 +11,19 @@ div.body {
 div.sphinxsidebar {
     background-color: #efe9de;
 }
+
+@media screen and (max-width: 940px) {
+    div.sphinxsidebar {
+        background: #efe9de;
+        color: #333;
+    }
+
+    div.sphinxsidebar h3, div.sphinxsidebar h4, div.sphinxsidebar p,
+    div.sphinxsidebar h3 a {
+        color: #333;
+    }
+
+    div.sphinxsidebar a {
+        color: #444;
+    }
+}
