@@ -8,9 +8,6 @@ Telix
 
    intro
    session-manager
-   commands
-   scripting
-   scripting-api
    keybindings
    macros
    triggers
@@ -19,6 +16,9 @@ Telix
    progressbars
    files
    protocols
+   commands
+   scripting
+   scripting-api
    contributing
    history
 
