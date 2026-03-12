@@ -1,7 +1,7 @@
 """Tests for telix.paths -- XDG directory resolution and atomic write helpers."""
 
-import json
 import os
+import json
 
 import pytest
 
@@ -78,7 +78,6 @@ def test_atomic_write_happy_path(tmp_path):
 
 def test_atomic_write_error_cleans_temp(tmp_path, monkeypatch):
     filepath = str(tmp_path / "test.txt")
-    original_replace = os.replace
 
     def failing_replace(src, dst):
         raise OSError("disk full")

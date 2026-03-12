@@ -509,7 +509,7 @@ def test_trigger_screen_save(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    "entry_extra,field_idx,expected", [({"when": {"HP%": ">50"}}, 4, {"HP%": ">50"}), ({"immediate": True}, 5, True)]
+    "entry_extra,field_idx,expected", [({"when": {"hp%": ">50"}}, 4, {"hp%": ">50"}), ({"immediate": True}, 5, True)]
 )
 def test_trigger_screen_loads_field(tmp_path, entry_extra, field_idx, expected) -> None:
     sk = "test.host:23"
@@ -524,7 +524,7 @@ def test_trigger_screen_loads_field(tmp_path, entry_extra, field_idx, expected) 
 @pytest.mark.parametrize(
     "rule_kwargs,json_key,expected,absent",
     [
-        ({"when": {"MP%": ">=30"}}, "when", {"MP%": ">=30"}, False),
+        ({"when": {"mp%": ">=30"}}, "when", {"mp%": ">=30"}, False),
         ({"immediate": True}, "immediate", True, False),
         ({}, "immediate", None, True),
     ],
@@ -803,7 +803,7 @@ def test_autodiscover_dialog_noreply(tmp_path: Any) -> None:
 
 
 def test_autodiscover_dialog_noreply_with_room_change_cmd(tmp_path: Any) -> None:
-    """noreply precedes roomcmd in the autodiscover command string."""
+    """Noreply precedes roomcmd in the autodiscover command string."""
     result_file = str(tmp_path / "result.json")
     screen = AutodiscoverDialogScreen(result_file=result_file, default_strategy="bfs")
     screen.write_result(True, "bfs", room_change_cmd="search", triggers=False)

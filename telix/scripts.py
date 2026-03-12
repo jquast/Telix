@@ -18,8 +18,8 @@ import typing
 import asyncio
 import logging
 import warnings
-import traceback
 import importlib
+import traceback
 import collections
 from typing import TYPE_CHECKING
 
@@ -140,13 +140,14 @@ class ScriptOutputBuffer:
         return text
 
     def _advance_cursor(self, text: str, match_end: int) -> None:
-        """Advance the cursor past the content consumed by a match.
+        """
+        Advance the cursor past the content consumed by a match.
 
         :param text: The text that was searched (result of :meth:`_text_from_cursor`).
         :param match_end: End position of the match within *text*.
         """
         lines_from_cursor = self._lines[self._cursor :]
-        committed_len = sum(len(l) for l in lines_from_cursor) + max(0, len(lines_from_cursor) - 1)
+        committed_len = sum(len(ln) for ln in lines_from_cursor) + max(0, len(lines_from_cursor) - 1)
         newlines = text[:match_end].count("\n")
         if match_end <= committed_len:
             self._cursor = min(self._cursor + newlines + 1, len(self._lines))
@@ -331,7 +332,8 @@ class ScriptContext:
         return node
 
     def _gmcp_search_field(self, field: str) -> tuple[typing.Any, dict[str, typing.Any] | None]:
-        """Search all GMCP package dicts for *field*.
+        """
+        Search all GMCP package dicts for *field*.
 
         :returns: ``(value, package_dict)`` or ``(None, None)`` if not found.
         """
@@ -487,9 +489,7 @@ class ScriptContext:
         compiled = re.compile(pattern, re.IGNORECASE | re.MULTILINE | re.DOTALL)
         return await self._buf.wait_for_pattern(compiled, timeout)
 
-    async def _wait_for_condition(
-        self, cond: dict[str, str], timeout: float | None,
-    ) -> bool:
+    async def _wait_for_condition(self, cond: dict[str, str], timeout: float | None) -> bool:
         """Wait until *cond* is satisfied, re-evaluating on each GMCP update."""
         from . import trigger as ar_mod
 
@@ -510,44 +510,43 @@ class ScriptContext:
             except asyncio.TimeoutError:
                 return False
 
-    async def condition_met(
-        self, key: str, op: str, threshold: int, timeout: float | None = None,
-    ) -> bool:
+    async def condition_met(self, key: str, op: str, threshold: int | str, timeout: float | None = None) -> bool:
         """
         Wait until a GMCP/capture condition becomes true.
 
         Re-evaluates immediately on every GMCP update rather than polling.
 
-        :param key: Condition key (e.g. ``"HP%"``).
-        :param op: Comparison operator (``">"``, ``"<"``, ``">="`` etc.).
-        :param threshold: Numeric threshold.
+        :param key: Condition key (e.g. ``"hp%"``, ``"Mode"``).
+        :param op: Comparison operator: ``">"``, ``"<"``, ``">="``, ``"<="``,
+            ``"="``, ``"!="``.
+        :param threshold: Numeric or string threshold.
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
         :returns: ``True`` when condition is met, ``False`` on timeout.
         """
         return await self._wait_for_condition({key: f"{op}{threshold}"}, timeout)
 
     async def conditions_met(
-        self,
-        *conditions: tuple[str, str, int],
-        timeout: float | None = None,
+        self, *conditions: tuple[str, str, int | str] | list[tuple[str, str, int | str]], timeout: float | None = None
     ) -> bool:
         """
         Wait until all conditions are true simultaneously.
 
-        Each condition is a ``(key, op, threshold)`` tuple, using the same
-        syntax as :meth:`condition_met`::
+        Each condition is a ``(key, op, threshold)`` tuple.  Tuples may be
+        passed as separate arguments or as a single list::
 
-            await ctx.conditions_met(
-                ("Water%", ">", 0),
-                ("HP%", "<", 100),
-                timeout=30.0,
-            )
+            await ctx.conditions_met(("Mode", "!=", "Rage"), ("Adrenaline%", ">", 0))
+            await ctx.conditions_met([("Mode", "!=", "Rage"), ("Adrenaline%", ">", 0)])
 
-        :param conditions: Variable number of ``(key, op, threshold)`` tuples.
+        :param conditions: ``(key, op, threshold)`` tuples, or a single list of them.
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
         :returns: ``True`` when all conditions are met at the same time, ``False`` on timeout.
         """
-        cond = {key: f"{op}{threshold}" for key, op, threshold in conditions}
+        items: typing.Sequence[tuple[str, str, int | str]]
+        if len(conditions) == 1 and isinstance(conditions[0], list):
+            items = conditions[0]
+        else:
+            items = typing.cast(typing.Sequence[tuple[str, str, int | str]], conditions)
+        cond = {key: f"{op}{threshold}" for key, op, threshold in items}
         return await self._wait_for_condition(cond, timeout)
 
     def print(self, *args: typing.Any, sep: str = " ") -> None:
@@ -568,13 +567,37 @@ class ScriptContext:
         else:
             self._log.info("script print: %s", text)
 
-    def log(self, msg: str) -> None:
+    def debug(self, msg: str) -> None:
+        """
+        Write *msg* to the telix log at DEBUG level.
+
+        :param msg: Message text.
+        """
+        self._log.debug("script: %s", msg)
+
+    def info(self, msg: str) -> None:
         """
         Write *msg* to the telix log at INFO level.
 
         :param msg: Message text.
         """
         self._log.info("script: %s", msg)
+
+    def warn(self, msg: str) -> None:
+        """
+        Write *msg* to the telix log at WARNING level.
+
+        :param msg: Message text.
+        """
+        self._log.warning("script: %s", msg)
+
+    def error(self, msg: str) -> None:
+        """
+        Write *msg* to the telix log at ERROR level.
+
+        :param msg: Message text.
+        """
+        self._log.error("script: %s", msg)
 
     @property
     def session_key(self) -> str:
@@ -588,7 +611,8 @@ class ScriptContext:
 
     @property
     def capture_log(self) -> dict[str, list[dict[str, typing.Any]]]:
-        """Full capture event history: ``{variable: [{value, time, ...}, ...]}``.
+        """
+        Full capture event history: ``{variable: [{value, time, ...}, ...]}``.
 
         Unlike :attr:`captures` (which holds only the current value), this dict
         accumulates every capture event so scripts can track trends over time.
@@ -654,10 +678,7 @@ class ScriptContext:
     def walk_active(self) -> bool:
         """``True`` if any automated walk (autodiscover, randomwalk, travel) is running."""
         w = self._ctx.walk
-        return any(
-            t is not None and not t.done()
-            for t in (w.discover_task, w.randomwalk_task, w.travel_task)
-        )
+        return any(t is not None and not t.done() for t in (w.discover_task, w.randomwalk_task, w.travel_task))
 
     def stop_walk(self) -> None:
         """Cancel all active automated walk tasks (autodiscover, randomwalk, travel)."""
@@ -672,7 +693,7 @@ class ScriptContext:
         mgr = self._ctx.scripts.manager
         if mgr is None:
             return []
-        return mgr.active_scripts()
+        return list(mgr.active_scripts())
 
     @property
     def command_history(self) -> list[str]:
@@ -812,7 +833,7 @@ class ScriptManager:
         task_key = token
 
         existing = self._tasks.get(task_key)
-        if existing is not None and not existing.done() and not existing.cancelling():
+        if existing is not None and not existing.done() and not getattr(existing, "_must_cancel", False):
             raise ValueError(f"script {task_key!r} is already running")
 
         buf = ScriptOutputBuffer()
@@ -836,7 +857,14 @@ class ScriptManager:
             raise ValueError(f"script {module_path!r} has no function {fn_name!r}")
 
         async def run_script() -> None:
-            def on_warning(message, category, filename, lineno, file=None, line=None):
+            def on_warning(
+                message: typing.Any,
+                category: type[Warning],
+                filename: str,
+                lineno: int,
+                file: typing.Any = None,
+                line: typing.Any = None,
+            ) -> None:
                 ctx.print(f"{filename}:{lineno}: {category.__name__}: {message}")
 
             try:

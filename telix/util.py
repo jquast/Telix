@@ -9,19 +9,19 @@ import datetime
 
 from . import paths
 
-
 ANSI_ESC_RE = re.compile(r"\x1b\[[^@-~]*[@-~]|\x1b.")
 
 
 def erase_eol(text: str) -> str:
-    """Insert ``\\x1b[K`` (erase to EOL) before ``\\r+\\n`` on lines with visible content.
+    r"""
+    Insert ``\x1b[K`` (erase to EOL) before ``\r+\n`` on lines with visible content.
 
     Inserts an erase-to-EOL sequence immediately before each carriage-return +
     line-feed group, but only when the segment since the previous line ending
     contains at least one printable (non-escape-sequence) character.
 
     Lines that contain only cursor-positioning or attribute sequences (e.g.
-    ``\\x1b[2H\\x1b[...m\\r\\n``) are left unchanged so that absolute cursor
+    ``\x1b[2H\x1b[...m\r\n``) are left unchanged so that absolute cursor
     moves do not cause the destination row to be erased.
 
     :param text: Decoded server text, possibly containing ANSI escape sequences.

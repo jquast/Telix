@@ -367,9 +367,7 @@ def test_dispatch_repl_action_calls_edit():
 
 def test_dispatch_repl_action_calls_toggle():
     called = []
-    ctx = types.SimpleNamespace(
-        repl=types.SimpleNamespace(actions={"toggle_highlights": lambda: called.append("th")})
-    )
+    ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"toggle_highlights": lambda: called.append("th")}))
     log = logging.getLogger("test")
     assert _dispatch_repl_action("`toggle highlights`", ctx, log) is True
     assert called == ["th"]

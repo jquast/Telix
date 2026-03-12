@@ -28,7 +28,7 @@ ESC_MAP = {";": "\x00ES\x00", "|": "\x00EP\x00", "`": "\x00EB\x00", "\\": "\x00E
 ESC_RESTORE = {v: k for k, v in ESC_MAP.items()}
 
 DELAY_RE = re.compile(r"^`delay\s+(\d+(?:\.\d+)?)(ms|s)`$")
-WHEN_RE = re.compile(r"^`when\s+(\w+%?)\s*(>=|<=|>|<|=)\s*(\d+)`$", re.IGNORECASE)
+WHEN_RE = re.compile(r"^`when\s+([\w.]+%?)\s*(!=|>=|<=|>|<|=)\s*(.+?)`$", re.IGNORECASE)
 UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 

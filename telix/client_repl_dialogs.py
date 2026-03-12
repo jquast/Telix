@@ -212,10 +212,7 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
     _prepare_terminal()
     _run_in_thread(
         lambda: client_tui_dialogs.run_randomwalk_dialog(
-            result_path,
-            default_visit_level,
-            default_room_change_cmd,
-            default_triggers,
+            result_path, default_visit_level, default_room_change_cmd, default_triggers
         ),
         replay_buf=replay_buf,
     )
@@ -273,10 +270,7 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
     _prepare_terminal()
     _run_in_thread(
         lambda: client_tui_dialogs.run_autodiscover_dialog(
-            result_path,
-            default_strategy,
-            default_room_change_cmd,
-            default_triggers,
+            result_path, default_strategy, default_room_change_cmd, default_triggers
         ),
         replay_buf=replay_buf,
     )

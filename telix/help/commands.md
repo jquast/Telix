@@ -41,24 +41,22 @@ Pause execution for a duration.
 
 ### When (Condition Gate)
 
-Stop the command chain unless a condition is met.  Conditions check
-GMCP vitals first, then fall back to **captured variables** from
-highlight rules.
+Stop the command chain unless a condition is met.  The key is the
+actual GMCP field name (case-sensitive) and is searched across all
+GMCP packages.  Falls back to **captured variables** from highlight
+rules if not found in GMCP data.
 
-Use **`HP%`** / **`MP%`** for GMCP vital percentages, **`HP`** / **`MP`**
-for raw GMCP values, or any captured variable name (e.g.
-**`Adrenaline`**, **`Adrenaline%`**).
-
-For percentage conditions on captured variables, the engine looks up
-`VariableName` (current) and `MaxVariableName` (max) and computes
-the percentage.
+Append ``%`` to compute a percentage from the field and its ``Max``
+counterpart.  Operators: ``>``, ``<``, ``>=``, ``<=``, ``=``, ``!=``.
+String comparisons work with ``=`` and ``!=``.
 
 | Example | Effect |
 |---------|--------|
-| `` `when HP%>=80` `` | Continue only if HP is at least 80% of max |
-| `` `when MP%>50` `` | Continue only if MP is above 50% of max |
-| `` `when HP>=500` `` | Continue only if HP is at least 500 |
-| `` `when MP>200` `` | Continue only if MP is above 200 |
+| `` `when hp%>=80` `` | Continue only if hp is at least 80% of maxhp |
+| `` `when mp%>50` `` | Continue only if mp is above 50% of maxmp |
+| `` `when hp>=500` `` | Continue only if hp is at least 500 |
+| `` `when mp>200` `` | Continue only if mp is above 200 |
+| `` `when Mode!=Rage` `` | Continue only if Mode is not Rage |
 | `` `when Adrenaline>100` `` | Continue only if captured Adrenaline > 100 |
 | `` `when Adrenaline%>50` `` | Continue only if Adrenaline/MaxAdrenaline > 50% |
 

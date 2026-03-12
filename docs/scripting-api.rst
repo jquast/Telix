@@ -58,8 +58,17 @@ Terminal output
     Print a message to the terminal in cyan.  Works like Python's built-in ``print``: pass multiple
     values and they are joined with *sep* and coerced to string.
 
-``ctx.log(msg)``
+``ctx.debug(msg)``
+    Write a message to the log file at DEBUG level.
+
+``ctx.info(msg)``
     Write a message to the log file at INFO level.
+
+``ctx.warn(msg)``
+    Write a message to the log file at WARNING level.
+
+``ctx.error(msg)``
+    Write a message to the log file at ERROR level.
 
 
 Pattern matching
@@ -73,31 +82,27 @@ Conditions
 ~~~~~~~~~~
 
 ``await ctx.condition_met(key, op, threshold, timeout=None)``
-    Wait until a numeric condition becomes true.  Returns ``True`` when the
-    condition is met, ``False`` on timeout.  *op* is one of ``">"``, ``"<"``,
-    ``">="``, ``"<="``, ``"="``.
+    Wait until a condition becomes true.  Returns ``True`` when the condition
+    is met, ``False`` on timeout.
 
-    *key* resolves in this order:
+    *op* is one of ``">"``, ``"<"``, ``">="``, ``"<="``, ``"="``, ``"!="``.
+    *threshold* may be an int or a string.
 
-    1. **Common vitals** -- ``"HP%"``, ``"MP%"``, ``"HP"``, ``"MP"`` are
-       computed from ``Char.Vitals`` using a set of known field aliases
-       (``hp``/``maxhp``, ``mana``/``maxmp``, etc.).
-    2. **Any GMCP percentage** -- append ``%`` to any field name performs a search for a matching
-       ``Foo`` / ``MaxFoo`` pair and computes the ratio.  Both fields must live in the same package
-       dict::
+    *key* uses the actual GMCP field name (case-sensitive).  A bare name
+    searches across all GMCP packages; a dotted path resolves directly.
+    Append ``%`` to compute a percentage from the field and its ``Max``
+    counterpart::
 
-           await ctx.condition_met("Water%", "<", 50)
-           # works if Char.Guild.Stats contains both "Water" and "MaxWater"
-
-    3. **Any GMCP raw value** -- the bare field name is searched across all
-       package dicts.
-    4. **Highlight capture variable** -- any variable captured by a
-       highlight rule, by name (or ``Name`` / ``MaxName`` for ``%``).
-
-    *key* may also be a fully-qualified dotted path, which bypasses the search
-    and resolves directly::
-
+        await ctx.condition_met("hp%", "<", 50)
+        await ctx.condition_met("Water%", ">", 0)
         await ctx.condition_met("Char.Guild.Stats.Water%", "<", 50)
+
+    String comparisons work with ``=`` and ``!=``::
+
+        await ctx.condition_met("Mode", "!=", "Rage")
+
+    If the key is not found in GMCP data, it falls back to highlight capture
+    variables.
 
 ``await ctx.conditions_met(*conditions, timeout=None)``
     Wait until multiple conditions are all true **at the same time**.  Each
@@ -106,8 +111,8 @@ Conditions
     on timeout::
 
         await ctx.conditions_met(
-            ("Water%", ">", 0),
-            ("HP%", "<", 100),
+            ("Mode", "!=", "Rage"),
+            ("Adrenaline%", ">", 0),
             timeout=30.0,
         )
 

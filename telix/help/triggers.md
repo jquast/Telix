@@ -46,7 +46,7 @@ the first match wins unless a rule is marked **Always**.
 - **Pattern** -- Python regex (case-insensitive by default, DOTALL,
   MULTILINE); use capture groups `(...)` for backreferences
 - **Reply** -- command sequence; use `\1`, `\2` for captured groups
-- **Condition** -- optional vital gate (e.g. HP% >= 80); the rule only
+- **Condition** -- optional gate (e.g. hp% >= 80); the rule only
   fires when the condition is met
 
 ### Pattern Syntax (Python Regex)
@@ -75,20 +75,22 @@ Patterns use Python's `re` module with flags `MULTILINE | DOTALL`
 ### Condition Gate
 
 The optional **Condition** field adds a gate: the rule only fires
-when the condition is satisfied.  Conditions check GMCP vitals first,
-then fall back to **captured variables** from highlight rules.
+when the condition is satisfied.  The key is the actual GMCP field name
+(case-sensitive) and is searched across all GMCP packages.  Falls back
+to **captured variables** from highlight rules if not found in GMCP data.
 
-Use **HP%** / **MP%** for GMCP vital percentages, **HP** / **MP** for
-raw GMCP values, or any captured variable name (e.g. **Adrenaline**,
-**Adrenaline%**).
+Append **%** to compute a percentage from the field and its **Max**
+counterpart.  Operators: ``>``, ``<``, ``>=``, ``<=``, ``=``, ``!=``.
+String comparisons work with ``=`` and ``!=``.
 
 | Condition | Meaning |
 |-----------|---------|
-| HP% >= 80 | Only fire when HP is at least 80% of max |
-| MP% > 50 | Only fire when MP is above 50% of max |
-| HP% = 100 | Only fire when HP is exactly full |
-| HP >= 500 | Only fire when HP is at least 500 |
-| MP > 200 | Only fire when MP is above 200 |
+| hp% >= 80 | Only fire when hp is at least 80% of maxhp |
+| mp% > 50 | Only fire when mp is above 50% of maxmp |
+| hp% = 100 | Only fire when hp is exactly full |
+| hp >= 500 | Only fire when hp is at least 500 |
+| mp > 200 | Only fire when mp is above 200 |
+| Mode != Rage | Only fire when Mode is not Rage |
 | Adrenaline > 100 | Only fire when captured Adrenaline is above 100 |
 | Adrenaline% > 50 | Only fire when Adrenaline/MaxAdrenaline is above 50% |
 
@@ -99,9 +101,9 @@ raw GMCP values, or any captured variable name (e.g. **Adrenaline**,
 | `(\w+) attacks you` | `kill \1` | Auto-attack using capture group |
 | `^Corpse of` | `degland corpse;distill corpse;get solaris from corpse` | Auto-loot corpses (Always) |
 | `Corpse contains:.*(\d+ solaris)` | `get all solaris from corpse` | Grab currency from corpses (Always) |
-| `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation (When: HP% > 50) |
-| `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome (When: HP% > 50) |
-| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy -- long timeout (When: HP% > 99) |
+| `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation (When: hp% > 50) |
+| `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome (When: hp% > 50) |
+| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy -- long timeout (When: hp% > 99) |
 | `Please enter your ship.` | `enter ship` | Board shuttle (Immediate) |
 | `(^You catch\|^You fail to catch)` | `bait hook;fish with rod` | Auto-fishing loop |
 | `Try searching\\.` | `search;gl` | Auto-search when prompted |

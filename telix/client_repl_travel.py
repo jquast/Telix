@@ -1040,7 +1040,7 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                 arg_parts = arg.split()
                 roomcmd_idx = next((i for i, p in enumerate(arg_parts) if p.lower() == "roomcmd"), -1)
                 if roomcmd_idx >= 0:
-                    room_change_cmd = " ".join(arg_parts[roomcmd_idx + 1:])
+                    room_change_cmd = " ".join(arg_parts[roomcmd_idx + 1 :])
                     arg_parts = arg_parts[:roomcmd_idx]
                 numeric_idx = 0
                 for ap in arg_parts:

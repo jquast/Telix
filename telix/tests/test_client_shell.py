@@ -18,8 +18,8 @@ from telix.client_shell import (
     want_repl,
     load_configs,
     ws_client_shell,
-    ssh_client_shell,
     _setup_ansi_keys,
+    ssh_client_shell,
     build_session_key,
     telix_client_shell,
     _setup_color_filter,
@@ -643,9 +643,7 @@ class TestSshClientShellNoLocalEcho:
 
         monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
         monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
-        monkeypatch.setattr(
-            "telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json")
-        )
+        monkeypatch.setattr("telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json"))
         monkeypatch.setattr(
             "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
         )

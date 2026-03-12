@@ -523,7 +523,7 @@ class EditListPane(textual.containers.Vertical):
         self.app.push_screen(RoomPickerScreen(**kwargs), callback=do_pick)
 
     COMMAND_BUTTONS: typing.ClassVar[dict[str, str]] = {
-        "btn-when": "`when HP%>=99`",
+        "btn-when": "`when hp%>=99`",
         "btn-until": "`until 10 pattern`",
         "btn-delay": "`delay 1s`",
         "delay": "`delay 1s`",

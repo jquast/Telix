@@ -12,6 +12,8 @@ import logging
 # 3rd party
 import pytest
 
+from telix import session_context
+
 # local
 from telix.trigger import (
     TriggerRule,
@@ -27,7 +29,6 @@ from telix.trigger import (
     resolve_group_value,
     extract_group_source,
 )
-from telix import session_context
 
 
 def test_search_buffer_add_text_strips_ansi():
@@ -324,11 +325,7 @@ def mock_writer():
     ctx = types.SimpleNamespace(
         writer=writer,
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None,
-            active_command_time=0.0,
-            randomwalk_active=False,
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     ctx.log = logging.getLogger("test")
@@ -672,7 +669,7 @@ async def test_all_rules_exclusive_only_first_fires():
             [{"pattern": "a", "reply": "b;", "enabled": False}, {"pattern": "c", "reply": "d;"}],
             [(0, "enabled", False), (1, "enabled", True)],
         ),
-        ([{"pattern": "bear", "reply": "kill bear;", "when": {"HP%": ">50"}}], [(0, "when", {"HP%": ">50"})]),
+        ([{"pattern": "bear", "reply": "kill bear;", "when": {"hp%": ">50"}}], [(0, "when", {"hp%": ">50"})]),
         ([{"pattern": "bear", "reply": "kill bear;"}], [(0, "when", {})]),
     ],
 )
@@ -1030,11 +1027,7 @@ def mock_writer_with_vitals(hp: int, maxhp: int, mp: int, maxmp: int):
     ctx = types.SimpleNamespace(
         writer=writer,
         log=logging.getLogger("test"),
-        walk=types.SimpleNamespace(
-            active_command=None,
-            active_command_time=0.0,
-            randomwalk_active=False,
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         gmcp_data={"Char.Vitals": {"hp": str(hp), "maxhp": str(maxhp), "mp": str(mp), "maxmp": str(maxmp)}},
         captures={},
         commands=session_context.CommandState(),
@@ -1143,29 +1136,30 @@ def test_check_condition_gmcp_arbitrary_key(when, gmcp_data, ok):
 @pytest.mark.parametrize(
     "when, gmcp_data, ok",
     [
-        (
-            {"Char.Guild.Stats.Water": ">50"},
-            {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}},
-            True,
-        ),
-        (
-            {"Char.Guild.Stats.Water": ">100"},
-            {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}},
-            False,
-        ),
-        (
-            {"Char.Guild.Stats.Water%": ">30"},
-            {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}},
-            True,
-        ),
-        (
-            {"Char.Guild.Stats.Water%": ">50"},
-            {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}},
-            False,
-        ),
+        ({"Char.Guild.Stats.Water": ">50"}, {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}}, True),
+        ({"Char.Guild.Stats.Water": ">100"}, {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}}, False),
+        ({"Char.Guild.Stats.Water%": ">30"}, {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}}, True),
+        ({"Char.Guild.Stats.Water%": ">50"}, {"Char.Guild.Stats": {"Water": 80, "MaxWater": 200}}, False),
     ],
 )
 def test_check_condition_dotted_path(when, gmcp_data, ok):
+    ctx = types.SimpleNamespace(gmcp_data=gmcp_data, captures={})
+    result, _ = check_condition(when, ctx)
+    assert result is ok
+
+
+@pytest.mark.parametrize(
+    "when, gmcp_data, ok",
+    [
+        ({"Mode": "=Rage"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, True),
+        ({"Mode": "=Calm"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, False),
+        ({"Mode": "!=Rage"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, False),
+        ({"Mode": "!=Calm"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, True),
+        ({"Char.Guild.Stats.Mode": "!=Rage"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, False),
+        ({"Char.Guild.Stats.Mode": "=Rage"}, {"Char.Guild.Stats": {"Mode": "Rage"}}, True),
+    ],
+)
+def test_check_condition_string_compare(when, gmcp_data, ok):
     ctx = types.SimpleNamespace(gmcp_data=gmcp_data, captures={})
     result, _ = check_condition(when, ctx)
     assert result is ok
@@ -1400,9 +1394,7 @@ async def test_trigger_engine_stamps_last_fired():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
     )
     rule = TriggerRule(pattern=re.compile("hello"), reply="world;")
     engine = TriggerEngine(rules=[rule], ctx=ctx, log=logging.getLogger("test"))
@@ -1413,7 +1405,7 @@ async def test_trigger_engine_stamps_last_fired():
 @pytest.mark.asyncio
 async def test_inline_when_passes_fires_commands():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when hp%>50`;kill bear;")]
     engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
@@ -1423,7 +1415,7 @@ async def test_inline_when_passes_fires_commands():
 @pytest.mark.asyncio
 async def test_inline_when_fails_aborts_chain():
     ctx, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP%>50`;kill bear;")]
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when hp%>50`;kill bear;")]
     engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
@@ -1433,7 +1425,7 @@ async def test_inline_when_fails_aborts_chain():
 @pytest.mark.asyncio
 async def test_inline_when_raw_hp_passes():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when hp>50`;kill bear;")]
     engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
@@ -1443,7 +1435,7 @@ async def test_inline_when_raw_hp_passes():
 @pytest.mark.asyncio
 async def test_inline_when_raw_hp_fails():
     ctx, written = mock_writer_with_vitals(30, 100, 50, 100)
-    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when HP>50`;kill bear;")]
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when hp>50`;kill bear;")]
     engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
@@ -1453,7 +1445,7 @@ async def test_inline_when_raw_hp_fails():
 @pytest.mark.asyncio
 async def test_inline_when_raw_mp_passes():
     ctx, written = mock_writer_with_vitals(80, 100, 50, 100)
-    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when MP>30`;kill bear;")]
+    rules = [TriggerRule(pattern=re.compile(r"bear"), reply="`when mp>30`;kill bear;")]
     engine = TriggerEngine(rules, ctx, ctx.log)
     engine.feed("A bear appears.\n")
     await asyncio.sleep(0.02)
@@ -1550,9 +1542,7 @@ def test_status_text_initially_empty():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
     )
     engine = TriggerEngine(rules=[], ctx=ctx, log=logging.getLogger("test"))
     assert engine.status_text == ""
@@ -1563,9 +1553,7 @@ async def test_status_text_during_until():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.1 done`")]
@@ -1584,9 +1572,7 @@ async def test_status_text_during_delay():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`delay 50ms`;cmd1;")]
@@ -1605,9 +1591,7 @@ async def test_status_text_cleared_on_cancel():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="`until 0.1 nope`")]
@@ -1624,9 +1608,7 @@ async def test_until_progress_tracks_elapsed():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.2 done`")]
@@ -1649,9 +1631,7 @@ async def test_until_progress_cleared_on_timeout():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
         commands=session_context.CommandState(),
     )
     rules = [TriggerRule(pattern=re.compile(r"go"), reply="cmd1;`until 0.02 nomatch`")]
@@ -1670,9 +1650,7 @@ async def test_status_text_masks_send_when_will_echo():
     ctx = types.SimpleNamespace(
         writer=types.SimpleNamespace(write=sent.append, will_echo=True),
         gmcp_data={},
-        walk=types.SimpleNamespace(
-            active_command=None, active_command_time=0.0, randomwalk_active=False
-        ),
+        walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
     )
     rules = [TriggerRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))

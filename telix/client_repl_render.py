@@ -766,7 +766,9 @@ class ToolbarRenderer:
     def is_trigger_bg(self, engine: "trigger_mod.TriggerEngine | None") -> bool:
         """Return whether the input row should use the trigger background."""
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
+        return (
+            self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
+        )
 
     def render(self, trigger_engine: "trigger_mod.TriggerEngine | None") -> bool:
         """

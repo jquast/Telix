@@ -1,12 +1,12 @@
 """Tests for telix.ssh_client -- key file path resolution, parser, and data delivery."""
 
-import asyncio
 import os
+import asyncio
 
 import pytest
 
 from telix import ssh_client as ssh_client_mod
-from telix.ssh_client import resolve_key_file, build_parser, SSHTelix
+from telix.ssh_client import SSHTelix, build_parser, resolve_key_file
 from telix.ssh_transport import SSHReader, SSHWriter
 
 
@@ -36,11 +36,23 @@ class TestBuildParser:
         assert args.port == 22
 
     def test_parses_all_options(self):
-        args = build_parser().parse_args([
-            "host", "--port", "2222", "--username", "user",
-            "--key-file", "/key", "--term", "vt100",
-            "--colormatch", "cga", "--color-brightness", "1.5",
-        ])
+        args = build_parser().parse_args(
+            [
+                "host",
+                "--port",
+                "2222",
+                "--username",
+                "user",
+                "--key-file",
+                "/key",
+                "--term",
+                "vt100",
+                "--colormatch",
+                "cga",
+                "--color-brightness",
+                "1.5",
+            ]
+        )
         assert args.port == 2222
         assert args.username == "user"
         assert args.key_file == "/key"
@@ -103,16 +115,11 @@ async def test_run_ssh_client_delivers_prompt_without_newline():
                 break
             delivered.append(chunk)
 
-    with (
-        patch("asyncssh.connect", return_value=fake_conn),
-        patch("shutil.get_terminal_size", return_value=(80, 24)),
-    ):
+    with patch("asyncssh.connect", return_value=fake_conn), patch("shutil.get_terminal_size", return_value=(80, 24)):
         from telix.ssh_client import run_ssh_client
 
         task = asyncio.ensure_future(
-            run_ssh_client(
-                host="host", port=22, username="user", key_file="", term_type="xterm", shell=fake_shell
-            )
+            run_ssh_client(host="host", port=22, username="user", key_file="", term_type="xterm", shell=fake_shell)
         )
         await asyncio.sleep(0.05)
         eof_event.set()

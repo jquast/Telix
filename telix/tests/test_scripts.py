@@ -14,10 +14,10 @@ from telix import scripts, session_context
 from telix.client_repl_commands import (
     ASYNC_CMD_RE,
     AWAIT_CMD_RE,
-    STOPSCRIPT_CMD_RE,
     SCRIPTS_CMD_RE,
-    DispatchHooks,
+    STOPSCRIPT_CMD_RE,
     StepResult,
+    DispatchHooks,
     dispatch_one,
 )
 
@@ -469,6 +469,15 @@ class TestConditionsMet:
         assert result is True
 
     @pytest.mark.asyncio
+    async def test_list_form(self):
+        session_ctx = make_ctx()
+        session_ctx.gmcp_data = {"Char.Vitals": {"hp": "50", "maxhp": "100", "mp": "80", "maxmp": "100"}}
+        buf = scripts.ScriptOutputBuffer()
+        ctx = scripts.ScriptContext(session_ctx, buf, logging.getLogger("test"))
+        result = await ctx.conditions_met([("hp%", "<", 100), ("mp%", ">", 50)])
+        assert result is True
+
+    @pytest.mark.asyncio
     async def test_one_false_waits_for_update(self):
         session_ctx = make_ctx()
         session_ctx.gmcp_data = {"Char.Vitals": {"hp": "100", "maxhp": "100", "mp": "80", "maxmp": "100"}}
@@ -897,11 +906,7 @@ def make_dispatch_hooks(mgr, echoed):
     ctx = make_ctx()
     ctx.scripts.manager = mgr
     return DispatchHooks(
-        ctx=ctx,
-        log=logging.getLogger("test"),
-        wait_fn=None,
-        send_fn=lambda s: None,
-        echo_fn=echoed.append,
+        ctx=ctx, log=logging.getLogger("test"), wait_fn=None, send_fn=lambda s: None, echo_fn=echoed.append
     )
 
 
@@ -991,9 +996,7 @@ class TestAwaitDispatch:
         hooks = make_dispatch_hooks(mgr, echoed)
 
         with patch.dict(sys.modules, {"slow_script": mod}):
-            outer = asyncio.ensure_future(
-                dispatch_one("`await slow_script`", 0, 0, frozenset(), hooks)
-            )
+            outer = asyncio.ensure_future(dispatch_one("`await slow_script`", 0, 0, frozenset(), hooks))
             await asyncio.sleep(0)
             outer.cancel()
             try:
@@ -1086,6 +1089,7 @@ class TestScriptManagerExceptionReporting:
         async def bad_script(ctx, *args):
             async def internal_coro():
                 pass
+
             internal_coro()  # deliberately unawaited
 
         mod = types.ModuleType("warn_test_script")
@@ -1110,6 +1114,7 @@ class TestScriptManagerExceptionReporting:
         async def locatable_script(ctx, *args):
             async def inner():
                 pass
+
             inner()  # unawaited
 
         mod = types.ModuleType("loc_warn_script")
@@ -1132,6 +1137,7 @@ class TestScriptManagerExceptionReporting:
         async def failing_with_warning(ctx, *args):
             async def inner():
                 pass
+
             inner()  # unawaited coroutine
             raise ValueError("deliberate error")
 
@@ -1336,10 +1342,7 @@ class TestScriptContextCommandIssued:
             session_ctx.commands.record("flee")
 
         asyncio.ensure_future(trigger_cmd())
-        r1, r2 = await asyncio.gather(
-            ctx1.command_issued(timeout=1.0),
-            ctx2.command_issued(timeout=1.0),
-        )
+        r1, r2 = await asyncio.gather(ctx1.command_issued(timeout=1.0), ctx2.command_issued(timeout=1.0))
         assert r1 == "flee"
         assert r2 == "flee"
 

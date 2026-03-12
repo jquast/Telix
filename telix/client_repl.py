@@ -92,9 +92,9 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
     REPEAT_RE,
     TRAVEL_RE,
     BACKTICK_RE,
-    COMMAND_DELAY,
     ASYNC_CMD_RE,
     AWAIT_CMD_RE,
+    COMMAND_DELAY,
     SCRIPTS_CMD_RE,
     MOVE_MAX_RETRIES,
     STOPSCRIPT_CMD_RE,
@@ -935,9 +935,7 @@ class ReplSession:
         """Rebuild the highlight engine when rules or triggers change."""
         hl_rules = self.ctx.highlights.rules or []
         ar_rules = self.ctx.triggers.rules or []
-        prev_enabled = (
-            self.ctx.highlights.engine.enabled if self.ctx.highlights.engine is not None else True
-        )
+        prev_enabled = self.ctx.highlights.engine.enabled if self.ctx.highlights.engine is not None else True
         builtin_rule = next((r for r in hl_rules if r.builtin), None)
         ar_highlight = builtin_rule.highlight if builtin_rule else highlighter.DEFAULT_TRIGGER_HIGHLIGHT
         ar_enabled = builtin_rule.enabled if builtin_rule is not None else True
@@ -1145,7 +1143,9 @@ class ReplSession:
         """Return ``True`` when the input line uses the trigger color scheme."""
         engine = self.trigger_engine
         ar = engine is not None and (engine.exclusive_active or engine.reply_pending)
-        return self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
+        return (
+            self.ctx.walk.discover_active or self.ctx.walk.randomwalk_active or bool(self.ctx.walk.await_script) or ar
+        )
 
     @property
     def bg_sgr(self) -> str:

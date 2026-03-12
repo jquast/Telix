@@ -33,10 +33,9 @@ class TestWsBuildParser:
         assert args.no_repl is False
 
     def test_parses_all_options(self):
-        args = ws_client_mod.build_parser().parse_args([
-            "ws://host:80", "--encoding=cp437", "--no-repl",
-            "--raw-mode", "--compression", "--colormatch", "cga",
-        ])
+        args = ws_client_mod.build_parser().parse_args(
+            ["ws://host:80", "--encoding=cp437", "--no-repl", "--raw-mode", "--compression", "--colormatch", "cga"]
+        )
         assert args.encoding == "cp437"
         assert args.no_repl is True
         assert args.raw_mode is True

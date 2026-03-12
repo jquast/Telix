@@ -161,13 +161,9 @@ class PromptState:
 class CommandState:
     """Sent-command history and waiting infrastructure for scripts."""
 
-    history: collections.deque = dataclasses.field(
-        default_factory=lambda: collections.deque(maxlen=200)
-    )
-    waiters: list = dataclasses.field(default_factory=list)
-    buf: collections.deque = dataclasses.field(
-        default_factory=lambda: collections.deque(maxlen=32)
-    )
+    history: collections.deque[str] = dataclasses.field(default_factory=lambda: collections.deque(maxlen=200))
+    waiters: list[asyncio.Future[str]] = dataclasses.field(default_factory=list)
+    buf: collections.deque[str] = dataclasses.field(default_factory=lambda: collections.deque(maxlen=32))
     ever_had_waiter: bool = False
 
     def record(self, cmd: str) -> None:

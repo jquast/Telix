@@ -185,7 +185,7 @@ def test_close_stops_script_manager():
 
 
 def test_close_clears_typescript_file():
-    """close() sets typescript_file to None so post-close code does not write to a closed file."""
+    """Close() sets typescript_file to None so post-close code does not write to a closed file."""
     ctx = TelixSessionContext()
     ctx.typescript_file = MagicMock()
 
@@ -196,7 +196,7 @@ def test_close_clears_typescript_file():
 
 
 def test_close_clears_prompt_echo():
-    """close() clears prompt.echo so scripts fall back to logging after session ends."""
+    """Close() clears prompt.echo so scripts fall back to logging after session ends."""
     ctx = TelixSessionContext()
     ctx.prompt.echo = MagicMock()
 

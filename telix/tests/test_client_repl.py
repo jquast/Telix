@@ -1540,9 +1540,7 @@ async def test_home_travel_command(monkeypatch: pytest.MonkeyPatch, fast_sleep) 
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.room.graph.room_area = lambda num: "town"
     writer.ctx.room.graph.get_home_for_area = lambda area: "room2"
-    writer.ctx.room.graph.find_path_with_rooms = lambda src, dst, **kw: (
-        [("north", "room2")] if dst == "room2" else None
-    )
+    writer.ctx.room.graph.find_path_with_rooms = lambda src, dst, **kw: [("north", "room2")] if dst == "room2" else None
 
     fast_travel_args: list[object] = []
     __import__("telix.client_repl_travel", fromlist=["fast_travel"]).fast_travel
@@ -2259,13 +2257,7 @@ class TestWriteHint:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "erase_eol, expected",
-    [
-        (True, "line1\x1b[K\r\r\nline2"),
-        (False, "line1\r\r\nline2"),
-    ],
-)
+@pytest.mark.parametrize("erase_eol, expected", [(True, "line1\x1b[K\r\r\nline2"), (False, "line1\r\r\nline2")])
 async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol, expected) -> None:
     """read_server injects erase-to-eol sequences only when erase_eol is True."""
     import telnetlib3.client_shell as telnet_shell
@@ -2304,8 +2296,7 @@ async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol,
     repl.stdout = stdout
     repl.dialogs_mod = types.SimpleNamespace(subprocess_is_active=False, subprocess_buffer=[])
     repl.line_hold = types.SimpleNamespace(
-        add=lambda text: line_hold_calls.append(text) or ("", ""),
-        flush_raw=lambda: "",
+        add=lambda text: line_hold_calls.append(text) or ("", ""), flush_raw=lambda: ""
     )
     repl.refresh_trigger_engine = lambda: None
     repl.refresh_highlight_engine = lambda: None

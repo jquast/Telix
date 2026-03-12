@@ -534,7 +534,9 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
                     lbl = textual.widgets.Label("Visit level:")
                     lbl.tooltip = "Minimum number of times each reachable room must be visited before the walk stops."
                     yield lbl
-                    yield textual.widgets.Input(value=str(self.default_visit_level), id="rw-visit-level", type="integer")
+                    yield textual.widgets.Input(
+                        value=str(self.default_visit_level), id="rw-visit-level", type="integer"
+                    )
                     yield textual.widgets.Label("Triggers:")
                     yield textual.widgets.Switch(value=self.default_triggers, id="rw-triggers")
                 with textual.containers.Horizontal(classes="rw-option"):
@@ -588,13 +590,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
         self.write_result(False, self.default_visit_level, self.default_room_change_cmd, self.default_triggers)
         self.dismiss(False)
 
-    def write_result(
-        self,
-        confirmed: bool,
-        visit_level: int,
-        room_change_cmd: str = "",
-        triggers: bool = True,
-    ) -> None:
+    def write_result(self, confirmed: bool, visit_level: int, room_change_cmd: str = "", triggers: bool = True) -> None:
         if not self.result_file:
             return
         cmd = f"`randomwalk 999 {visit_level}"
@@ -617,10 +613,7 @@ class RandomwalkDialogScreen(textual.screen.Screen[bool]):
 
 
 def run_randomwalk_dialog(
-    result_file: str,
-    default_visit_level: int = 2,
-    default_room_change_cmd: str = "",
-    default_triggers: bool = True,
+    result_file: str, default_visit_level: int = 2, default_room_change_cmd: str = "", default_triggers: bool = True
 ) -> None:
     """
     Launch the random walk dialog in the current (worker) thread.
@@ -817,13 +810,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
         self.write_result(False, self.default_strategy, self.default_room_change_cmd, self.default_triggers)
         self.dismiss(False)
 
-    def write_result(
-        self,
-        confirmed: bool,
-        strategy: str,
-        room_change_cmd: str = "",
-        triggers: bool = True,
-    ) -> None:
+    def write_result(self, confirmed: bool, strategy: str, room_change_cmd: str = "", triggers: bool = True) -> None:
         """Write result JSON to disk for the parent process."""
         if not self.result_file:
             return
@@ -847,10 +834,7 @@ class AutodiscoverDialogScreen(textual.screen.Screen[bool]):
 
 
 def run_autodiscover_dialog(
-    result_file: str,
-    default_strategy: str = "bfs",
-    default_room_change_cmd: str = "",
-    default_triggers: bool = True,
+    result_file: str, default_strategy: str = "bfs", default_room_change_cmd: str = "", default_triggers: bool = True
 ) -> None:
     """
     Launch the autodiscover dialog in the current (worker) thread.

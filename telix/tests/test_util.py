@@ -7,7 +7,8 @@ import datetime
 
 # local
 import pytest
-from telix.util import relative_time, erase_eol
+
+from telix.util import erase_eol, relative_time
 
 
 def test_relative_time_empty():

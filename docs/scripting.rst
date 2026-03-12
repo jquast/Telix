@@ -56,7 +56,7 @@ time and then call it to see any new changes (or errors!).
 
     This loads ``combat.py`` and calls ``hunt(ctx)`` asynchronously.
 
-With either command calls, the function name can be omitted, and is then assumed as ``run``. 
+With either command calls, the function name can be omitted, and is then assumed as ``run``.
 
 - `` `async demo` `` loads ``demo.py``, calls ``run(ctx)``.
 
@@ -143,7 +143,7 @@ it returns as soon as one of them fires::
             [
                 asyncio.ensure_future(ctx.wait_for(f"{target} has died")),
                 asyncio.ensure_future(ctx.wait_for("You flee")),
-                asyncio.ensure_future(ctx.condition_met("HP%", "<", 25)),
+                asyncio.ensure_future(ctx.condition_met("hp%", "<", 25)),
             ],
             return_when=asyncio.FIRST_COMPLETED,
         )

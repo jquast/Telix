@@ -30,10 +30,11 @@ if TYPE_CHECKING:
 __all__ = ("SearchBuffer", "TriggerEngine", "TriggerRule", "check_condition", "load_triggers", "save_triggers")
 
 GROUP_RE = re.compile(r"\\(\d+)")
-COND_RE = re.compile(r"^(>=|<=|>|<|=)(\d+)$")
+COND_RE = re.compile(r"^(!=|>=|<=|>|<|=)(.+)$")
 KILL_RE = re.compile(r"^kill\s+(\S+)", re.IGNORECASE)
 
-def gmcp_lookup_raw(key: str, gmcp: dict[str, typing.Any]) -> int | None:
+
+def gmcp_lookup_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
     """Look up *key* directly in any GMCP package dict."""
     for pkg_data in gmcp.values():
         if not isinstance(pkg_data, dict):
@@ -43,12 +44,13 @@ def gmcp_lookup_raw(key: str, gmcp: dict[str, typing.Any]) -> int | None:
             try:
                 return int(raw)
             except (TypeError, ValueError):
-                pass
+                return str(raw)
     return None
 
 
 def _gmcp_walk(dotted_path: str, gmcp: dict[str, typing.Any]) -> typing.Any:
-    """Resolve a dot-separated path against the GMCP data dict.
+    """
+    Resolve a dot-separated path against the GMCP data dict.
 
     Uses longest-prefix matching at each level, identical to the algorithm in
     :meth:`~telix.scripts.ScriptContext._gmcp_get_raw`.
@@ -104,15 +106,15 @@ def gmcp_lookup_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
     return None
 
 
-def _gmcp_dotted_raw(key: str, gmcp: dict[str, typing.Any]) -> int | None:
-    """Resolve a dotted raw key like ``Char.Guild.Stats.Water`` to an int."""
+def _gmcp_dotted_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
+    """Resolve a dotted raw key like ``Char.Guild.Stats.Water`` to an int or str."""
     raw = _gmcp_walk(key, gmcp)
     if raw is None:
         return None
     try:
         return int(raw)
     except (TypeError, ValueError):
-        return None
+        return str(raw)
 
 
 def _gmcp_dotted_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
@@ -147,18 +149,31 @@ def _gmcp_dotted_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
     return int(cur * 100 / mx)
 
 
-def compare(value: int, op: str, threshold: int) -> bool:
+def compare(value: int | str, op: str, threshold: int | str) -> bool:
     """Evaluate ``value op threshold``."""
-    if op == ">":
-        return value > threshold
-    if op == "<":
-        return value < threshold
-    if op == ">=":
-        return value >= threshold
-    if op == "<=":
-        return value <= threshold
     if op == "=":
         return value == threshold
+    if op == "!=":
+        return value != threshold
+    if isinstance(value, str) or isinstance(threshold, str):
+        sv, st = str(value), str(threshold)
+        if op == ">":
+            return sv > st
+        if op == "<":
+            return sv < st
+        if op == ">=":
+            return sv >= st
+        if op == "<=":
+            return sv <= st
+    else:
+        if op == ">":
+            return value > threshold
+        if op == "<":
+            return value < threshold
+        if op == ">=":
+            return value >= threshold
+        if op == "<=":
+            return value <= threshold
     raise ValueError(f"unknown operator: {op!r}")
 
 
@@ -185,12 +200,14 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
         m = COND_RE.match(expr.strip())
         if not m:
             continue
-        op, threshold = m.group(1), int(m.group(2))
-        value: int | None = None
+        op, threshold_str = m.group(1), m.group(2)
+        value: int | str | None = None
+        threshold: int | str
         unit = ""
         base = key[:-1] if key.endswith("%") else key
         is_dotted = "." in base
         if key.endswith("%"):
+            threshold = int(threshold_str)
             if is_dotted:
                 if gmcp:
                     value = _gmcp_dotted_pct(key, gmcp)
@@ -204,6 +221,10 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
                         value = int(cur * 100 / mx)
             unit = "%"
         else:
+            try:
+                threshold = int(threshold_str)
+            except ValueError:
+                threshold = threshold_str
             if is_dotted:
                 if gmcp:
                     value = _gmcp_dotted_raw(key, gmcp)
