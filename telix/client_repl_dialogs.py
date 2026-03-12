@@ -36,6 +36,14 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _safe_get_blocking(fd: int) -> "bool | None":
+    """Return ``os.get_blocking(fd)`` or ``None`` when unavailable or invalid."""
+    try:
+        return os.get_blocking(fd)
+    except (AttributeError, OSError):
+        return None
+
+
 @contextlib.contextmanager
 def _patch_signal_for_thread() -> Iterator[None]:
     """
@@ -174,9 +182,9 @@ def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: typing.
         "confirm_dialog: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        getattr(os, "get_blocking", lambda fd: None)(0),
-        getattr(os, "get_blocking", lambda fd: None)(1),
-        getattr(os, "get_blocking", lambda fd: None)(2),
+        _safe_get_blocking(0),
+        _safe_get_blocking(1),
+        _safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
@@ -558,9 +566,9 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         "tui_editor: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s editor_type=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        getattr(os, "get_blocking", lambda fd: None)(0),
-        getattr(os, "get_blocking", lambda fd: None)(1),
-        getattr(os, "get_blocking", lambda fd: None)(2),
+        _safe_get_blocking(0),
+        _safe_get_blocking(1),
+        _safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         editor_type,
@@ -697,9 +705,9 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: typing.Any | Non
         "room_browser: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        getattr(os, "get_blocking", lambda fd: None)(0),
-        getattr(os, "get_blocking", lambda fd: None)(1),
-        getattr(os, "get_blocking", lambda fd: None)(2),
+        _safe_get_blocking(0),
+        _safe_get_blocking(1),
+        _safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),

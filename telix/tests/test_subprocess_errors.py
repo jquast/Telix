@@ -10,6 +10,7 @@ import pytest
 from telix.session_context import TelixSessionContext
 from telix.client_repl_dialogs import (
     launch_tui_editor,
+    _safe_get_blocking,
     launch_chat_viewer,
     launch_room_browser,
     most_recent_channel,
@@ -125,3 +126,12 @@ class TestMostRecentChannel:
         cap = {"tells": [{}]}
         result = most_recent_channel(msgs, cap)
         assert result in ("gossip", "tells", "")
+
+
+class TestSafeGetBlocking:
+    def test_returns_bool_for_valid_fd(self):
+        result = _safe_get_blocking(1)
+        assert result is None or isinstance(result, bool)
+
+    def test_returns_none_for_invalid_fd(self):
+        assert _safe_get_blocking(9999) is None

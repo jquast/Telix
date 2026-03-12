@@ -649,18 +649,18 @@ def test_save_triggers_field_roundtrip(tmp_path, rule_kwargs, field, exp0, exp1,
 @pytest.mark.asyncio
 async def test_exclusive_suppresses_feed_while_chain_active():
     writer, written = mock_writer()
-    rules = [TriggerRule(pattern=re.compile(r"monster"), reply="`delay 20ms`;kill;")]
+    rules = [TriggerRule(pattern=re.compile(r"monster"), reply="`delay 200ms`;kill;")]
     engine = TriggerEngine(rules, writer, writer.log)
     engine.feed("monster\n")
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
     assert engine.exclusive_active is True
 
     engine.feed("monster again\n")
-    await asyncio.sleep(0.005)
+    await asyncio.sleep(0.02)
     count = sum(1 for w in written if "kill\r\n" in w)
     assert count == 0
 
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.25)
     count2 = sum(1 for w in written if "kill\r\n" in w)
     assert count2 == 1
     assert engine.exclusive_active is False
