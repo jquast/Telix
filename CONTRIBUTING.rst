@@ -1,1 +1,1 @@
-docs/contributing.rst
+https://telix.readthedocs.io/en/latest/contributing.html

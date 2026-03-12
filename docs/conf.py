@@ -31,8 +31,8 @@ master_doc = "index"
 project = "Telix"
 copyright = f"2025-{datetime.datetime.now().year} Jeff Quast"
 
-version = "0"
-release = "0.0.1"  # keep in sync with pyproject.toml
+import telix
+version = release = telix.__version__
 
 exclude_patterns = ["_build"]
 
