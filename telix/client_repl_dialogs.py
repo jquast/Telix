@@ -116,13 +116,25 @@ def _run_in_thread(
     global subprocess_is_active
     log.debug("_run_in_thread: starting worker thread")
     subprocess_is_active = True
+    thread_exc: BaseException | None = None
+
+    def wrapped_target() -> None:
+        nonlocal thread_exc
+        try:
+            target()
+        except BaseException as exc:
+            thread_exc = exc
+            raise
+
     try:
         with _patch_signal_for_thread(), blocking_fds():
-            t = threading.Thread(target=target, daemon=True)
+            t = threading.Thread(target=wrapped_target, daemon=True)
             t.start()
             t.join()
     finally:
         subprocess_is_active = False
+        if thread_exc is not None:
+            log.error("TUI thread failed: %s", thread_exc)
         restore_after_subprocess(replay_buf)
         for path in cleanup_files or ():
             try:
