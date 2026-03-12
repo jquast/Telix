@@ -179,7 +179,7 @@ Full documentation at https://telix.readthedocs.io/.
 .. |codecov| image:: https://codecov.io/gh/jquast/telix/branch/master/graph/badge.svg?v=2
     :alt: codecov.io Code Coverage
     :target: https://codecov.io/gh/jquast/telix/
-.. |license| image:: https://img.shields.io/pypi/l/telix.svg
+.. |license| image:: https://img.shields.io/pypi/l/telix.svg?v=2
     :target: https://pypi.org/project/telix/
     :alt: License
 .. |linux| image:: https://img.shields.io/badge/Linux-yes-success?logo=linux&v=2
