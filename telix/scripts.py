@@ -239,7 +239,8 @@ class ScriptContext:
     """
     User-facing API handed to scripts as their ``ctx`` argument.
 
-    Wraps the session context and script output buffer to provide a clean, stable interface for script authors.
+    Every script receives a single ``ctx`` argument that provides access to all
+    known information about the MUD session and scripting capabilities of Telix.
 
     :param session_ctx: The live session context.
     :param buf: Per-script output buffer.
@@ -274,7 +275,12 @@ class ScriptContext:
 
     @property
     def room(self) -> "rooms.Room | None":
-        """The current :class:`~telix.rooms.Room`, or ``None`` if unknown."""
+        """
+        The current :class:`~telix.rooms.Room`, or ``None`` if unknown.
+
+        Returns ``None`` if no GMCP room data has been received.  The room
+        object has ``name``, ``area``, and ``exits`` attributes.
+        """
         rg = self._ctx.room.graph
         if rg is None or not self._ctx.room.current:
             return None
@@ -298,6 +304,8 @@ class ScriptContext:
 
             ctx.gmcp_get("Char.Guild.Stats.Water%")
             ctx.gmcp_get("Water%")
+
+        The ``Max`` lookup is case-insensitive (``MaxWater``, ``maxwater``, etc.).
 
         :param dotted_path: Key path, e.g. ``"Char.Vitals.hp"`` or ``"hp"``.
         :returns: The value at that path, or ``None`` if not found.
@@ -403,7 +411,23 @@ class ScriptContext:
 
     async def send(self, line: str, wait_prompt: bool = True) -> None:
         """
-        Send a command string, with full expansion (repeat, ; | separators, backticks).
+        Send a command string to the server.
+
+        Supports the same syntax as the REPL:
+
+        - ``;`` between commands waits for the server prompt before sending the next
+        - ``|`` sends immediately without waiting
+        - A leading number repeats: ``3north`` sends ``north`` three times
+
+        Backtick directives like `` `async` `` and `` `until` `` are handled by the
+        client, not sent to the server.  See :doc:`commands` for the full list.
+
+        By default, ``send`` waits for the server prompt (GA/EOR) after all
+        commands have been dispatched.  Pass ``wait_prompt=False`` to return
+        immediately::
+
+            await ctx.send("look")                       # waits for prompt
+            await ctx.send("look", wait_prompt=False)    # returns immediately
 
         :param line: Command line to send.
         :param wait_prompt: Wait for the server prompt (GA/EOR) after sending.
@@ -516,6 +540,21 @@ class ScriptContext:
 
         Re-evaluates immediately on every GMCP update rather than polling.
 
+        *key* uses the actual GMCP field name (case-sensitive).  A bare name
+        searches across all GMCP packages; a dotted path resolves directly.
+        Append ``%`` to compute a percentage from the field and its ``Max``
+        counterpart::
+
+            await ctx.condition_met("hp%", "<", 50)
+            await ctx.condition_met("Char.Guild.Stats.Water%", "<", 50)
+
+        String comparisons work with ``=`` and ``!=``::
+
+            await ctx.condition_met("Mode", "!=", "Rage")
+
+        If the key is not found in GMCP data, it falls back to highlight
+        capture variables.
+
         :param key: Condition key (e.g. ``"hp%"``, ``"Mode"``).
         :param op: Comparison operator: ``">"``, ``"<"``, ``">="``, ``"<="``,
             ``"="``, ``"!="``.
@@ -536,6 +575,10 @@ class ScriptContext:
 
             await ctx.conditions_met(("Mode", "!=", "Rage"), ("Adrenaline%", ">", 0))
             await ctx.conditions_met([("Mode", "!=", "Rage"), ("Adrenaline%", ">", 0)])
+
+        Unlike running separate :meth:`condition_met` calls with
+        :func:`asyncio.wait`, this checks all conditions atomically, so you are
+        guaranteed they all hold simultaneously when it returns.
 
         :param conditions: ``(key, op, threshold)`` tuples, or a single list of them.
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
@@ -640,7 +683,13 @@ class ScriptContext:
 
         Captures a reference to the current ``room.changed`` event before
         awaiting, so the caller is woken exactly once per transition even if
-        another change fires immediately after.
+        another change fires immediately after::
+
+            async def tracker(ctx: ScriptContext) -> None:
+                while True:
+                    if not await ctx.room_changed(timeout=60.0):
+                        break
+                    ctx.print(f"[tracker] {ctx.previous_room_id} -> {ctx.room_id}")
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
         :returns: ``True`` if a transition occurred; ``False`` on timeout.
@@ -655,6 +704,18 @@ class ScriptContext:
     async def gmcp_changed(self, package: str | None = None, timeout: float | None = None) -> bool:
         """
         Wait until the next GMCP packet is received.
+
+        ::
+
+            async def watch_vitals(ctx: ScriptContext) -> None:
+                while True:
+                    if not await ctx.gmcp_changed("Char.Vitals", timeout=60.0):
+                        break
+                    hp = ctx.gmcp_get("Char.Vitals.hp")
+                    ctx.print(f"[vitals] HP: {hp}")
+
+            # wait for any GMCP update
+            await ctx.gmcp_changed()
 
         :param package: GMCP package name, e.g. ``"Char.Vitals"``.
             Pass ``None`` (the default) to wait for any GMCP update.
@@ -689,7 +750,12 @@ class ScriptContext:
 
     @property
     def running_scripts(self) -> list[str]:
-        """Names of all currently running scripts."""
+        """
+        Names of all currently running scripts.
+
+        Each name is the first token of the spec used to start the script
+        (e.g. ``"combat.hunt"``).  The calling script's own name is included.
+        """
         mgr = self._ctx.scripts.manager
         if mgr is None:
             return []
