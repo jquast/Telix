@@ -682,12 +682,18 @@ def log_child_diagnostics() -> None:
         tsize_str = f"{tsize.columns}x{tsize.lines}"
     except OSError:
         tsize_str = "?"
+    def fd_blocking(fd: int) -> bool | None:
+        try:
+            return os.get_blocking(fd)
+        except OSError:
+            return None
+
     log.debug(
         "child env: %s terminal_size=%s fd0_blocking=%s fd2_blocking=%s",
         env,
         tsize_str,
-        getattr(os, "get_blocking", lambda fd: None)(0),
-        getattr(os, "get_blocking", lambda fd: None)(2),
+        fd_blocking(0),
+        fd_blocking(2),
     )
     os.environ["TEXTUAL_DEBUG"] = "1"
 
