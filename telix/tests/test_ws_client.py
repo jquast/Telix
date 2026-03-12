@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from telix import ws_client as ws_client_mod
+
 
 def _make_ws(messages):
     """Return a mock WebSocket that yields *messages* from async iteration."""
@@ -17,6 +19,29 @@ def _make_ws(messages):
     ws.__aiter__ = MagicMock(return_value=_aiter())
     ws.send = AsyncMock()
     return ws
+
+
+class TestWsBuildParser:
+    def test_returns_parser(self):
+        parser = ws_client_mod.build_parser()
+        assert parser.prog == "telix"
+
+    def test_parses_url(self):
+        args = ws_client_mod.build_parser().parse_args(["wss://example.com:4000"])
+        assert args.url == "wss://example.com:4000"
+        assert args.encoding == "utf-8"
+        assert args.no_repl is False
+
+    def test_parses_all_options(self):
+        args = ws_client_mod.build_parser().parse_args([
+            "ws://host:80", "--encoding=cp437", "--no-repl",
+            "--raw-mode", "--compression", "--colormatch", "cga",
+        ])
+        assert args.encoding == "cp437"
+        assert args.no_repl is True
+        assert args.raw_mode is True
+        assert args.compression is True
+        assert args.colormatch == "cga"
 
 
 class TestRunGmcpWsEcho:

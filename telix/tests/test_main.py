@@ -464,6 +464,56 @@ class TestSshUrlRouting:
         mock_ws.assert_not_called()
 
 
+class TestGetArgvValue:
+    def test_flag_equals_form(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--term=xterm-256color", "host"])
+        assert main_mod._get_argv_value("--term", "unknown") == "xterm-256color"
+
+    def test_flag_space_form(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--term", "vt100", "host"])
+        assert main_mod._get_argv_value("--term", "unknown") == "vt100"
+
+    def test_flag_missing_returns_default(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "host"])
+        assert main_mod._get_argv_value("--term", "fallback") == "fallback"
+
+    def test_flag_at_end_without_value(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--term"])
+        assert main_mod._get_argv_value("--term", "default") == "default"
+
+
+class TestGetTermValue:
+    def test_uses_argv_term(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--term=xterm", "host"])
+        assert main_mod._get_term_value() == "xterm"
+
+    def test_falls_back_to_env(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "host"])
+        monkeypatch.setenv("TERM", "screen-256color")
+        assert main_mod._get_term_value() == "screen-256color"
+
+    def test_falls_back_to_unknown(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "host"])
+        monkeypatch.delenv("TERM", raising=False)
+        assert main_mod._get_term_value() == "unknown"
+
+
+class TestPopServerType:
+    def test_bbs_flag(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "host"])
+        assert main_mod.pop_server_type() == "bbs"
+        assert "--bbs" not in sys.argv
+
+    def test_mud_flag(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "--mud", "host"])
+        assert main_mod.pop_server_type() == "mud"
+        assert "--mud" not in sys.argv
+
+    def test_no_flag(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["telix", "host"])
+        assert main_mod.pop_server_type() == ""
+
+
 class TestBuildWsCommandUsesMain:
     def test_ws_command_uses_telix_main(self) -> None:
         """build_ws_command spawns telix.main, not telix.ws_client."""

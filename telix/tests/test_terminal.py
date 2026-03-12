@@ -83,6 +83,27 @@ def test_set_blocking_stdout_returns_previous(monkeypatch):
     assert was is True
 
 
+def test_set_blocking_stdout_oserror_fallback(monkeypatch):
+    """set_blocking_stdout returns the requested state on OSError."""
+
+    def raising_get_blocking(fd):
+        raise OSError("bad fd")
+
+    monkeypatch.setattr("os.get_blocking", raising_get_blocking)
+    was = terminal_unix.set_blocking_stdout(True)
+    assert was is True
+
+
+def test_restore_io_blocking_oserror_silent(monkeypatch):
+    """restore_io_blocking does not raise when set_blocking fails."""
+
+    def raising_set_blocking(fd, val):
+        raise OSError("fail")
+
+    monkeypatch.setattr("os.set_blocking", raising_set_blocking)
+    terminal_unix.restore_io_blocking()
+
+
 def test_terminal_dispatcher_exposes_functions():
     """The terminal module exposes all required platform functions."""
     for name in (

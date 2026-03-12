@@ -83,7 +83,8 @@ telix/
 - Use tox to run tests, linters, and formatters.
 - Max line length: 120 characters.
 - Sphinx-style reStructuredText docstrings.
-- Target ~50% test coverage; layout, design, and TUI interaction are not tested.
+- TUI and REPL modules should have basic coverage for data-handling and validation logic;
+  only interactive rendering and layout is excluded.
 - Write tests first when fixing bugs (TDD).
 - Do not use section dividers or markers in code.
 - Tests should be self-documenting: no assertion messages, no explanatory comments, no description
