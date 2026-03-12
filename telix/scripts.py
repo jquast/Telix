@@ -454,17 +454,13 @@ class ScriptContext:
         while idx < len(parts):
             cmd = parts[idx]
             if client_repl_commands.TRAVEL_RE.match(cmd):
-                remainder = await client_repl_travel.handle_travel_commands(
-                    parts[idx:], self._ctx, self._log,
-                )
+                remainder = await client_repl_travel.handle_travel_commands(parts[idx:], self._ctx, self._log)
                 parts = remainder
                 immediate_set = frozenset()
                 idx = 0
                 sent_count = 0
                 continue
-            result = await client_repl_commands.dispatch_one(
-                cmd, idx, sent_count, immediate_set, hooks,
-            )
+            result = await client_repl_commands.dispatch_one(cmd, idx, sent_count, immediate_set, hooks)
             if result is client_repl_commands.StepResult.ABORT:
                 break
             if result is client_repl_commands.StepResult.SENT:
@@ -769,8 +765,8 @@ class ScriptContext:
         """
         Names of all currently running scripts.
 
-        Each name is the first token of the spec used to start the script
-        (e.g. ``"combat.hunt"``).  The calling script's own name is included.
+        Each name is the first token of the spec used to start the script (e.g. ``"combat.hunt"``).  The calling
+        script's own name is included.
         """
         mgr = self._ctx.scripts.manager
         if mgr is None:

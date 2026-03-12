@@ -413,6 +413,6 @@ def test_bar_type_omitted_from_json_when_default(tmp_path):
 
 
 def test_label_format_rendering():
-    assert "Lv.{value}".format(value=42) == "Lv.42"
-    assert "${value:,}".format(value=12345) == "$12,345"
+    assert f"Lv.{42}" == "Lv.42"
+    assert f"${12345:,}" == "$12,345"
     assert "{value}".format(value="hello") == "hello"

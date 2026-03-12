@@ -93,5 +93,5 @@ The current toggle state is not saved to disk.
 |-----|------|-------|
 | Alt + G | `get boots;get jacket;take crysknife;wield crysknife;equip boots;equip cloak` | Equip gear after respawn |
 | Alt + S | `` `travel 8bd9a5e5`;5order splint;5order bandage;`return` `` | Heal at supply store and return |
-| ALT + B | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
+| Alt + B | `` kill bear;`until 10 died\.\|You killed\|Kill what \?`;get all `` | Kill, wait for outcome, loot |
 | Alt + D | `` `autodiscover 1` `` | Explore one unvisited exit |

@@ -84,5 +84,5 @@ functional effect -- use them to flag rooms of interest.
 ### Travel
 
 Travel moves through rooms one step at a time.  Triggers fire in
-each room along the path.  Use the backtick `noreply` option to
-disable triggers during travel.
+each room along the path.  Use the `noreply` option to disable
+triggers during travel.

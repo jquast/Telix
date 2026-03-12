@@ -989,11 +989,7 @@ class ToolbarRenderer:
 
     @staticmethod
     def label_slot(
-        cfg: "progressbars.BarConfig",
-        raw: typing.Any,
-        index: int,
-        is_ar_bg: bool,
-        slots: list[ToolbarSlot],
+        cfg: "progressbars.BarConfig", raw: typing.Any, index: int, is_ar_bg: bool, slots: list[ToolbarSlot]
     ) -> None:
         """Add a label-type slot from a :class:`BarConfig`."""
         from . import progressbars  # circular

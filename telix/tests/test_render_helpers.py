@@ -9,15 +9,7 @@ from telix import client_repl_render
 
 @pytest.mark.parametrize(
     "n, expected",
-    [
-        (0, "0"),
-        (999, "999"),
-        (1000, "1.0k"),
-        (1500, "1.5k"),
-        (999999, "1000.0k"),
-        (1000000, "1.0m"),
-        (2500000, "2.5m"),
-    ],
+    [(0, "0"), (999, "999"), (1000, "1.0k"), (1500, "1.5k"), (999999, "1000.0k"), (1000000, "1.0m"), (2500000, "2.5m")],
 )
 def test_fmt_value(n, expected):
     assert client_repl_render.fmt_value(n) == expected
@@ -135,8 +127,7 @@ def test_xp_tracker_history_prune():
 
 def test_toolbar_slot_defaults():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "test")], side="left", min_width=5, label="test",
+        priority=1, display_order=1, width=10, fragments=[("", "test")], side="left", min_width=5, label="test"
     )
     assert slot.growable is False
     assert slot.grow_params is None
@@ -150,8 +141,7 @@ def test_layout_toolbar_empty():
 
 def test_layout_toolbar_single_left():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "test")], side="left", min_width=0, label="test",
+        priority=1, display_order=1, width=10, fragments=[("", "test")], side="left", min_width=0, label="test"
     )
     left, right = client_repl_render.layout_toolbar([slot], 80)
     assert len(left) == 1
@@ -160,8 +150,7 @@ def test_layout_toolbar_single_left():
 
 def test_layout_toolbar_slot_too_wide():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=100,
-        fragments=[("", "x" * 100)], side="left", min_width=0, label="x" * 100,
+        priority=1, display_order=1, width=100, fragments=[("", "x" * 100)], side="left", min_width=0, label="x" * 100
     )
     left, right = client_repl_render.layout_toolbar([slot], 20)
     assert left == []
@@ -169,12 +158,10 @@ def test_layout_toolbar_slot_too_wide():
 
 def test_layout_toolbar_display_order():
     s1 = client_repl_render.ToolbarSlot(
-        priority=1, display_order=2, width=5,
-        fragments=[("", "a")], side="left", min_width=0, label="a",
+        priority=1, display_order=2, width=5, fragments=[("", "a")], side="left", min_width=0, label="a"
     )
     s2 = client_repl_render.ToolbarSlot(
-        priority=2, display_order=1, width=5,
-        fragments=[("", "b")], side="left", min_width=0, label="b",
+        priority=2, display_order=1, width=5, fragments=[("", "b")], side="left", min_width=0, label="b"
     )
     left, _ = client_repl_render.layout_toolbar([s1, s2], 80)
     assert left[0].display_order < left[1].display_order
@@ -186,16 +173,14 @@ def test_left_sep_widths_empty():
 
 def test_left_sep_widths_single():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "x")], side="left", min_width=0, label="x",
+        priority=1, display_order=1, width=10, fragments=[("", "x")], side="left", min_width=0, label="x"
     )
     assert client_repl_render.left_sep_widths([slot]) == []
 
 
 def test_left_sep_widths_two_growable():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "x")], side="left", min_width=0, label="x", growable=True,
+        priority=1, display_order=1, width=10, fragments=[("", "x")], side="left", min_width=0, label="x", growable=True
     )
     gaps = client_repl_render.left_sep_widths([slot, slot])
     assert gaps == [client_repl_render.BAR_GAP_WIDTH]
@@ -203,12 +188,17 @@ def test_left_sep_widths_two_growable():
 
 def test_left_sep_widths_mixed():
     growable = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "x")], side="left", min_width=0, label="x", growable=True,
+        priority=1, display_order=1, width=10, fragments=[("", "x")], side="left", min_width=0, label="x", growable=True
     )
     fixed = client_repl_render.ToolbarSlot(
-        priority=2, display_order=2, width=10,
-        fragments=[("", "y")], side="left", min_width=0, label="y", growable=False,
+        priority=2,
+        display_order=2,
+        width=10,
+        fragments=[("", "y")],
+        side="left",
+        min_width=0,
+        label="y",
+        growable=False,
     )
     gaps = client_repl_render.left_sep_widths([growable, fixed])
     assert gaps == [client_repl_render.DISPLAY.SEPARATOR_WIDTH]
@@ -216,8 +206,7 @@ def test_left_sep_widths_mixed():
 
 def test_fill_toolbar_no_growable():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "test")], side="left", min_width=0, label="test",
+        priority=1, display_order=1, width=10, fragments=[("", "test")], side="left", min_width=0, label="test"
     )
     left, right, sep = client_repl_render.fill_toolbar([slot], [], 80)
     assert left[0].width == 10
@@ -226,9 +215,15 @@ def test_fill_toolbar_no_growable():
 
 def test_fill_toolbar_distributes_extra():
     slot = client_repl_render.ToolbarSlot(
-        priority=1, display_order=1, width=10,
-        fragments=[("", "test")], side="left", min_width=0, label="test",
-        growable=True, grow_params=(100, 200, "hp", -1.0),
+        priority=1,
+        display_order=1,
+        width=10,
+        fragments=[("", "test")],
+        side="left",
+        min_width=0,
+        label="test",
+        growable=True,
+        grow_params=(100, 200, "hp", -1.0),
     )
     left, right, sep = client_repl_render.fill_toolbar([slot], [], 80)
     assert left[0].width > 10

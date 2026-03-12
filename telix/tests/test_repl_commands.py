@@ -9,11 +9,7 @@ from telix import client_repl_commands
 
 @pytest.mark.parametrize(
     "text,expected_groups",
-    [
-        ("`delay 1s`", ("1", "s")),
-        ("`delay 500ms`", ("500", "ms")),
-        ("`delay 1.5s`", ("1.5", "s")),
-    ],
+    [("`delay 1s`", ("1", "s")), ("`delay 500ms`", ("500", "ms")), ("`delay 1.5s`", ("1.5", "s"))],
 )
 def test_delay_re_matches(text, expected_groups):
     """DELAY_RE matches backtick-enclosed delay commands."""
@@ -43,11 +39,7 @@ def test_when_re_matches(text, expected_groups):
 
 
 @pytest.mark.parametrize(
-    "text,expected_groups",
-    [
-        ("`until 4 died\\.`", ("4", "died\\.")),
-        ("`until pattern`", (None, "pattern")),
-    ],
+    "text,expected_groups", [("`until 4 died\\.`", ("4", "died\\.")), ("`until pattern`", (None, "pattern"))]
 )
 def test_until_re_matches(text, expected_groups):
     """UNTIL_RE matches backtick-enclosed until commands."""
@@ -57,11 +49,7 @@ def test_until_re_matches(text, expected_groups):
 
 
 @pytest.mark.parametrize(
-    "text,expected_groups",
-    [
-        ("`untils 4 died\\.`", ("4", "died\\.")),
-        ("`untils pattern`", (None, "pattern")),
-    ],
+    "text,expected_groups", [("`untils 4 died\\.`", ("4", "died\\.")), ("`untils pattern`", (None, "pattern"))]
 )
 def test_untils_re_matches(text, expected_groups):
     """UNTILS_RE matches backtick-enclosed untils commands."""

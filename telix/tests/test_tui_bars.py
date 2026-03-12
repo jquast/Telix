@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
+import json
 
 import pytest
 import rich.text
 
-from telix import client_tui_bars, progressbars
+from telix import progressbars, client_tui_bars
 
 
 class TestProgressBarTupleDefaults:
@@ -76,10 +76,7 @@ class TestLoadGmcpPackages:
 
     def test_load_from_file(self, tmp_path):
         snapshot = {
-            "packages": {
-                "Char.Vitals": {"data": {"hp": 100, "maxhp": 200}},
-                "Char.Status": {"data": {"level": 5}},
-            }
+            "packages": {"Char.Vitals": {"data": {"hp": 100, "maxhp": 200}}, "Char.Status": {"data": {"level": 5}}}
         }
         path = str(tmp_path / "gmcp.json")
         with open(path, "w", encoding="utf-8") as fh:
@@ -96,9 +93,7 @@ class TestLoadGmcpPackages:
         assert pane.gmcp_fields == {}
 
     def test_missing_file(self, tmp_path):
-        pane = client_tui_bars.ProgressBarEditPane(
-            path="unused", gmcp_snapshot_path=str(tmp_path / "nonexistent.json")
-        )
+        pane = client_tui_bars.ProgressBarEditPane(path="unused", gmcp_snapshot_path=str(tmp_path / "nonexistent.json"))
         pane.load_gmcp_packages()
         assert pane.gmcp_packages == []
 
@@ -159,11 +154,7 @@ class TestTextColorOptions:
 class TestEaseInOut:
     """ProgressBarEditPane.ease_in_out static method."""
 
-    @pytest.mark.parametrize("t,expected", [
-        (0.0, 0.0),
-        (1.0, 1.0),
-        (0.5, 0.5),
-    ])
+    @pytest.mark.parametrize("t,expected", [(0.0, 0.0), (1.0, 1.0), (0.5, 0.5)])
     def test_known_values(self, t, expected):
         assert client_tui_bars.ProgressBarEditPane.ease_in_out(t) == pytest.approx(expected)
 

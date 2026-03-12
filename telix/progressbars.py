@@ -319,17 +319,12 @@ def detect_standard(gmcp_data: dict[str, typing.Any], bars: list[BarConfig], see
         try_aliases(status, "Char.Status", XP_ALIASES, "XP", ("purple", "cyan"), True, bars, seen)
 
 
-def detect_labels(
-    gmcp_data: dict[str, typing.Any], bars: list[BarConfig], seen: set[tuple[str, str, str]]
-) -> None:
+def detect_labels(gmcp_data: dict[str, typing.Any], bars: list[BarConfig], seen: set[tuple[str, str, str]]) -> None:
     """Detect label-type bars for level and money from ``Char.Status``."""
     status = gmcp_data.get("Char.Status")
     if not isinstance(status, dict):
         return
-    label_defs = (
-        ("level", "Level", "Lv.{value}"),
-        ("money", "Money", "${value:,}"),
-    )
+    label_defs = (("level", "Level", "Lv.{value}"), ("money", "Money", "${value:,}"))
     for field, name, fmt in label_defs:
         if field not in status:
             continue

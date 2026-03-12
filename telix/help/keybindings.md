@@ -26,7 +26,7 @@ macro editor (Alt + M).
 
 | Key | Action |
 |-----|--------|
-| **F3** | Random walk (explore random exits) |
+| **F3** | Random walk dialog |
 | **F4** | Autodiscover (explore unvisited exits) |
 | **F5** | Resume last walk |
 | **Alt + R** | Browse rooms / travel |

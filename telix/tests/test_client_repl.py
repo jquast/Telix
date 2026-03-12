@@ -91,12 +91,7 @@ def mock_writer(will_echo: bool = False) -> object:
 
 
 @pytest.mark.parametrize(
-    "rows, cols, reserve, expected_scroll, expected_input",
-    [
-        (24, 80, 1, 21, 23),
-        (1, 80, 1, 0, 0),
-        (24, 80, 2, 20, 22),
-    ],
+    "rows, cols, reserve, expected_scroll, expected_input", [(24, 80, 1, 21, 23), (1, 80, 1, 0, 0), (24, 80, 2, 20, 22)]
 )
 def test_scroll_region_properties(rows, cols, reserve, expected_scroll, expected_input) -> None:
     stdout, _ = mock_stdout()
@@ -230,6 +225,7 @@ async def test_adjusted_naws_inactive_returns_terminal_size() -> None:
 @pytest.mark.asyncio
 async def test_naws_restored_on_exception() -> None:
     """handle_send_naws is restored even if repl_scaffold body raises."""
+
     def orig_handler() -> tuple[int, int]:
         return (24, 80)
 
@@ -246,6 +242,7 @@ async def test_naws_restored_on_exception() -> None:
 @pytest.mark.asyncio
 async def test_naws_restored_on_normal_exit() -> None:
     """handle_send_naws is restored after normal scaffold exit."""
+
     def orig_handler() -> tuple[int, int]:
         return (24, 80)
 
@@ -397,10 +394,7 @@ def test_travel_re_matching(cmd: str, match: bool) -> None:
 
 @pytest.mark.parametrize(
     "style_ref, keys",
-    [
-        (lambda: STYLE_NORMAL, ["text_sgr", "bg_sgr", "suggestion_sgr"]),
-        (lambda: STYLE_TRIGGER, ["text_sgr", "bg_sgr"]),
-    ],
+    [(lambda: STYLE_NORMAL, ["text_sgr", "bg_sgr", "suggestion_sgr"]), (lambda: STYLE_TRIGGER, ["text_sgr", "bg_sgr"])],
 )
 def test_style_populated(style_ref, keys) -> None:
     pytest.importorskip("blessed")

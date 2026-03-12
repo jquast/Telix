@@ -9,7 +9,7 @@ Features
 --------
 
 - **Session Manager** For configuring and bookmarking connections, bundled with an up-to-date
-  directory of over 1,700+ MUDs_ and BBSs_.
+  directory of over 1,700 MUDs_ and BBSs_.
 - **Advanced Telnet** Support for popular BBS and MUD `Protocols
   <https://telix.readthedocs.io/en/latest/protocols.html>`_
 - **WebSocket** support for BBS and MUD `websocket subprotocols`_, `TELNETS`_ (Telnet + SSL),
@@ -39,7 +39,7 @@ Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
 .. _PETSCII: https://en.wikipedia.org/wiki/PETSCII
 .. _ATASCII: https://en.wikipedia.org/wiki/ATASCII
 .. _iCE colors: https://forum.16colo.rs/t/ice-colors-or-blinking-text/27
-.. _`websocket subprotocols`: <https://mudstandards.org/websocket/>
+.. _`websocket subprotocols`: https://mudstandards.org/websocket/
 .. _TELNETS: https://www.micropolis.com/support/kb/micropolis-bbs-faq#Is_there_a_secure_Telnet
 
 Installation
@@ -81,11 +81,19 @@ Connect directly via WebSocket::
 .. begin-cli-help
 .. code-block:: text
 
-    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression] [--connect-maxwait N]
-                 [--connect-minwait N] [--connect-timeout N] [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS] [--gmcp-modules MODULES] [--line-mode]
-                 [--logfile FILE] [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL] [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL] [--speed N] [--ssl]
-                 [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM] [--typescript FILE] [--typescript-mode {append,rewrite}] [--key-file FILE] [--username USER]
-                 [--background-color COLOR] [--bbs] [--color-brightness N] [--color-contrast N] [--colormatch PALETTE] [--mud] [--no-ice-colors]
+    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT]
+                 [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
+                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N]
+                 [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
+                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
+                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL]
+                 [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
+                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify]
+                 [--term TERM] [--typescript FILE]
+                 [--typescript-mode {append,rewrite}] [--key-file FILE]
+                 [--username USER] [--background-color COLOR] [--bbs]
+                 [--color-brightness N] [--color-contrast N]
+                 [--colormatch PALETTE] [--mud] [--no-ice-colors]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -100,11 +108,16 @@ Connect directly via WebSocket::
       -h, --help            show this help message and exit
 
     Connection options:
-      --always-do OPT       always send DO for this option (comma-separated, named like GMCP)
-      --always-dont OPT     always send DONT for this option, refusing even natively supported
-      --always-will OPT     always send WILL for this option (comma-separated, named like MXP)
-      --always-wont OPT     always send WONT for this option, refusing even natively supported
-      --ansi-keys           transmit raw ANSI escape sequences for arrow/function keys
+      --always-do OPT       always send DO for this option (comma-separated, named
+                            like GMCP)
+      --always-dont OPT     always send DONT for this option, refusing even
+                            natively supported
+      --always-will OPT     always send WILL for this option (comma-separated,
+                            named like MXP)
+      --always-wont OPT     always send WONT for this option, refusing even
+                            natively supported
+      --ansi-keys           transmit raw ANSI escape sequences for arrow/function
+                            keys
       --ascii-eol           use ASCII CR/LF instead of encoding-native EOL
       --compression         request MCCP compression
       --connect-maxwait N   timeout for pending negotiation (default: 4.0)
@@ -122,7 +135,8 @@ Connect directly via WebSocket::
       --loglevel LOGLEVEL   logging level (default: warn)
       --no-repl             disable the interactive REPL (raw I/O only)
       --raw-mode            force raw-mode input (default: auto-detect)
-      --send-environ VARS   comma-separated environment variables to send via NEW-ENVIRON
+      --send-environ VARS   comma-separated environment variables to send via NEW-
+                            ENVIRON
       --shell SHELL         dotted path to shell coroutine
       --speed N             terminal speed to report (default: 38400)
       --ssl                 enable SSL/TLS (telnet only)
@@ -139,11 +153,13 @@ Connect directly via WebSocket::
 
     Telix options:
       --background-color COLOR
-                            terminal background color as #RRGGBB (default: #000000)
+                            terminal background color as #RRGGBB (default:
+                            #000000)
       --bbs                 apply BBS connection presets
       --color-brightness N  color brightness multiplier (default: 1.0)
       --color-contrast N    color contrast multiplier (default: 1.0)
-      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to disable)
+      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
+                            disable)
       --mud                 apply MUD connection presets
       --no-ice-colors       disable iCE color (blink as bright background) support
 
@@ -153,7 +169,7 @@ Connect directly via WebSocket::
 Documentation
 -------------
 
-Full documentation at https://telix.readthedocs.org/.
+Full documentation at https://telix.readthedocs.io/.
 
 .. |pypi_downloads| image:: https://img.shields.io/pypi/dm/telix.svg?logo=pypi
     :alt: Downloads

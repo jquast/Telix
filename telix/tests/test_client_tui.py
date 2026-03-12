@@ -611,13 +611,30 @@ def test_help_screen_creates(topic: str) -> None:
 @pytest.mark.parametrize(
     "topic, expected_strings",
     [
-        ("macro", ["## Macro Editor", "## Command Syntax", "## Backtick Commands",
-                    "`autodiscover`", "`randomwalk`", "`resume`"]),
-        ("trigger", ["## Trigger Editor", "### Flags Explained", "### Pattern Syntax",
-                      "### Backreferences in Reply", "### Condition Gate", "\\1"]),
+        (
+            "macro",
+            [
+                "## Macro Editor",
+                "## Command Syntax",
+                "## Backtick Commands",
+                "`autodiscover`",
+                "`randomwalk`",
+                "`resume`",
+            ],
+        ),
+        (
+            "trigger",
+            [
+                "## Trigger Editor",
+                "### Flags Explained",
+                "### Pattern Syntax",
+                "### Backreferences in Reply",
+                "### Condition Gate",
+                "\\1",
+            ],
+        ),
         ("highlight", ["## Highlight Editor", "### Flags Explained", "### Style Names", "bold_red"]),
-        ("session", ["## Session Manager", "### Keyboard Shortcuts", "### Bookmarks",
-                      "### Flags", "### Search"]),
+        ("session", ["## Session Manager", "### Keyboard Shortcuts", "### Bookmarks", "### Flags", "### Search"]),
     ],
 )
 def test_help_topic_contains_key_sections(topic, expected_strings):
@@ -985,10 +1002,7 @@ def test_highlight_matches_search_pattern(tmp_path):
     """HighlightEditPane.matches_search matches on pattern and highlight text."""
     path = str(tmp_path / "highlights.json")
     pane = HighlightEditPane(path=path)
-    pane.rules = [
-        HighlightTuple("gold coins", "bold_yellow"),
-        HighlightTuple("silver", "dim_white"),
-    ]
+    pane.rules = [HighlightTuple("gold coins", "bold_yellow"), HighlightTuple("silver", "dim_white")]
     assert pane.matches_search(0, "gold")
     assert pane.matches_search(0, "yellow")
     assert not pane.matches_search(0, "silver")
@@ -1029,14 +1043,7 @@ def test_trigger_tuple_defaults():
     assert tt.case_sensitive is False
 
 
-@pytest.mark.parametrize(
-    "query, expected",
-    [
-        ("gold", True),
-        ("get", True),
-        ("silver", False),
-    ],
-)
+@pytest.mark.parametrize("query, expected", [("gold", True), ("get", True), ("silver", False)])
 def test_trigger_matches_search(tmp_path, query, expected):
     """TriggerEditPane.matches_search matches on pattern and reply text."""
     path = str(tmp_path / "triggers.json")
@@ -1055,12 +1062,16 @@ def test_trigger_gmcp_source_choices_no_snapshot(tmp_path):
 def test_trigger_gmcp_source_choices_with_snapshot(tmp_path):
     """Only packages with numeric fields appear in gmcp_source_choices."""
     snap = tmp_path / "snapshot.json"
-    snap.write_text(json.dumps({
-        "packages": {
-            "Char.Vitals": {"data": {"hp": 100, "maxhp": 200}},
-            "Char.Status": {"data": {"name": "test"}},
-        }
-    }))
+    snap.write_text(
+        json.dumps(
+            {
+                "packages": {
+                    "Char.Vitals": {"data": {"hp": 100, "maxhp": 200}},
+                    "Char.Status": {"data": {"name": "test"}},
+                }
+            }
+        )
+    )
     path = str(tmp_path / "triggers.json")
     pane = TriggerEditPane(path=path, gmcp_snapshot_path=str(snap))
     choices = pane.gmcp_source_choices()
@@ -1072,12 +1083,16 @@ def test_trigger_gmcp_source_choices_with_snapshot(tmp_path):
 def test_trigger_gmcp_field_choices(tmp_path):
     """gmcp_field_choices returns numeric fields and percent pairs."""
     snap = tmp_path / "snapshot.json"
-    snap.write_text(json.dumps({
-        "packages": {
-            "Char.Vitals": {"data": {"hp": 100, "maxhp": 200}},
-            "Char.Status": {"data": {"name": "test"}},
-        }
-    }))
+    snap.write_text(
+        json.dumps(
+            {
+                "packages": {
+                    "Char.Vitals": {"data": {"hp": 100, "maxhp": 200}},
+                    "Char.Status": {"data": {"name": "test"}},
+                }
+            }
+        )
+    )
     path = str(tmp_path / "triggers.json")
     pane = TriggerEditPane(path=path, gmcp_snapshot_path=str(snap))
     choices = pane.gmcp_field_choices("Char.Vitals")

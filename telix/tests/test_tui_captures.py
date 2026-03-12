@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
+import json
 
 import pytest
 
@@ -43,8 +43,7 @@ class TestLoadMessages:
 
     def test_missing_files(self, tmp_path):
         pane = client_tui_captures.CapsPane(
-            chat_file=str(tmp_path / "no_chat.json"),
-            capture_file=str(tmp_path / "no_caps.json"),
+            chat_file=str(tmp_path / "no_chat.json"), capture_file=str(tmp_path / "no_caps.json")
         )
         pane.load_messages()
         assert pane.messages == []

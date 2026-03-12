@@ -75,6 +75,7 @@ async def run_ws_client(
     connect_minwait: float = 0.0,
     connect_maxwait: float = 4.0,
     connect_timeout: "float | None" = None,
+    route_timeout: float = 1.0,
     compression: "bool | None" = None,
     color_args: "argparse.Namespace | None" = None,
 ) -> None:
@@ -116,6 +117,8 @@ async def run_ws_client(
     :param connect_minwait: Minimum wait (seconds) before declaring negotiation done.
     :param connect_maxwait: Maximum wait (seconds) for negotiation to complete.
     :param connect_timeout: WebSocket open timeout in seconds (default: 10).
+    :param route_timeout: Seconds to wait for the first frame when choosing
+        the telnet-vs-GMCP path (default: 1.0).
     :param compression: ``True`` to request MCCP, ``False`` to refuse, ``None`` for auto.
     :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
     """
@@ -137,7 +140,7 @@ async def run_ws_client(
         # GMCP subprotocol (spec violation but common in practice, e.g. BBS servers).
         first_msg = None
         try:
-            first_msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
+            first_msg = await asyncio.wait_for(ws.recv(), timeout=route_timeout)
         except asyncio.TimeoutError:
             log.debug("no initial frame received within 1 second, defaulting to GMCP path")
 

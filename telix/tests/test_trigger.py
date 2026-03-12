@@ -400,14 +400,7 @@ def test_trigger_engine_cancel_when_idle():
     assert engine.reply_chain is None
 
 
-@pytest.mark.parametrize(
-    "command, expected_written",
-    [
-        ("", []),
-        ("   ", []),
-        ("look", ["look\r\n"]),
-    ],
-)
+@pytest.mark.parametrize("command, expected_written", [("", []), ("   ", []), ("look", ["look\r\n"])])
 def test_send_command(command, expected_written):
     writer, written = mock_writer()
     engine = TriggerEngine([], writer, writer.log)
@@ -1116,12 +1109,17 @@ def test_check_condition_string_compare(when, gmcp_data, ok):
 @pytest.mark.parametrize(
     "kwargs, attr, expected",
     [
-        (dict(pattern=re.compile(r"bear"), reply="kill bear;", when={"hp%": ">50", "mp%": ">30"}),
-         "when", {"hp%": ">50", "mp%": ">30"}),
-        (dict(pattern=re.compile(r"ship arrived"), reply="enter ship;", immediate=True),
-         "immediate", True),
-        (dict(pattern=re.compile(r"DEAD", re.MULTILINE | re.DOTALL), reply="loot;", case_sensitive=True),
-         "case_sensitive", True),
+        (
+            {"pattern": re.compile(r"bear"), "reply": "kill bear;", "when": {"hp%": ">50", "mp%": ">30"}},
+            "when",
+            {"hp%": ">50", "mp%": ">30"},
+        ),
+        ({"pattern": re.compile(r"ship arrived"), "reply": "enter ship;", "immediate": True}, "immediate", True),
+        (
+            {"pattern": re.compile(r"DEAD", re.MULTILINE | re.DOTALL), "reply": "loot;", "case_sensitive": True},
+            "case_sensitive",
+            True,
+        ),
     ],
 )
 def test_save_triggers_roundtrip(tmp_path, kwargs, attr, expected):

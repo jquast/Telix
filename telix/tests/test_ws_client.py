@@ -296,5 +296,5 @@ class TestRunWsClientRouting:
         cm.__aexit__ = AsyncMock(return_value=False)
         monkeypatch.setattr(websockets, "connect", lambda *a, **kw: cm)
 
-        await ws_client.run_ws_client(url="wss://test.bbs:44512")
+        await ws_client.run_ws_client(url="wss://test.bbs:44512", route_timeout=0.01)
         assert calls == {"path": "gmcp", "first_msg": None}

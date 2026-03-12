@@ -42,8 +42,8 @@ launched, the last-modified time is checked and reloaded if necessary. Save a sc
 time and then call it to see any new changes (or errors!).
 
 :samp:`\`await NAME\``
-    Start a script and block until it finishes before continuing, preferred for most trigger, macro,
-    or autowalk/autodiscover integration this is preferred, as you would want the script to run to
+    Start a script and block until it finishes before continuing. This is preferred for most
+    trigger, macro, or autowalk/autodiscover integration, as you would want the script to run to
     completion before continuing::
 
         `await combat.hunt`

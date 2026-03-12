@@ -227,20 +227,20 @@ Room tracking
 Room state lives in two parallel systems:
 
 1. **In-memory** (for REPL commands like randomwalk, autodiscover,
-   and fast-travel): ``ctx.current_room_num``,
-   ``ctx.previous_room_num``, ``ctx.room_changed``, and
-   ``ctx.room_graph`` (a ``RoomStore`` backed by a SQLite database
-   at ``ctx.rooms_file``).
+   and fast-travel): ``ctx.room.current``,
+   ``ctx.room.previous``, ``ctx.room.changed``, and
+   ``ctx.room.graph`` (a ``RoomStore`` backed by a SQLite database
+   at ``ctx.room.file``).
 
 2. **File-based** (for TUI subprocesses like the Alt+R room browser):
-   ``ctx.current_room_file`` contains the current room number as
+   ``ctx.room.current_file`` contains the current room number as
    plain text, read by ``rooms.read_current_room()``.  The rooms
    SQLite DB is shared between both systems.
 
 The ``on_room_info`` callback bridges these: when a ``Room.Info``
-GMCP message arrives, it updates ``ctx.current_room_num``, calls
+GMCP message arrives, it updates ``ctx.room.current``, calls
 ``room_graph.update_room()`` to persist the room and its exits to
-SQLite, and writes ``ctx.current_room_file`` so TUI subprocesses
+SQLite, and writes ``ctx.room.current_file`` so TUI subprocesses
 see the change.
 
 TUI editor subprocesses

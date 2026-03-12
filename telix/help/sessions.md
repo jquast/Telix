@@ -9,7 +9,7 @@ connected, then name.
 To connect to a system, use the mouse to click the selected entry, or select
 using keyboard and press return.
 
-Once connected, disconnect using ``Control  + ]``, which returns to the session manager.
+Once connected, disconnect using ``Ctrl + ]``, which returns to the session manager.
 
 ### Buttons
 

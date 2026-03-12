@@ -60,7 +60,7 @@ String comparisons work with ``=`` and ``!=``.
 | `` `when Adrenaline>100` `` | Continue only if captured Adrenaline > 100 |
 | `` `when Adrenaline%>50` `` | Continue only if Adrenaline/MaxAdrenaline > 50% |
 
-Operators: `>=`, `<=`, `>`, `<`, `=`
+Operators: `>`, `<`, `>=`, `<=`, `=`, `!=`
 
 ### Until (Wait for Pattern)
 

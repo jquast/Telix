@@ -1,7 +1,7 @@
 """Tests for extracted helpers in :mod:`telix.client_repl_travel`."""
 
-import asyncio
 import types
+import asyncio
 
 import pytest
 
@@ -131,12 +131,7 @@ def make_travel_ctx(graph=None, current=""):
         randomwalk_total=0,
     )
     repaint_calls = []
-    prompt = types.SimpleNamespace(
-        wait_fn=None,
-        echo=None,
-        ready=None,
-        repaint_input=lambda: repaint_calls.append(1),
-    )
+    prompt = types.SimpleNamespace(wait_fn=None, echo=None, ready=None, repaint_input=lambda: repaint_calls.append(1))
     room = types.SimpleNamespace(graph=graph, current=current, changed=asyncio.Event())
     triggers = types.SimpleNamespace(engine=None)
     writer = types.SimpleNamespace(write=lambda s: None)
@@ -163,9 +158,7 @@ async def test_fast_travel_calls_repaint_on_completion(tmp_path):
 
     ctx.writer.write = fake_write
 
-    await client_repl_travel.fast_travel(
-        [("east", "B")], ctx, logging.getLogger("test"), destination="B"
-    )
+    await client_repl_travel.fast_travel([("east", "B")], ctx, logging.getLogger("test"), destination="B")
     store.close()
     assert repaint_calls
     assert ctx.walk.active_command is None

@@ -20,9 +20,7 @@ class TestPriority:
     def test_blocked_sorts_second(self):
         blocked = ("1", "Blocked", "area", 2, False, "", True, False, False)
         plain = ("2", "Plain", "area", 2, False, "", False, False, False)
-        assert client_tui_rooms.RoomBrowserPane.priority(blocked) < (
-            client_tui_rooms.RoomBrowserPane.priority(plain)
-        )
+        assert client_tui_rooms.RoomBrowserPane.priority(blocked) < (client_tui_rooms.RoomBrowserPane.priority(plain))
 
     def test_bookmarked_sorts_third(self):
         bookmarked = ("1", "BM", "area", 2, True, "", False, False, False)
@@ -34,9 +32,7 @@ class TestPriority:
     def test_marked_sorts_fourth(self):
         marked = ("1", "Marked", "area", 2, False, "", False, False, True)
         plain = ("2", "Plain", "area", 2, False, "", False, False, False)
-        assert client_tui_rooms.RoomBrowserPane.priority(marked) < (
-            client_tui_rooms.RoomBrowserPane.priority(plain)
-        )
+        assert client_tui_rooms.RoomBrowserPane.priority(marked) < (client_tui_rooms.RoomBrowserPane.priority(plain))
 
     def test_plain_sorts_last(self):
         plain = ("1", "Plain", "area", 2, False, "", False, False, False)

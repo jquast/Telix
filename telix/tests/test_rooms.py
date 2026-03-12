@@ -283,11 +283,9 @@ def test_default_limit_99(store: RoomStore) -> None:
     assert len(result) == 99
 
 
-@pytest.mark.parametrize("method,attr", [
-    ("toggle_bookmark", "bookmarked"),
-    ("toggle_blocked", "blocked"),
-    ("toggle_marked", "marked"),
-])
+@pytest.mark.parametrize(
+    "method,attr", [("toggle_bookmark", "bookmarked"), ("toggle_blocked", "blocked"), ("toggle_marked", "marked")]
+)
 def test_toggle_marker(store: RoomStore, method, attr) -> None:
     store.update_room({"num": "1", "name": "Room"})
     assert not getattr(store.get_room("1"), attr)
@@ -302,28 +300,15 @@ def test_toggle_marker_missing(store: RoomStore, method) -> None:
     assert getattr(store, method)("999") is False
 
 
-@pytest.mark.parametrize("rooms,query,expected_count", [
-    (
-        [("1", "Dark Forest", "wild"), ("2", "Town Square", "town"), ("3", "Forest Path", "wild")],
-        "forest",
-        2,
-    ),
-    (
-        [("1", "Room A", "caladan"), ("2", "Room B", "arrakis")],
-        "caladan",
-        1,
-    ),
-    (
-        [("1", "DARK FOREST", "")],
-        "dark",
-        1,
-    ),
-    (
-        [("1", "Room A", ""), ("2", "Room B", "")],
-        "",
-        2,
-    ),
-])
+@pytest.mark.parametrize(
+    "rooms,query,expected_count",
+    [
+        ([("1", "Dark Forest", "wild"), ("2", "Town Square", "town"), ("3", "Forest Path", "wild")], "forest", 2),
+        ([("1", "Room A", "caladan"), ("2", "Room B", "arrakis")], "caladan", 1),
+        ([("1", "DARK FOREST", "")], "dark", 1),
+        ([("1", "Room A", ""), ("2", "Room B", "")], "", 2),
+    ],
+)
 def test_search(store: RoomStore, rooms, query, expected_count) -> None:
     for num, name, area in rooms:
         store.update_room({"num": num, "name": name, "area": area})

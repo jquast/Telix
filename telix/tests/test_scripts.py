@@ -236,7 +236,6 @@ class TestScriptOutputBufferWaitForPrompt:
         assert result is False
 
 
-
 def make_ctx():
     """Return a minimal mock TelixSessionContext."""
     ctx = MagicMock()
@@ -387,9 +386,7 @@ class TestConditionsMet:
 
     @pytest.mark.asyncio
     async def test_one_false_waits_for_update(self):
-        ctx, sctx = make_script_ctx(
-            {"Char.Vitals": {"hp": "100", "maxhp": "100", "mp": "80", "maxmp": "100"}}
-        )
+        ctx, sctx = make_script_ctx({"Char.Vitals": {"hp": "100", "maxhp": "100", "mp": "80", "maxmp": "100"}})
         task = asyncio.ensure_future(ctx.conditions_met(("hp%", "<", 100), ("mp%", ">", 50)))
         await asyncio.sleep(0)
         assert not task.done()
@@ -456,7 +453,6 @@ class TestScriptContextSend:
         asyncio.get_event_loop().call_soon(buf.on_prompt)
         await ctx.send("look")
         assert any("look" in s for s in sent)
-
 
 
 def make_fake_module(fn_name: str, body: str) -> types.ModuleType:
@@ -710,11 +706,7 @@ class TestScriptContextWalk:
 
     @pytest.mark.parametrize(
         "discover, randomwalk, travel, expected",
-        [
-            (None, None, None, False),
-            ("running", None, None, True),
-            ("done", "done", "done", False),
-        ],
+        [(None, None, None, False), ("running", None, None, True), ("done", "done", "done", False)],
     )
     def test_walk_active(self, discover, randomwalk, travel, expected):
         _, sctx = make_script_ctx()
@@ -728,13 +720,7 @@ class TestScriptContextWalk:
         ctx = scripts.ScriptContext(sctx, scripts.ScriptOutputBuffer(), logging.getLogger("test"))
         assert ctx.walk_active is expected
 
-    @pytest.mark.parametrize(
-        "done, should_cancel",
-        [
-            (False, True),
-            (True, False),
-        ],
-    )
+    @pytest.mark.parametrize("done, should_cancel", [(False, True), (True, False)])
     def test_stop_walk(self, done, should_cancel):
         _, sctx = make_script_ctx()
         task = MagicMock()
@@ -914,10 +900,7 @@ class TestScriptManagerExceptionReporting:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "side_effect, script_name, expected_substr",
-        [
-            (SyntaxError("unexpected EOF"), "bad_script", "SyntaxError"),
-        ],
+        "side_effect, script_name, expected_substr", [(SyntaxError("unexpected EOF"), "bad_script", "SyntaxError")]
     )
     async def test_import_error_printed(self, side_effect, script_name, expected_substr):
         mgr = scripts.ScriptManager()
@@ -1061,7 +1044,6 @@ class TestScriptManagerFeed:
         assert prompted == [True]
 
 
-
 class TestCommandState:
     """session_context.CommandState history and waiter notification."""
 
@@ -1130,7 +1112,6 @@ class TestCommandState:
         cs.record("north")
         cs.record("kill goblin")
         assert list(cs.buf) == ["north", "kill goblin"]
-
 
 
 class TestScriptContextCommandHistory:
