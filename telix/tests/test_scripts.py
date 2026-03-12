@@ -434,6 +434,21 @@ class TestScriptContextPrint:
         session_ctx.prompt.echo.assert_called_once_with("a, b, c")
 
 
+class TestScriptContextLogging:
+    """ScriptContext level-specific logging methods."""
+
+    @pytest.mark.parametrize(
+        "method, logger_method", [("debug", "debug"), ("info", "info"), ("warn", "warning"), ("error", "error")]
+    )
+    def test_log_level(self, method, logger_method):
+        session_ctx = make_ctx()
+        buf = scripts.ScriptOutputBuffer()
+        mock_log = MagicMock()
+        ctx = scripts.ScriptContext(session_ctx, buf, mock_log)
+        getattr(ctx, method)("test message")
+        getattr(mock_log, logger_method).assert_called_once_with("script: %s", "test message")
+
+
 class TestScriptContextProperties:
     """ScriptContext property accessors."""
 
