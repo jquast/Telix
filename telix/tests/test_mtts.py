@@ -178,6 +178,7 @@ def test_gmcp_hello_sends_telix():
     """Core.Hello identifies Telix instead of telnetlib3."""
     import types
     import logging
+
     client = mtts.TelixClient.__new__(mtts.TelixClient)
     client._gmcp_hello_sent = False
     client._gmcp_modules = ["Char 1"]
@@ -193,6 +194,7 @@ def test_gmcp_hello_not_sent_twice():
     """Core.Hello guard prevents duplicate sends."""
     import types
     import logging
+
     client = mtts.TelixClient.__new__(mtts.TelixClient)
     client._gmcp_hello_sent = True
     client._gmcp_modules = []

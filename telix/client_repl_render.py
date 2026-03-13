@@ -878,9 +878,7 @@ class ToolbarRenderer:
                 "maxmp", vitals.get("maxMP", vitals.get("max_mp", vitals.get("maxsp", vitals.get("maxSP"))))
             )
             if maxmp is None:
-                maxmp = maxstats.get(
-                    "maxmana", maxstats.get("maxmp", maxstats.get("maxMP", maxstats.get("maxsp")))
-                )
+                maxmp = maxstats.get("maxmana", maxstats.get("maxmp", maxstats.get("maxMP", maxstats.get("maxsp"))))
             if mp is not None:
                 if self.vital_slot(self.mp, mp, maxmp, DISPLAY.BAR_WIDTH, "mp", 4, 3, now, slots):
                     needs_reflash = True

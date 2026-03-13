@@ -317,8 +317,16 @@ def detect_standard(gmcp_data: dict[str, typing.Any], bars: list[BarConfig], see
             (MP_ALIASES, "MP", ("dodger_blue2", "gold1")),
         ):
             try_aliases(
-                vitals, "Char.Vitals", alias_map, bar_name, defaults, True, bars, seen,
-                alt_max_data=maxstats, alt_max_pkg="Char.Maxstats",
+                vitals,
+                "Char.Vitals",
+                alias_map,
+                bar_name,
+                defaults,
+                True,
+                bars,
+                seen,
+                alt_max_data=maxstats,
+                alt_max_pkg="Char.Maxstats",
             )
 
     status = gmcp_data.get("Char.Status")
