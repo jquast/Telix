@@ -40,6 +40,7 @@ class BarConfig(typing.NamedTuple):
     gmcp_package: str
     value_field: str
     max_field: str
+    max_gmcp_package: str = ""
     enabled: bool = True
     color_mode: str = "theme"
     color_name_max: str = "success"
@@ -307,12 +308,18 @@ def named_color_rgb(name: str) -> tuple[int, int, int]:
 def detect_standard(gmcp_data: dict[str, typing.Any], bars: list[BarConfig], seen: set[tuple[str, str, str]]) -> None:
     """Detect standard HP/MP/XP bars from known GMCP packages."""
     vitals = gmcp_data.get("Char.Vitals")
+    maxstats = gmcp_data.get("Char.Maxstats")
+    if not isinstance(maxstats, dict):
+        maxstats = None
     if isinstance(vitals, dict):
         for alias_map, bar_name, defaults in (
             (HP_ALIASES, "HP", ("green", "red")),
             (MP_ALIASES, "MP", ("dodger_blue2", "gold1")),
         ):
-            try_aliases(vitals, "Char.Vitals", alias_map, bar_name, defaults, True, bars, seen)
+            try_aliases(
+                vitals, "Char.Vitals", alias_map, bar_name, defaults, True, bars, seen,
+                alt_max_data=maxstats, alt_max_pkg="Char.Maxstats",
+            )
 
     status = gmcp_data.get("Char.Status")
     if isinstance(status, dict):
@@ -368,29 +375,44 @@ def try_aliases(
     enabled: bool,
     bars: list[BarConfig],
     seen: set[tuple[str, str, str]],
+    alt_max_data: dict[str, typing.Any] | None = None,
+    alt_max_pkg: str = "",
 ) -> None:
-    """Try known field aliases and add a bar if a matching pair is found."""
+    """Try known field aliases and add a bar if a matching pair is found.
+
+    :param alt_max_data: Optional secondary package dict to search for max
+        fields when they are absent from *pkg_data* (e.g. Aardwolf keeps max
+        values in ``Char.Maxstats``).
+    :param alt_max_pkg: Package name for *alt_max_data*.
+    """
     for val_field, max_fields in alias_map.items():
         if val_field not in pkg_data:
             continue
         for max_field in max_fields:
+            found_pkg = pkg_name
             if max_field in pkg_data and is_numeric(pkg_data[max_field]):
-                key = (pkg_name, val_field, max_field)
-                if key not in seen:
-                    seen.add(key)
-                    bars.append(
-                        BarConfig(
-                            name=bar_name,
-                            gmcp_package=pkg_name,
-                            value_field=val_field,
-                            max_field=max_field,
-                            enabled=enabled,
-                            color_mode="theme",
-                            color_name_max=defaults[0],
-                            color_name_min=defaults[1],
-                        )
+                pass
+            elif alt_max_data and max_field in alt_max_data and is_numeric(alt_max_data[max_field]):
+                found_pkg = alt_max_pkg
+            else:
+                continue
+            key = (pkg_name, val_field, max_field)
+            if key not in seen:
+                seen.add(key)
+                bars.append(
+                    BarConfig(
+                        name=bar_name,
+                        gmcp_package=pkg_name,
+                        value_field=val_field,
+                        max_field=max_field,
+                        max_gmcp_package=found_pkg if found_pkg != pkg_name else "",
+                        enabled=enabled,
+                        color_mode="theme",
+                        color_name_max=defaults[0],
+                        color_name_min=defaults[1],
                     )
-                return
+                )
+            return
 
 
 def detect_pairs(
@@ -440,6 +462,7 @@ def dict_to_bar(entry: dict[str, typing.Any], idx: int) -> BarConfig:
         gmcp_package=str(entry.get("gmcp_package", "")),
         value_field=str(entry.get("value_field", "")),
         max_field=str(entry.get("max_field", "")),
+        max_gmcp_package=str(entry.get("max_gmcp_package", "")),
         enabled=bool(entry.get("enabled", True)),
         color_mode=str(entry.get("color_mode", "theme")),
         color_name_max=str(entry.get("color_name_max", "green")),
@@ -461,6 +484,7 @@ def bar_to_dict(bar: BarConfig) -> dict[str, typing.Any]:
         "gmcp_package": bar.gmcp_package,
         "value_field": bar.value_field,
         "max_field": bar.max_field,
+        "max_gmcp_package": bar.max_gmcp_package,
         "enabled": bar.enabled,
         "color_mode": bar.color_mode,
         "color_name_max": bar.color_name_max,

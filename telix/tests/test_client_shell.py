@@ -358,6 +358,22 @@ class TestWsClientShellNoRepl:
         assert ctx.repl.enabled is False
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("char.vitals", "Char.Vitals"),
+        ("Char.Vitals", "Char.Vitals"),
+        ("room.info", "Room.Info"),
+        ("comm.channel.text", "Comm.Channel.Text"),
+        ("char.maxstats", "Char.Maxstats"),
+        ("Core.Goodbye", "Core.Goodbye"),
+    ],
+)
+def test_gmcp_package_normalization(raw, expected):
+    """GMCP package names are normalized to title-case segments."""
+    assert ".".join(seg.title() for seg in raw.split(".")) == expected
+
+
 class TestWsClientShellTypescript:
     """ws_client_shell opens a typescript file from initial ctx and closes it in finally."""
 

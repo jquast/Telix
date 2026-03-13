@@ -121,14 +121,31 @@ def test_detect_no_duplicate_standard_and_pair():
     assert len(hp_bars) == 1
 
 
+def test_detect_cross_package_maxstats():
+    """Aardwolf sends max values in a separate Char.Maxstats package."""
+    gmcp = {
+        "Char.Vitals": {"hp": 160, "mana": 165, "moves": 550},
+        "Char.Maxstats": {"maxhp": 160, "maxmana": 165, "maxmoves": 550},
+    }
+    bars = detect_progressbars(gmcp)
+    hp_bars = [b for b in bars if b.value_field == "hp"]
+    assert len(hp_bars) == 1
+    assert hp_bars[0].gmcp_package == "Char.Vitals"
+    assert hp_bars[0].max_field == "maxhp"
+    assert hp_bars[0].max_gmcp_package == "Char.Maxstats"
+    mana_bars = [b for b in bars if b.value_field == "mana"]
+    assert len(mana_bars) == 1
+    assert mana_bars[0].max_gmcp_package == "Char.Maxstats"
+
+
 # -- load_progressbars / save_progressbars --
 
 
 def test_round_trip(tmp_path):
     path = str(tmp_path / "pb.json")
     bars = [
-        BarConfig("HP", "Char.Vitals", "hp", "maxhp", True, "theme", "green", "red", "shortest", display_order=0),
-        BarConfig("MP", "Char.Vitals", "mp", "maxmp", True, "custom", "blue", "gold1", "longest", display_order=1),
+        BarConfig("HP", "Char.Vitals", "hp", "maxhp", "", True, "theme", "green", "red", "shortest", display_order=0),
+        BarConfig("MP", "Char.Vitals", "mp", "maxmp", "", True, "custom", "blue", "gold1", "longest", display_order=1),
     ]
     save_progressbars(path, "mud:1234", bars)
     loaded = load_progressbars(path, "mud:1234")

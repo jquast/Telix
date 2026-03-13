@@ -32,6 +32,7 @@ class ProgressBarTuple(typing.NamedTuple):
     gmcp_package: str = ""
     value_field: str = ""
     max_field: str = ""
+    max_gmcp_package: str = ""
     enabled: bool = True
     color_mode: str = "theme"
     color_name_max: str = "success"

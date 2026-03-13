@@ -862,9 +862,14 @@ class ToolbarRenderer:
         """Build HP/MP/XP bars using hardcoded aliases (backward compat)."""
         needs_reflash = False
         vitals = gmcp_data.get("Char.Vitals")
+        maxstats = gmcp_data.get("Char.Maxstats")
+        if not isinstance(maxstats, dict):
+            maxstats = {}
         if isinstance(vitals, dict):
             hp = vitals.get("hp", vitals.get("HP"))
             maxhp = vitals.get("maxhp", vitals.get("maxHP", vitals.get("max_hp")))
+            if maxhp is None:
+                maxhp = maxstats.get("maxhp", maxstats.get("maxHP", maxstats.get("max_hp")))
             if hp is not None:
                 if self.vital_slot(self.hp, hp, maxhp, DISPLAY.BAR_WIDTH, "hp", 1, 2, now, slots):
                     needs_reflash = True
@@ -872,6 +877,10 @@ class ToolbarRenderer:
             maxmp = vitals.get(
                 "maxmp", vitals.get("maxMP", vitals.get("max_mp", vitals.get("maxsp", vitals.get("maxSP"))))
             )
+            if maxmp is None:
+                maxmp = maxstats.get(
+                    "maxmana", maxstats.get("maxmp", maxstats.get("maxMP", maxstats.get("maxsp")))
+                )
             if mp is not None:
                 if self.vital_slot(self.mp, mp, maxmp, DISPLAY.BAR_WIDTH, "mp", 4, 3, now, slots):
                     needs_reflash = True
@@ -913,7 +922,11 @@ class ToolbarRenderer:
                 self.label_slot(cfg, raw, i, is_ar_bg, slots)
                 continue
 
-            maxval = pkg_data.get(cfg.max_field)
+            if cfg.max_gmcp_package:
+                max_pkg = gmcp_data.get(cfg.max_gmcp_package)
+                maxval = max_pkg.get(cfg.max_field) if isinstance(max_pkg, dict) else None
+            else:
+                maxval = pkg_data.get(cfg.max_field)
             tracker = self.bar_trackers.get(cfg.name)
             if tracker is None:
                 tracker = VitalTracker()

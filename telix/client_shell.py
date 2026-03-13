@@ -368,6 +368,7 @@ async def telix_client_shell(
     base_on_gmcp = telnet_writer._ext_callback.get(telnetlib3.telopt.GMCP)
 
     def on_gmcp(package: str, data: typing.Any) -> None:
+        package = ".".join(seg.title() for seg in package.split("."))
         if base_on_gmcp is not None:
             base_on_gmcp(package, data)
         if package == "Comm.Channel.Text":
@@ -611,6 +612,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
     def on_gmcp(package: str, data: typing.Any) -> None:
+        package = ".".join(seg.title() for seg in package.split("."))
         if package == "Comm.Channel.Text":
             if ctx.chat.on_text is not None:
                 ctx.chat.on_text(data)
