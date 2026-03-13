@@ -378,7 +378,8 @@ def try_aliases(
     alt_max_data: dict[str, typing.Any] | None = None,
     alt_max_pkg: str = "",
 ) -> None:
-    """Try known field aliases and add a bar if a matching pair is found.
+    """
+    Try known field aliases and add a bar if a matching pair is found.
 
     :param alt_max_data: Optional secondary package dict to search for max
         fields when they are absent from *pkg_data* (e.g. Aardwolf keeps max
