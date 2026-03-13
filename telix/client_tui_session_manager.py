@@ -1735,6 +1735,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             return
         ssl_on = self.is_ssl_active()
         if button_id == "type-bbs":
+            term_input = self.query_one("#term", textual.widgets.Input)
+            if term_input.value.strip() == "XTERM-TRUECOLOR":
+                term_input.value = ""
             self.query_one("#colormatch", textual.widgets.Select).value = "vga"
             self.query_one("#ice-colors", textual.widgets.Switch).value = True
             self.select_radio("mode-radio", "mode-raw")
@@ -1762,6 +1765,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#repl-label", textual.widgets.Label).set_class(False, "dimmed")
             self.query_one("#colormatch", textual.widgets.Select).value = "none"
             self.query_one("#ice-colors", textual.widgets.Switch).value = False
+            term_input = self.query_one("#term", textual.widgets.Input)
+            if not term_input.value.strip():
+                term_input.value = "XTERM-TRUECOLOR"
             force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
             if not force_bg.disabled:
                 force_bg.value = False

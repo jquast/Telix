@@ -80,12 +80,16 @@ def _apply_type_presets(cfg: client_tui_session_manager.SessionConfig, entry_typ
         cfg.colormatch = "vga"
         cfg.ice_colors = True
         cfg.compression = None  # passive
+        if cfg.term == "XTERM-TRUECOLOR":
+            cfg.term = ""
     elif entry_type == "mud":
         cfg.colormatch = "none"
         cfg.ice_colors = False
         cfg.mode = "line"
         cfg.no_repl = False
         cfg.compression = True
+        if not cfg.term:
+            cfg.term = "XTERM-TRUECOLOR"
 
 
 def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager.SessionConfig:

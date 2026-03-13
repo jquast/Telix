@@ -28,6 +28,7 @@ from telix import mtts
             0,
         ),
         ({"mslp": False}, 783),
+        ({"colors_256": False}, 1807),
     ],
 )
 def test_bitvector(kwargs, expected):

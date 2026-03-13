@@ -42,6 +42,11 @@ class MttsCapabilities:
     mslp: bool = True  # 1024
     ssl: bool = False  # 2048
 
+    def __post_init__(self) -> None:
+        """Enforce MTTS invariants: TRUECOLOR requires 256 COLORS."""
+        if self.truecolor:
+            self.colors_256 = True
+
     @property
     def bitvector(self) -> int:
         """Return the integer bitvector for all enabled capabilities."""
