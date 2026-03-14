@@ -3,5 +3,5 @@
 __author__ = "Jeff Quast"
 __url__ = "https://github.com/jquast/telix/"
 __license__ = "ISC"
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
