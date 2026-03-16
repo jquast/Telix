@@ -8,7 +8,7 @@ import datetime
 # local
 import pytest
 
-from telix.util import erase_eol, relative_time
+from telix.util import erase_eol, relative_time, strip_decstbm
 
 
 def test_relative_time_empty():
@@ -54,3 +54,21 @@ def test_relative_time_invalid():
 def test_erase_eol(text, expected):
     """erase_eol inserts \\x1b[K before \\r+\\n only on lines with visible content."""
     assert erase_eol(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("\x1b[1;28r", ""),
+        ("\x1b[r", ""),
+        ("\x1b[;28r", ""),
+        ("\x1b[5r", ""),
+        ("hello\x1b[1;28rworld", "helloworld"),
+        ("\x1b[2J\x1b[H\x1b7\x1b[1;28r\x1b8", "\x1b[2J\x1b[H\x1b7\x1b8"),
+        ("no escape", "no escape"),
+        ("", ""),
+    ],
+)
+def test_strip_decstbm(text, expected):
+    """strip_decstbm removes DECSTBM scroll region sequences."""
+    assert strip_decstbm(text) == expected

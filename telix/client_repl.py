@@ -1448,6 +1448,7 @@ class ReplSession:
             out = telnetlib3.client_shell._transform_output(out, self.telnet_writer, True)
             if self.ctx.repl.erase_eol:
                 out = util.erase_eol(out)
+            out = util.strip_decstbm(out)
             ts = self.ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None:
                 ts.write(out)
@@ -1530,6 +1531,7 @@ class ReplSession:
                 self.update_input_style()
                 self.stdout.write(self.render_editor(bt, scroll.input_row, self.input_width()).encode())
                 cursor_col = self.editor_cursor()
+            scroll.set_scroll_region()
             needs_reflash = self.toolbar.render(self.trigger_engine)
             if needs_reflash and not self.toolbar.flash_active:
                 self.toolbar.flash_active = True

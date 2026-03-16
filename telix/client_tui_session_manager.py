@@ -39,6 +39,59 @@ from . import util, paths, terminal
 log = logging.getLogger(__name__)
 
 
+import textual.geometry
+
+
+class VerticalOnlyDataTable(textual.widgets.DataTable):
+    """DataTable subclass that never scrolls horizontally.
+
+    Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region``
+    with ``force=True``, bypassing ``overflow-x: hidden``.  The built-in
+    ``action_scroll_end`` also sets ``scroll_x`` directly.  This subclass
+    clamps ``scroll_x`` to zero in all relevant code paths.
+    """
+
+    def _scroll_cursor_into_view(self, animate: bool = False) -> None:
+        fixed_offset = self._get_fixed_offset()
+        top, _, _, left = fixed_offset
+        if self.cursor_type == "row":
+            x, y, width, height = self._get_row_region(self.cursor_row)
+            region = textual.geometry.Region(
+                int(self.scroll_x) + left, y, width - left, height
+            )
+        elif self.cursor_type == "column":
+            x, y, width, height = self._get_column_region(self.cursor_column)
+            region = textual.geometry.Region(
+                x, int(self.scroll_y) + top, width, height - top
+            )
+        else:
+            region = self._get_cell_region(self.cursor_coordinate)
+        self.scroll_to_region(
+            region, animate=animate, spacing=fixed_offset, force=True, x_axis=False
+        )
+
+    def action_scroll_end(self) -> None:
+        """Scroll to the last row without horizontal shift."""
+        self._set_hover_cursor(False)
+        if self.show_cursor and self.cursor_type in ("cell", "column"):
+            self.move_cursor(column=len(self.columns) - 1)
+        else:
+            self.move_cursor(row=self.row_count - 1)
+
+    def action_scroll_home(self) -> None:
+        """Scroll to the first row without horizontal shift."""
+        self._set_hover_cursor(False)
+        if self.show_cursor and self.cursor_type in ("cell", "column"):
+            self.move_cursor(column=0)
+        else:
+            self.move_cursor(row=0)
+
+    def watch_scroll_x(self, value: float) -> None:
+        """Pin horizontal scroll to zero."""
+        if value != 0:
+            self.scroll_x = 0
+
+
 PRIMARY_PASTE_COMMANDS = (
     ("xclip", "-selection", "primary", "-o"),
     ("xsel", "--primary", "--output"),
@@ -592,13 +645,24 @@ def relative_time(iso_str: str) -> str:
     return util.relative_time(iso_str)
 
 
-# Reset SGR, cursor, scroll region, alt-screen, mouse, and bracketed paste,
-# then move cursor home and clear the screen so tracebacks start clean.
+# Reset SGR, cursor, scroll region, alt-screen, mouse, and bracketed paste.
 # \x1b[r (DECSTBM) must come before \x1b[?1049l so it resets the alt-screen
 # scroll region before switching to the normal screen.
 TERMINAL_CLEANUP = (
-    "\x1b[m\x1b[?25h\x1b[r\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[H\x1b[2J"
+    "\x1b[m\x1b[?25h\x1b[r\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l"
 )
+
+
+def terminal_cleanup(clear_screen: bool = True) -> str:
+    """Return the terminal cleanup sequence.
+
+    :param clear_screen: When ``True``, append cursor-home and clear-screen
+        sequences.  Set to ``False`` when the caller wants the previous
+        output (e.g. a disconnect message) to remain visible.
+    """
+    if clear_screen:
+        return TERMINAL_CLEANUP + "\x1b[H\x1b[2J"
+    return TERMINAL_CLEANUP
 
 
 def int_val(text: str, default: int) -> int:
@@ -720,7 +784,7 @@ class SessionListScreen(textual.screen.Screen[None]):
                     yield textual.widgets.Button("Delete", variant="error", id="delete-btn")
                     yield textual.widgets.Button("Copy", variant="default", id="copy-btn")
                     yield textual.widgets.Button("Edit", variant="default", id="edit-btn")
-                yield textual.widgets.DataTable(id="session-table")
+                yield VerticalOnlyDataTable(id="session-table")
         yield textual.widgets.Footer()
 
     def on_mount(self) -> None:
@@ -798,8 +862,11 @@ class SessionListScreen(textual.screen.Screen[None]):
                 key=key,
             )
 
-    def refresh_table(self, search: str = "") -> None:
+    def refresh_table(self, search: str | None = None) -> None:
         """Rebuild the session table, loading rows in batches."""
+        if search is None:
+            search_input = self.query_one("#session-search", textual.widgets.Input)
+            search = search_input.value
         self.refresh_gen += 1
         gen = self.refresh_gen
         table = self.query_one("#session-table", textual.widgets.DataTable)
@@ -860,10 +927,11 @@ class SessionListScreen(textual.screen.Screen[None]):
             event.prevent_default()
             return
 
-        # Right from search -> theme button; left from theme -> search
+        # Right from search -> theme button only when cursor is at end of input
         if self.focused is search_input and event.key == "right":
-            theme_btn.focus()
-            event.prevent_default()
+            if search_input.cursor_position >= len(search_input.value):
+                theme_btn.focus()
+                event.prevent_default()
             return
         if self.focused is theme_btn and event.key == "left":
             search_input.focus()
@@ -1091,15 +1159,13 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # Reset terminal to known-good state -- the child may
                 # have left raw mode, SGR attributes, mouse tracking,
                 # or alternate screen active.
-                sys.stdout.write(TERMINAL_CLEANUP)
+                sys.stdout.write(terminal_cleanup(clear_screen=False))
                 sys.stdout.flush()
-                # If the session exited very quickly, the child likely crashed
-                # before fully starting.  Pause so the error output is visible
-                # rather than being wiped by the TUI redraw.
-                if _elapsed < 5.0:
-                    sys.stdout.write("\r\n[press Enter to return to session manager]\r\n")
-                    sys.stdout.flush()
-                    sys.stdin.readline()
+                # Pause so the final output (disconnect message, error, etc.)
+                # is visible before the TUI redraws over it.
+                sys.stdout.write("\r\n[press Enter to return to session manager]\r\n")
+                sys.stdout.flush()
+                sys.stdin.readline()
         self.refresh_table()
         self.select_row(key)
         # Textual's app.suspend() re-enters the alternate screen buffer

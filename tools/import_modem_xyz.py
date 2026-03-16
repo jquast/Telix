@@ -10,17 +10,19 @@ import sys
 
 # Tokens recognised as encoding names (non-numeric, non-ssl).
 _KNOWN_ENCODINGS = frozenset({
-    "ascii", "atascii", "big5", "cp437", "cp1251", "cp1252",
-    "gbk", "gb18030", "latin-1", "latin1", "petscii", "topaz",
+    "ascii", "atascii", "big5", "big5bbs", "cp437", "cp1251", "cp1252",
+    "euc-kr", "gbk", "gb18030", "iso-8859-2", "koi8-r",
+    "latin-1", "latin1", "petscii", "shift-jis", "topaz",
     "utf-8", "utf8",
 })
 
 
-def _parse_line(line: str, entry_type: str) -> dict[str, object] | None:
+def _parse_line(line: str, entry_type: str, default_encoding: str = "utf-8") -> dict[str, object] | None:
     """Parse a single data line into a directory entry dict.
 
     :param line: whitespace-separated fields ``host [port [enc [cols [tall]]]] [ssl]``
     :param entry_type: ``"mud"`` or ``"bbs"``
+    :param default_encoding: encoding to assume when the line has none
     :returns: entry dict or ``None`` for blank/comment lines
     """
     line = line.strip()
@@ -38,7 +40,7 @@ def _parse_line(line: str, entry_type: str) -> dict[str, object] | None:
         pass
 
     port = 23
-    encoding = "utf-8"
+    encoding = default_encoding
     columns = 0
     rows = 0
     ssl = False
@@ -87,17 +89,18 @@ def _parse_line(line: str, entry_type: str) -> dict[str, object] | None:
     return entry
 
 
-def parse_file(path: str, entry_type: str) -> list[dict[str, object]]:
+def parse_file(path: str, entry_type: str, default_encoding: str = "utf-8") -> list[dict[str, object]]:
     """Parse a modem.xyz list file.
 
     :param path: path to ``mudlist.txt`` or ``bbslist.txt``
     :param entry_type: ``"mud"`` or ``"bbs"``
+    :param default_encoding: encoding to assume when a line has none
     :returns: list of directory entry dicts
     """
     entries: list[dict[str, object]] = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
-            entry = _parse_line(line, entry_type)
+            entry = _parse_line(line, entry_type, default_encoding)
             if entry is not None:
                 entries.append(entry)
     return entries
@@ -124,7 +127,7 @@ def main() -> None:
         print(f"Error: {bbslist} not found", file=sys.stderr)
         sys.exit(1)
 
-    entries = parse_file(mudlist, "mud") + parse_file(bbslist, "bbs")
+    entries = parse_file(mudlist, "mud") + parse_file(bbslist, "bbs", default_encoding="cp437")
 
     out_path = os.path.join(project_dir, "telix", "data", "directory.json")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

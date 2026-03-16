@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 
 # Re-export constants and symbols used by other modules that import from client_tui_base.
 TERMINAL_CLEANUP = client_tui_session_manager.TERMINAL_CLEANUP
+terminal_cleanup = client_tui_session_manager.terminal_cleanup
 PRIMARY_PASTE_COMMANDS = client_tui_session_manager.PRIMARY_PASTE_COMMANDS
 ENCODINGS = client_tui_session_manager.ENCODINGS
 DEFAULTS_KEY = client_tui_session_manager.DEFAULTS_KEY

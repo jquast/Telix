@@ -1,6 +1,14 @@
 History
 =======
 
+0.1.7 -- 2026-03-16
+-------------------
+
+- bugfix: strip DECSTBM (Set Scrolling Region) sequences from server when in linemode.
+- bugfix: thousands of bbs's were erroneously set with utf8 encoding, set to cp437.
+- bugfix: more some small TUI fixes/weaks
+- enhancement: always display 'press Enter to return' prompt on disconnect.
+
 0.1.6 -- 2026-03-15
 -------------------
 

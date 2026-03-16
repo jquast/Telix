@@ -5,11 +5,30 @@ import os
 import re
 import json
 import typing
+import logging
 import datetime
 
 from . import paths
 
 ANSI_ESC_RE = re.compile(r"\x1b\[[^@-~]*[@-~]|\x1b.")
+DECSTBM_RE = re.compile(r"\x1b\[\d*;?\d*r")
+
+
+def strip_decstbm(text: str) -> str:
+    r"""
+    Remove DECSTBM (Set Scrolling Region) escape sequences from server output.
+
+    Some MUD servers send ``\x1b[Pt;Pbr`` to set their own scroll region,
+    which conflicts with the client's managed scroll region and causes the
+    toolbar to scroll into the text area.
+
+    :param text: Decoded server text.
+    :returns: Text with DECSTBM sequences removed.
+    """
+    result = DECSTBM_RE.sub("", text)
+    if len(result) != len(text):
+        logging.getLogger(__name__).debug("stripped DECSTBM scroll region sequence from server output")
+    return result
 
 
 def erase_eol(text: str) -> str:
