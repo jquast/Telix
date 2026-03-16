@@ -30,6 +30,7 @@ import textual.events
 import textual.screen
 import textual.binding
 import textual.widgets
+import textual.geometry
 import textual.css.query
 import textual.containers
 
@@ -39,11 +40,9 @@ from . import util, paths, terminal
 log = logging.getLogger(__name__)
 
 
-import textual.geometry
-
-
 class VerticalOnlyDataTable(textual.widgets.DataTable):
-    """DataTable subclass that never scrolls horizontally.
+    """
+    DataTable subclass that never scrolls horizontally.
 
     Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region``
     with ``force=True``, bypassing ``overflow-x: hidden``.  The built-in
@@ -56,19 +55,13 @@ class VerticalOnlyDataTable(textual.widgets.DataTable):
         top, _, _, left = fixed_offset
         if self.cursor_type == "row":
             x, y, width, height = self._get_row_region(self.cursor_row)
-            region = textual.geometry.Region(
-                int(self.scroll_x) + left, y, width - left, height
-            )
+            region = textual.geometry.Region(int(self.scroll_x) + left, y, width - left, height)
         elif self.cursor_type == "column":
             x, y, width, height = self._get_column_region(self.cursor_column)
-            region = textual.geometry.Region(
-                x, int(self.scroll_y) + top, width, height - top
-            )
+            region = textual.geometry.Region(x, int(self.scroll_y) + top, width, height - top)
         else:
             region = self._get_cell_region(self.cursor_coordinate)
-        self.scroll_to_region(
-            region, animate=animate, spacing=fixed_offset, force=True, x_axis=False
-        )
+        self.scroll_to_region(region, animate=animate, spacing=fixed_offset, force=True, x_axis=False)
 
     def action_scroll_end(self) -> None:
         """Scroll to the last row without horizontal shift."""
@@ -648,13 +641,12 @@ def relative_time(iso_str: str) -> str:
 # Reset SGR, cursor, scroll region, alt-screen, mouse, and bracketed paste.
 # \x1b[r (DECSTBM) must come before \x1b[?1049l so it resets the alt-screen
 # scroll region before switching to the normal screen.
-TERMINAL_CLEANUP = (
-    "\x1b[m\x1b[?25h\x1b[r\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l"
-)
+TERMINAL_CLEANUP = "\x1b[m\x1b[?25h\x1b[r\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l"
 
 
 def terminal_cleanup(clear_screen: bool = True) -> str:
-    """Return the terminal cleanup sequence.
+    """
+    Return the terminal cleanup sequence.
 
     :param clear_screen: When ``True``, append cursor-home and clear-screen
         sequences.  Set to ``False`` when the caller wants the previous
