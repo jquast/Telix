@@ -72,10 +72,10 @@ class TestLoadFavorites:
             assert "name" in entry
             assert "type" in entry
 
-    def test_topaz_alias(self) -> None:
+    def test_topaz_no_alias(self) -> None:
         from telix.directory import _ENCODING_ALIASES
 
-        assert _ENCODING_ALIASES["topaz"] == "latin1"
+        assert "topaz" not in _ENCODING_ALIASES
 
     def test_port_is_int(self) -> None:
         entries = load_favorites()
@@ -234,10 +234,10 @@ class TestParseLine:
         assert entry is not None
         assert entry["encoding"] == encoding
 
-    def test_topaz_becomes_latin1(self) -> None:
+    def test_topaz_preserved(self) -> None:
         entry = _parse_line("host.example 1234 topaz", "bbs")
         assert entry is not None
-        assert entry["encoding"] == "latin1"
+        assert entry["encoding"] == "topaz"
 
 
 class TestParseFile:

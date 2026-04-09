@@ -149,6 +149,10 @@ class ReplState:
     history_file: str | None = None
     color_filter: typing.Any | None = None
     erase_eol: bool = False
+    metafont: bool = False
+    metafont_font_id: int | None = None
+    metafont_columns: int | None = None
+    metafont_rows: int | None = None
 
 
 @dataclasses.dataclass

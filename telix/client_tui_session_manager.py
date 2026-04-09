@@ -110,6 +110,12 @@ ENCODINGS = (
     "cp437",
     "latin-1",
     "ascii",
+    "topaz",
+    "topaz-plus",
+    "microknight",
+    "microknight-plus",
+    "p0t-noodle",
+    "mosoul",
     "iso-8859-1",
     "iso-8859-2",
     "iso-8859-15",
@@ -134,6 +140,35 @@ for _enc in reversed(ENCODINGS):
         _CODEC_MAP[codecs.lookup(_enc).name] = _enc
     except LookupError:
         pass
+
+
+# Font short names from the font registry that appear in the ENCODINGS list.
+# Maps font short name -> (wire encoding, font ID).
+_FONT_ENCODINGS: dict[str, tuple[str, int]] = {}
+
+
+def _init_font_encodings() -> None:
+    if _FONT_ENCODINGS:
+        return
+    from .fonts import font_registry
+    for entry in font_registry.FONT_TABLE:
+        if entry.short_name in ENCODINGS:
+            _FONT_ENCODINGS[entry.short_name] = (entry.encoding, entry.font_id)
+
+
+def resolve_encoding_font(enc: str) -> tuple[str, int | None]:
+    """Resolve an encoding/font name to (wire_encoding, font_id_or_None).
+
+    Font names like "topaz" resolve to their wire encoding (e.g. "iso-8859-1")
+    and SyncTERM font ID.  Regular encodings return themselves and ``None``.
+
+    :param enc: Encoding or font name from the session config.
+    :returns: Tuple of (wire_encoding, font_id).
+    """
+    _init_font_encodings()
+    if enc in _FONT_ENCODINGS:
+        return _FONT_ENCODINGS[enc]
+    return (enc, None)
 
 
 def normalize_encoding(enc: str) -> str:
@@ -384,6 +419,12 @@ class SessionConfig:
     # Developer
     coverage: bool = False
 
+    # Metafont: octant bitmap font rendering
+    metafont: bool = False
+    metafont_font_id: int | None = None
+    metafont_columns: int | None = None
+    metafont_rows: int | None = None
+
     # Server type: "bbs", "mud", or "" (unset)
     server_type: str = ""
 
@@ -455,6 +496,25 @@ TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
 TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
 
 
+def _append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--metafont`` related flags to *cmd* when metafont is enabled."""
+    if not config.metafont:
+        return
+    cmd.append("--metafont")
+    if config.metafont_font_id is not None:
+        cmd.extend(["--metafont-font-id", str(config.metafont_font_id)])
+    if config.metafont_columns is not None:
+        cmd.extend(["--metafont-columns", str(config.metafont_columns)])
+    if config.metafont_rows is not None:
+        cmd.extend(["--metafont-rows", str(config.metafont_rows)])
+
+
+def _resolve_wire_encoding(config: SessionConfig) -> str:
+    """Return the wire encoding for *config*, resolving font names."""
+    wire_enc, _ = resolve_encoding_font(config.encoding)
+    return wire_enc
+
+
 def build_command(config: SessionConfig) -> list[str]:
     """
     Build CLI arguments from *config*.
@@ -491,6 +551,8 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
 
     for attr, flag, default in CMD_STR_FLAGS:
         val = getattr(config, attr)
+        if attr == "encoding":
+            val = _resolve_wire_encoding(config)
         if val != default:
             cmd.extend([flag, str(val)])
 
@@ -520,6 +582,7 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
             if opt := opt.strip():
                 cmd.extend([flag, opt])
 
+    _append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -587,6 +650,8 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         ("background_color", "--background-color", "#000000"),
     ]:
         value = getattr(config, field)
+        if field == "encoding":
+            value = _resolve_wire_encoding(config)
         if value != default:
             cmd += [flag, str(value)]
     if config.connect_timeout != 10.0:
@@ -597,6 +662,7 @@ def build_ws_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
+    _append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -630,6 +696,7 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+    _append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -1594,7 +1661,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         enc = normalize_encoding(cfg.encoding or "utf8")
         is_retro = enc.lower() in ("atascii", "petscii")
         with textual.containers.Horizontal(classes="field-row"):
-            yield textual.widgets.Label("Encoding", id="enc-label")
+            yield textual.widgets.Label("Encoding/Font", id="enc-label")
             yield textual.widgets.Select([(e, e) for e in ENCODINGS], value=enc, id="encoding", allow_blank=False)
             yield textual.widgets.Label("Errors", id="enc-errors-label")
             yield textual.widgets.Select(
@@ -1650,6 +1717,32 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 if not has_detected:
                     switch.tooltip = "Could not detect background color of your terminal"
                 yield switch
+        mf_dim = "" if cfg.metafont else " dimmed"
+        with textual.containers.Horizontal():
+            with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label("Octant Metafonts", classes="field-label")
+                yield textual.widgets.Switch(value=cfg.metafont, id="metafont")
+            with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label(
+                    "Columns", id="metafont-cols-label", classes=f"field-label-short{mf_dim}"
+                )
+                yield textual.widgets.Input(
+                    value=str(cfg.metafont_columns or ""),
+                    placeholder="auto",
+                    id="metafont-columns",
+                    classes="field-input-short",
+                    disabled=not cfg.metafont,
+                )
+                yield textual.widgets.Label(
+                    "Rows", id="metafont-rows-label", classes=f"field-label-short{mf_dim}"
+                )
+                yield textual.widgets.Input(
+                    value=str(cfg.metafont_rows or ""),
+                    placeholder="auto",
+                    id="metafont-rows",
+                    classes="field-input-short",
+                    disabled=not cfg.metafont,
+                )
 
     def compose_advanced_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Advanced tab pane."""
@@ -1901,6 +1994,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """Handle switch changes for palette and other toggles."""
         if event.switch.id in ("ice-colors", "force-black-bg"):
             self.update_palette_preview()
+        elif event.switch.id == "metafont":
+            enabled = event.value
+            for widget_id in ("#metafont-columns", "#metafont-rows"):
+                self.query_one(widget_id, textual.widgets.Input).disabled = not enabled
+            for label_id in ("#metafont-cols-label", "#metafont-rows-label"):
+                self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
@@ -2082,6 +2181,20 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.color_contrast = self._parse_pct("#color-contrast", 100) / 100.0
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
         cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
+        cfg.metafont = self.query_one("#metafont", textual.widgets.Switch).value
+        mf_cols = self.query_one("#metafont-columns", textual.widgets.Input).value.strip()
+        cfg.metafont_columns = int(mf_cols) if mf_cols.isdigit() and int(mf_cols) > 0 else None
+        mf_rows = self.query_one("#metafont-rows", textual.widgets.Input).value.strip()
+        cfg.metafont_rows = int(mf_rows) if mf_rows.isdigit() and int(mf_rows) > 0 else None
+
+        enc = cfg.encoding
+        wire_enc, font_id = resolve_encoding_font(enc)
+        if font_id is not None:
+            cfg.metafont = True
+            cfg.metafont_font_id = font_id
+        else:
+            cfg.metafont_font_id = None
+
         if not cfg.force_black_bg and self.detected_bg is not None:
             r, g, b = self.detected_bg
             cfg.background_color = f"#{r:02x}{g:02x}{b:02x}"

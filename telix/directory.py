@@ -9,7 +9,8 @@ import importlib.resources
 from . import client_tui_session_manager
 
 # Encoding aliases applied when loading favorites.
-_ENCODING_ALIASES: dict[str, str] = {"topaz": "latin1"}
+# "topaz" is now a valid encoding/font name in ENCODINGS -- no alias needed.
+_ENCODING_ALIASES: dict[str, str] = {}
 
 
 def load_directory() -> list[dict[str, typing.Any]]:

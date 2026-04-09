@@ -39,6 +39,7 @@ from . import (
     rooms,
     macros,
     trigger,
+    terminal,
     client_repl,
     highlighter,
     progressbars,
@@ -331,6 +332,91 @@ def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     ctx.repl.ansi_keys = bool(getattr(args, "ansi_keys", False))
 
 
+def _setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure metafont rendering from telix CLI args.
+
+    Reads ``ctx.color_args`` for ``--metafont``, ``--metafont-font-id``,
+    and ``--metafont-columns`` flags.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.metafont = bool(getattr(args, "metafont", False))
+    ctx.repl.metafont_font_id = getattr(args, "metafont_font_id", None)
+    ctx.repl.metafont_columns = getattr(args, "metafont_columns", None)
+    ctx.repl.metafont_rows = getattr(args, "metafont_rows", None)
+
+
+def _make_raw_stdout(
+    stdout: asyncio.StreamWriter,
+    ctx: "session_context.TelixSessionContext",
+    tty_shell: "typing.Any | None" = None,
+    writer: "typing.Any | None" = None,
+) -> "asyncio.StreamWriter | ColorFilteredWriter":
+    """
+    Build the raw-mode stdout wrapper appropriate for the session config.
+
+    Returns a :class:`MetaTerminalWriter` when metafont is enabled,
+    a :class:`ColorFilteredWriter` when a color filter is active,
+    or the raw *stdout* otherwise.
+
+    When metafont is enabled, also patches NAWS reporting on *writer* to
+    return the virtual terminal size, and sets *tty_shell.on_resize* to
+    schedule a resize on the next write (no I/O from the signal handler).
+
+    :param stdout: The underlying asyncio stream to real stdout.
+    :param ctx: Session context with display configuration.
+    :param tty_shell: Terminal shell object (for resize callback).
+    :param writer: Telnet/WS/SSH writer (for NAWS patching).
+    :returns: Wrapped or raw stdout writer.
+    """
+    if ctx.repl.metafont:
+        from . import metaterminal
+        from .fonts import font_registry
+
+        real_rows, real_cols = terminal.get_terminal_size()
+        columns = ctx.repl.metafont_columns
+        rows = ctx.repl.metafont_rows
+        if columns is None:
+            columns = real_cols // 4 if real_cols else 80
+        if rows is None:
+            rows = real_rows // 4 if real_rows else 25
+        mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows)
+        if ctx.repl.metafont_font_id is not None:
+            mtw.font = metaterminal.metafont.load_font(ctx.repl.metafont_font_id)
+
+        if writer is not None and hasattr(writer, "handle_send_naws"):
+            def _metafont_naws() -> tuple[int, int]:
+                return mtw.virtual_size()
+            writer.handle_send_naws = _metafont_naws  # type: ignore[method-assign]
+
+        if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
+            import signal
+            try:
+                loop = asyncio.get_event_loop()
+
+                def _metafont_winch() -> None:
+                    real_rows, real_cols = terminal.get_terminal_size()
+                    mtw.resize(real_cols, real_rows)
+                    tty_shell._resize_pending.set()
+                    if hasattr(writer, "local_option"):
+                        import telnetlib3.telopt
+                        if writer.local_option.enabled(telnetlib3.telopt.NAWS):
+                            writer._send_naws()
+
+                loop.add_signal_handler(signal.SIGWINCH, _metafont_winch)
+            except (RuntimeError, ValueError):
+                pass
+
+        return mtw
+    if ctx.repl.color_filter is not None:
+        return ColorFilteredWriter(stdout, ctx)
+    return stdout
+
+
 async def telix_client_shell(
     telnet_reader: (telnetlib3.stream_reader.TelnetReader | telnetlib3.stream_reader.TelnetReaderUnicode),
     telnet_writer: (telnetlib3.stream_writer.TelnetWriter | telnetlib3.stream_writer.TelnetWriterUnicode),
@@ -365,6 +451,7 @@ async def telix_client_shell(
 
     _setup_color_filter(ctx, telnet_writer)
     _setup_ansi_keys(ctx)
+    _setup_metafont(ctx)
 
     # 3. Setup GMCP callbacks
     base_on_gmcp = telnet_writer._ext_callback.get(telnetlib3.telopt.GMCP)
@@ -437,12 +524,17 @@ async def telix_client_shell(
         banner_sep = "\r\n" if tty_shell._istty else linesep
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -484,7 +576,8 @@ async def telix_client_shell(
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = _make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=telnet_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 telnet_reader,
                 telnet_writer,
@@ -538,6 +631,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
 
     load_configs(ctx)
     _setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
+    _setup_metafont(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
 
@@ -549,12 +643,17 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
         escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)
         stdout.write(f"Escape character is '{escape_name}'.{linesep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -565,7 +664,8 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = _make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ssh_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ssh_reader,  # type: ignore[arg-type]
                 ssh_writer,  # type: ignore[arg-type]
@@ -609,8 +709,9 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     # 2. Load per-session configs.
     load_configs(ctx)
 
-    # 2b. Set up color filter from CLI args.
+    # 2b. Set up color filter and metafont from CLI args.
     _setup_color_filter(ctx, ws_writer)
+    _setup_metafont(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
     def on_gmcp(package: str, data: typing.Any) -> None:
@@ -646,12 +747,17 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         banner_sep = "\r\n" if tty_shell._istty else linesep
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -673,7 +779,8 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = _make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ws_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ws_reader,  # type: ignore[arg-type]
                 ws_writer,  # type: ignore[arg-type]
