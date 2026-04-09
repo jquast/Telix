@@ -104,6 +104,8 @@ class ColorConfig(typing.NamedTuple):
         brightness/contrast adjustment is applied to detected colors.
     :param force_black_bg: When True, use (0,0,0) background and enable
         Erase-to-End-of-Line injection to extend black to line edges.
+    :param force_black_bg: When True, use (0,0,0) background and enable
+        Erase-to-End-of-Line injection to extend black to line edges.
     """
 
     palette_name: str = "vga"
@@ -295,7 +297,6 @@ class ColorFilter:
 
             if p == 1:
                 bold = True
-                output_parts.append("1")
                 if not seq_has_fg and 0 <= self._fg_idx <= 7:
                     bright_idx = self._fg_idx + 8
                     r, g, b = self._adjusted[bright_idx]
@@ -305,7 +306,6 @@ class ColorFilter:
                 continue
             if p == 22:
                 bold = False
-                output_parts.append("22")
                 if not seq_has_fg and 0 <= self._fg_idx <= 7:
                     if self._fg_idx == 7 and self._config.foreground_color is not None:
                         r, g, b = self._fg_color
@@ -319,14 +319,10 @@ class ColorFilter:
             if p == 5:
                 if ice:
                     blink = True
-                else:
-                    output_parts.append("5")
                 i += 1
                 continue
             if p == 25:
                 blink = False
-                if not ice:
-                    output_parts.append("25")
                 i += 1
                 continue
 
