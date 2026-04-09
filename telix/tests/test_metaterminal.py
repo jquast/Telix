@@ -3,6 +3,7 @@
 import asyncio
 import types
 
+import pyte
 import pytest
 
 from telix.metaterminal import (
@@ -46,6 +47,25 @@ class FakeCtx:
 
 
 VGA = PALETTES["vga"]
+
+
+class TestBBSScreen:
+
+    def test_ed2_homes_cursor(self):
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("\033[5;10Htext\033[2J")
+        assert s.cursor.x == 0
+        assert s.cursor.y == 0
+
+    def test_ed0_preserves_cursor(self):
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("\033[5;10H\033[0J")
+        assert s.cursor.x == 9
+        assert s.cursor.y == 4
 
 
 class TestPyteColorToRgb:

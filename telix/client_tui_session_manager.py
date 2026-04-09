@@ -419,9 +419,11 @@ class SessionConfig:
     # Developer
     coverage: bool = False
 
+    # BBS compatibility
+    clear_homes_cursor: bool = False
+
     # Metafont: octant bitmap font rendering
     metafont: bool = False
-    metafont_font_id: int | None = None
     metafont_columns: int | None = None
     metafont_rows: int | None = None
 
@@ -496,13 +498,17 @@ TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
 TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
 
 
+def _append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--clear-homes-cursor`` to *cmd* when enabled."""
+    if config.clear_homes_cursor:
+        cmd.append("--clear-homes-cursor")
+
+
 def _append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
     """Append ``--metafont`` related flags to *cmd* when metafont is enabled."""
     if not config.metafont:
         return
     cmd.append("--metafont")
-    if config.metafont_font_id is not None:
-        cmd.extend(["--metafont-font-id", str(config.metafont_font_id)])
     if config.metafont_columns is not None:
         cmd.extend(["--metafont-columns", str(config.metafont_columns)])
     if config.metafont_rows is not None:
@@ -582,6 +588,7 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
             if opt := opt.strip():
                 cmd.extend([flag, opt])
 
+    _append_clear_homes_flag(cmd, config)
     _append_metafont_flags(cmd, config)
     return cmd
 
@@ -662,6 +669,7 @@ def build_ws_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
+    _append_clear_homes_flag(cmd, config)
     _append_metafont_flags(cmd, config)
     return cmd
 
@@ -696,6 +704,7 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+    _append_clear_homes_flag(cmd, config)
     _append_metafont_flags(cmd, config)
     return cmd
 
@@ -1720,6 +1729,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         mf_dim = "" if cfg.metafont else " dimmed"
         with textual.containers.Horizontal():
             with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label("Clear Homes Cursor", classes="field-label")
+                yield textual.widgets.Switch(value=cfg.clear_homes_cursor, id="clear-homes-cursor")
+            with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("Octant Metafonts", classes="field-label")
                 yield textual.widgets.Switch(value=cfg.metafont, id="metafont")
             with textual.containers.Horizontal(classes="switch-row"):
@@ -1903,6 +1915,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
             if not force_bg.disabled:
                 force_bg.value = True
+            self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
             self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, REPL off, MCCP Compression {compress_label}")
@@ -2181,6 +2194,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.color_contrast = self._parse_pct("#color-contrast", 100) / 100.0
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
         cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
+        cfg.clear_homes_cursor = self.query_one("#clear-homes-cursor", textual.widgets.Switch).value
         cfg.metafont = self.query_one("#metafont", textual.widgets.Switch).value
         mf_cols = self.query_one("#metafont-columns", textual.widgets.Input).value.strip()
         cfg.metafont_columns = int(mf_cols) if mf_cols.isdigit() and int(mf_cols) > 0 else None
@@ -2191,9 +2205,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         wire_enc, font_id = resolve_encoding_font(enc)
         if font_id is not None:
             cfg.metafont = True
-            cfg.metafont_font_id = font_id
-        else:
-            cfg.metafont_font_id = None
 
         if not cfg.force_black_bg and self.detected_bg is not None:
             r, g, b = self.detected_bg

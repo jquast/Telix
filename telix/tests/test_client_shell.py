@@ -649,6 +649,41 @@ class TestColorFilteredWriter:
         assert ts_file.closed
 
 
+class TestInjectHomeBeforeClear:
+
+    def test_no_ed2_passthrough(self):
+        from telix.client_shell import _inject_home_before_clear
+        data = b"hello\x1b[mworld"
+        assert _inject_home_before_clear(data) == data
+
+    def test_lone_ed2_gets_home(self):
+        from telix.client_shell import _inject_home_before_clear
+        data = b"\x1b[0m\x1b[2Jtext"
+        result = _inject_home_before_clear(data)
+        assert b"\x1b[H\x1b[2J" in result
+
+    def test_paired_ed2_unchanged(self):
+        from telix.client_shell import _inject_home_before_clear
+        data = b"\x1b[H\x1b[2Jtext"
+        assert _inject_home_before_clear(data) == data
+
+    def test_multiple_ed2_mixed(self):
+        from telix.client_shell import _inject_home_before_clear
+        data = b"\x1b[H\x1b[2Jfirst\x1b[2Jsecond"
+        result = _inject_home_before_clear(data)
+        assert result.count(b"\x1b[H\x1b[2J") == 2
+
+    def test_color_filtered_writer_applies(self):
+        ctx = TelixSessionContext()
+        ctx.repl.clear_homes_cursor = True
+        inner = MagicMock()
+        inner.write = MagicMock()
+        writer = ColorFilteredWriter(inner, ctx)
+        writer.write(b"\x1b[2Jtext")
+        written = inner.write.call_args[0][0]
+        assert b"\x1b[H\x1b[2J" in written
+
+
 class TestSshClientShellNoLocalEcho:
     """ssh_client_shell must not enable local echo -- the SSH PTY echoes server-side."""
 

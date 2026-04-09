@@ -82,8 +82,8 @@ def _build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--background-color", default="#000000", dest="background_color")
     parser.add_argument("--no-ice-colors", action="store_true", default=False, dest="no_ice_colors")
     parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
+    parser.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
     parser.add_argument("--metafont", action="store_true", default=False, dest="metafont")
-    parser.add_argument("--metafont-font-id", type=int, default=None, dest="metafont_font_id")
     parser.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
     parser.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
     return parser
@@ -184,10 +184,11 @@ def _build_help_parser() -> argparse.ArgumentParser:
         "--colormatch", metavar="PALETTE", help="color palette for remapping (default: vga, 'none' to disable)"
     )
     telix.add_argument("--mud", action="store_true", help="apply MUD connection presets")
-    telix.add_argument("--metafont", action="store_true", help="render using octant bitmap metafonts")
     telix.add_argument(
-        "--metafont-font-id", metavar="ID", type=int, help="SyncTERM font ID for metafont rendering (default: 0)"
+        "--clear-homes-cursor", action="store_true",
+        help="inject cursor home before clear screen (BBS/CTerm compatibility)",
     )
+    telix.add_argument("--metafont", action="store_true", help="render using octant bitmap metafonts")
     telix.add_argument(
         "--metafont-columns", metavar="N", type=int, help="force virtual terminal columns for metafont (e.g. 40)"
     )

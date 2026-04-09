@@ -41,3 +41,8 @@ of ``host:port``:
 - ``prefs-<hash>.json`` - per-session runtime preferences
 - ``.current-room-<hash>`` - current room number (read by the room browser)
 - ``.fasttravel-<hash>`` - queued fast-travel steps (written by the room browser, read by the REPL)
+
+Bundled with the package (inside ``telix/fonts/``):
+
+- ``syncterm_fonts.bin`` - all 45 SyncTERM 8x16 bitmap fonts (180 KB)
+- ``font_registry.py`` - font ID, name, encoding, and binary offset mapping

@@ -128,6 +128,60 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
 
 
+# ED 2 (erase display) without an adjacent HOME -- inject HOME before it.
+# Matches \033[2J that is NOT immediately preceded by \033[H or \033[1;1H.
+_ED2 = b"\x1b[2J"
+_HOME = b"\x1b[H"
+_HOME_ED2 = b"\x1b[H\x1b[2J"
+
+
+def _inject_home_before_clear(data: bytes) -> bytes:
+    """Insert ``CSI H`` before any ``CSI 2 J`` not already preceded by ``CSI H``.
+
+    BBS software often sends ``ED 2`` expecting it to also home the cursor
+    (CTerm/SyncTERM behavior), but VT100-spec terminals and pyte do not.
+    This injects the missing ``HOME`` so the real terminal behaves as expected.
+    """
+    if _ED2 not in data:
+        return data
+    # Already has HOME before every ED 2 -- fast path
+    if _HOME_ED2 in data and data.count(_ED2) == data.count(_HOME_ED2):
+        return data
+    result = bytearray()
+    i = 0
+    while i < len(data):
+        ed2_pos = data.find(_ED2, i)
+        if ed2_pos == -1:
+            result.extend(data[i:])
+            break
+        result.extend(data[i:ed2_pos])
+        # Check if HOME immediately precedes
+        if len(result) >= 3 and result[-3:] == bytearray(_HOME):
+            result.extend(_ED2)
+        else:
+            result.extend(_HOME_ED2)
+        i = ed2_pos + len(_ED2)
+    return bytes(result)
+
+
+class ClearHomesWriter:
+    """Wraps a stream writer to inject HOME before lone ED 2 sequences.
+
+    Used in raw mode without a color filter when ``clear_homes_cursor`` is enabled.
+
+    :param inner: The underlying ``asyncio.StreamWriter``.
+    """
+
+    def __init__(self, inner: asyncio.StreamWriter) -> None:
+        self.inner = inner
+
+    def write(self, data: bytes) -> None:
+        self.inner.write(_inject_home_before_clear(data))
+
+    def __getattr__(self, name: str) -> typing.Any:
+        return getattr(self.inner, name)
+
+
 class ColorFilteredWriter:
     """
     Wraps an ``asyncio.StreamWriter`` to apply the session color filter to all writes.
@@ -150,6 +204,8 @@ class ColorFilteredWriter:
 
     def write(self, data: bytes) -> None:
         """Filter *data* through the color filter if one is active, then write."""
+        if self.ctx.repl.clear_homes_cursor:
+            data = _inject_home_before_clear(data)
         cf = self.ctx.repl.color_filter
         if cf is not None:
             cur_encoding = self.ctx.encoding or self.encoding
@@ -332,6 +388,18 @@ def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     ctx.repl.ansi_keys = bool(getattr(args, "ansi_keys", False))
 
 
+def _setup_clear_homes(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure the clear-homes-cursor option from telix CLI args.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.clear_homes_cursor = bool(getattr(args, "clear_homes_cursor", False))
+
+
 def _setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
     """
     Configure metafont rendering from telix CLI args.
@@ -345,7 +413,6 @@ def _setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
     if args is None:
         return
     ctx.repl.metafont = bool(getattr(args, "metafont", False))
-    ctx.repl.metafont_font_id = getattr(args, "metafont_font_id", None)
     ctx.repl.metafont_columns = getattr(args, "metafont_columns", None)
     ctx.repl.metafont_rows = getattr(args, "metafont_rows", None)
 
@@ -385,8 +452,6 @@ def _make_raw_stdout(
         if rows is None:
             rows = real_rows // 4 if real_rows else 25
         mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows)
-        if ctx.repl.metafont_font_id is not None:
-            mtw.font = metaterminal.metafont.load_font(ctx.repl.metafont_font_id)
 
         if writer is not None and hasattr(writer, "handle_send_naws"):
             def _metafont_naws() -> tuple[int, int]:
@@ -414,6 +479,8 @@ def _make_raw_stdout(
         return mtw
     if ctx.repl.color_filter is not None:
         return ColorFilteredWriter(stdout, ctx)
+    if ctx.repl.clear_homes_cursor:
+        return ClearHomesWriter(stdout)
     return stdout
 
 
@@ -451,6 +518,7 @@ async def telix_client_shell(
 
     _setup_color_filter(ctx, telnet_writer)
     _setup_ansi_keys(ctx)
+    _setup_clear_homes(ctx)
     _setup_metafont(ctx)
 
     # 3. Setup GMCP callbacks
@@ -631,6 +699,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
 
     load_configs(ctx)
     _setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
+    _setup_clear_homes(ctx)
     _setup_metafont(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
@@ -711,6 +780,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
 
     # 2b. Set up color filter and metafont from CLI args.
     _setup_color_filter(ctx, ws_writer)
+    _setup_clear_homes(ctx)
     _setup_metafont(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).

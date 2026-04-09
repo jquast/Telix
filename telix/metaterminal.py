@@ -21,6 +21,22 @@ from .fonts import font_registry
 
 log = logging.getLogger(__name__)
 
+
+class BBSScreen(pyte.Screen):
+    """pyte Screen subclass with BBS/CTerm compatibility adjustments.
+
+    SyncTERM's CTerm (and most BBS software) treats ``ED 2`` (Erase in
+    Display, mode 2) as clearing the screen AND moving the cursor home.
+    The VT100/ECMA-48 spec says ``ED 2`` should not move the cursor, but
+    virtually all BBS software depends on the home behavior.
+    """
+
+    def erase_in_display(self, how: int = 0, *args, **kwargs) -> None:
+        super().erase_in_display(how, *args, **kwargs)
+        if how == 2:
+            self.cursor.x = 0
+            self.cursor.y = 0
+
 # SyncTERM font switching: ESC [ <slot> ; <font_id> SPACE D
 # CSI with intermediate character ' ' and final character 'D'.
 _SYNCTERM_FONT_RE = re.compile(r"\x1b\[(\d+);(\d+) D")
@@ -130,7 +146,7 @@ class MetaTerminalWriter:
         self._decoder: codecs.IncrementalDecoder | None = None
         self.columns = columns
         self.rows = rows
-        self.screen = pyte.Screen(columns, rows)
+        self.screen = BBSScreen(columns, rows)
         self.stream = pyte.Stream(self.screen)
         self.palette = PALETTES.get("vga", PALETTES["vga"])
         self.font = metafont.load_font(font_registry.DEFAULT_FONT_ID)

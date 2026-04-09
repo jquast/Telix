@@ -82,6 +82,12 @@ Telix code file overview::
     ├── mtts.py                 MTTS terminal type standard bitvector
     ├── mslp.py                 MSLP multiline softlink parser
     │
+    ├── metafont.py             Octant block rendering engine (glyph-to-octant)
+    ├── metaterminal.py         pyte virtual terminal + octant output
+    ├── fonts/
+    │   ├── font_registry.py    SyncTERM font ID/name/encoding registry
+    │   └── syncterm_fonts.bin  All 45 SyncTERM 8x16 font bitmaps (180 KB)
+    │
     ├── paths.py                XDG base directory resolution
     ├── util.py                 Small internal helpers
     └── help/                   Markdown help files loaded at runtime
@@ -356,6 +362,44 @@ REPL/raw-mode loop:
 Data arriving **before** the REPL event loop starts is buffered in
 the telnet reader's internal buffer and consumed by the first
 ``read()`` call in ``read_server``.
+
+Octant metafont pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``--metafont`` is enabled, the raw-mode output path uses
+``MetaTerminalWriter`` (``metaterminal.py``) instead of
+``ColorFilteredWriter``.  The pipeline:
+
+1. **Decode** -- raw bytes are decoded using the font's wire encoding
+   (e.g. ``cp437`` or ``iso-8859-1``).
+
+2. **Filter** -- SyncTERM font switching sequences
+   (``CSI Ps1 ; Ps2 SP D``) are stripped and processed.  The font and
+   wire encoding switch to match the requested font ID.  CSI sequences
+   with intermediate bytes that pyte cannot handle are also stripped.
+
+3. **Virtual terminal** -- the decoded text is fed to a ``pyte.Screen``
+   (via ``BBSScreen``, a subclass that homes the cursor on ``ED 2`` for
+   CTerm compatibility).  pyte maintains a virtual 80x25 (or forced
+   size) screen buffer with per-cell character and color attributes.
+
+4. **Diff** -- changed cells are identified by comparing the current
+   pyte buffer against the previous frame.
+
+5. **Render** -- each changed cell's character is mapped back to a byte
+   index via the font's encoding, then looked up in the 8x16 bitmap
+   font (``metafont.py``).  The 16-row bitmap is divided into a 4x4
+   grid of 2x4 pixel blocks, each encoded as a Unicode octant character
+   (U+1CD00 range) with 24-bit foreground/background SGR colors.
+
+6. **Output** -- the rendered octant characters are written to the real
+   terminal using cursor positioning, wrapped in synchronized output
+   (DEC private mode 2026) to prevent flicker.  Only cells within the
+   real terminal bounds are rendered.
+
+Font bitmaps for all 45 SyncTERM fonts are stored in
+``telix/fonts/syncterm_fonts.bin`` (180 KB), extracted from SyncTERM's
+``allfonts.c`` by ``tools/extract_syncterm_fonts.py``.
 
 
 .. _telnetlib3: https://github.com/jquast/telnetlib3

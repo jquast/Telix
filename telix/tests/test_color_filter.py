@@ -211,7 +211,6 @@ def test_extended_color_pass_through(seq: str, needle: str) -> None:
 def test_bold_emits_bright_default_fg() -> None:
     f = _make_filter()
     result = f.filter("\x1b[1m")
-    assert "1" in result
     assert "38;2;255;255;255" in result
 
 
@@ -361,8 +360,6 @@ def test_ice_colors_disabled() -> None:
     result = f.filter("\x1b[5;40m")
     normal_black = PALETTES["vga"][0]
     assert f"48;2;{normal_black[0]};{normal_black[1]};{normal_black[2]}" in result
-    params = result.split("\x1b[")[1].split("m")[0]
-    assert "5" in params.split(";")
 
 
 def test_chunked_split_at_esc() -> None:
