@@ -63,7 +63,7 @@ def load_favorites() -> list[dict[str, typing.Any]]:
     return entries
 
 
-def _apply_overrides(
+def apply_overrides(
     cfg: client_tui_session_manager.SessionConfig, enc: str | None, mode: str | None, protocol: str | None
 ) -> None:
     """Apply optional field overrides to *cfg* when values are present and valid."""
@@ -75,12 +75,14 @@ def _apply_overrides(
         cfg.protocol = protocol
 
 
-def _apply_type_presets(cfg: client_tui_session_manager.SessionConfig, entry_type: str) -> None:
+def apply_type_presets(cfg: client_tui_session_manager.SessionConfig, entry_type: str) -> None:
     """Apply type-specific presets matching the session manager radio buttons."""
     if entry_type == "bbs":
         cfg.colormatch = "vga"
         cfg.ice_colors = True
         cfg.compression = None  # passive
+        cfg.clear_homes_cursor = True
+        cfg.ff_clears_screen = True
         if cfg.term == "XTERM-TRUECOLOR":
             cfg.term = ""
     elif entry_type == "mud":
@@ -89,11 +91,13 @@ def _apply_type_presets(cfg: client_tui_session_manager.SessionConfig, entry_typ
         cfg.mode = "line"
         cfg.no_repl = False
         cfg.compression = True
+        cfg.clear_homes_cursor = False
+        cfg.ff_clears_screen = False
         if not cfg.term:
             cfg.term = "XTERM-TRUECOLOR"
 
 
-def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager.SessionConfig:
+def entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager.SessionConfig:
     """Convert a single directory/favorites entry dict to a SessionConfig."""
     host = entry["host"]
     port = entry.get("port", 23)
@@ -102,9 +106,9 @@ def _entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manage
         cfg.ssl = True
     enc = entry.get("encoding")
     entry_type = entry.get("type", "")
-    _apply_type_presets(cfg, entry_type)
+    apply_type_presets(cfg, entry_type)
     cfg.server_type = entry_type
-    _apply_overrides(cfg, enc, entry.get("mode"), entry.get("protocol"))
+    apply_overrides(cfg, enc, entry.get("mode"), entry.get("protocol"))
     ws_path = entry.get("ws_path")
     if ws_path:
         cfg.ws_path = ws_path
@@ -125,15 +129,15 @@ def directory_to_sessions() -> dict[str, typing.Any]:
     sessions: dict[str, typing.Any] = {}
     for entry in entries:
         key = f"{entry['host']}:{entry.get('port', 23)}"
-        sessions[key] = _entry_to_session(entry)
+        sessions[key] = entry_to_session(entry)
 
     for fav in load_favorites():
         key = f"{fav['host']}:{fav.get('port', 23)}"
         if key in sessions:
             sessions[key].bookmarked = True
-            _apply_overrides(sessions[key], fav.get("encoding"), fav.get("mode"), fav.get("protocol"))
+            apply_overrides(sessions[key], fav.get("encoding"), fav.get("mode"), fav.get("protocol"))
         else:
-            cfg = _entry_to_session(fav)
+            cfg = entry_to_session(fav)
             cfg.bookmarked = True
             sessions[key] = cfg
 

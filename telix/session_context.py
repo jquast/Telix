@@ -150,6 +150,7 @@ class ReplState:
     color_filter: typing.Any | None = None
     erase_eol: bool = False
     clear_homes_cursor: bool = False
+    ff_clears_screen: bool = False
     metafont: bool = False
     metafont_columns: int | None = None
     metafont_rows: int | None = None

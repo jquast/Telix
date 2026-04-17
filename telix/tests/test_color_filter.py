@@ -10,9 +10,9 @@ from telix.color_filter import (
     ColorFilter,
     PetsciiColorFilter,
     AtasciiControlFilter,
-    _adjust_color,
-    _is_foreground_code,
-    _sgr_code_to_palette_index,
+    adjust_color,
+    is_foreground_code,
+    sgr_code_to_palette_index,
 )
 
 
@@ -53,22 +53,22 @@ def test_color_config_defaults() -> None:
     "code,expected", [(30, 0), (31, 1), (37, 7), (40, 0), (47, 7), (90, 8), (97, 15), (100, 8), (107, 15)]
 )
 def test_color_code_maps_to_palette_index(code: int, expected: int) -> None:
-    assert _sgr_code_to_palette_index(code) == expected
+    assert sgr_code_to_palette_index(code) == expected
 
 
 @pytest.mark.parametrize("code", [0, 1, 4, 7, 22, 38, 39, 48, 49, 128])
 def test_non_color_returns_none(code: int) -> None:
-    assert _sgr_code_to_palette_index(code) is None
+    assert sgr_code_to_palette_index(code) is None
 
 
 @pytest.mark.parametrize("code", list(range(30, 38)) + list(range(90, 98)))
-def test_is_foreground_code_true(code: int) -> None:
-    assert _is_foreground_code(code) is True
+def testis_foreground_code_true(code: int) -> None:
+    assert is_foreground_code(code) is True
 
 
 @pytest.mark.parametrize("code", list(range(40, 48)) + list(range(100, 108)))
-def test_is_foreground_code_false(code: int) -> None:
-    assert _is_foreground_code(code) is False
+def testis_foreground_code_false(code: int) -> None:
+    assert is_foreground_code(code) is False
 
 
 @pytest.mark.parametrize(
@@ -80,19 +80,19 @@ def test_is_foreground_code_false(code: int) -> None:
         (200, 100, 0, 0.5, 1.0, (100, 50, 0)),
     ],
 )
-def test_adjust_color_values(
+def testadjust_color_values(
     r: int, g: int, b: int, brightness: float, contrast: float, expected: tuple[int, int, int]
 ) -> None:
-    assert _adjust_color(r, g, b, brightness, contrast) == expected
+    assert adjust_color(r, g, b, brightness, contrast) == expected
 
 
-def test_adjust_color_clamp_high() -> None:
-    r, _, _ = _adjust_color(255, 255, 255, 1.0, 2.0)
+def testadjust_color_clamp_high() -> None:
+    r, _, _ = adjust_color(255, 255, 255, 1.0, 2.0)
     assert r == 255
 
 
-def test_adjust_color_clamp_low() -> None:
-    r, _, _ = _adjust_color(0, 0, 0, 1.0, 2.0)
+def testadjust_color_clamp_low() -> None:
+    r, _, _ = adjust_color(0, 0, 0, 1.0, 2.0)
     assert r == 0
 
 
@@ -424,7 +424,7 @@ def test_color_filter_reduced_brightness() -> None:
     f = ColorFilter(ColorConfig(brightness=0.5, contrast=1.0))
     result = f.filter("\x1b[37m")
     ega_white = PALETTES["vga"][7]
-    adjusted = _adjust_color(*ega_white, 0.5, 1.0)
+    adjusted = adjust_color(*ega_white, 0.5, 1.0)
     assert f"38;2;{adjusted[0]};{adjusted[1]};{adjusted[2]}" in result
 
 
@@ -432,7 +432,7 @@ def test_color_filter_reduced_contrast() -> None:
     f = ColorFilter(ColorConfig(brightness=1.0, contrast=0.5))
     result = f.filter("\x1b[31m")
     ega_red = PALETTES["vga"][1]
-    adjusted = _adjust_color(*ega_red, 1.0, 0.5)
+    adjusted = adjust_color(*ega_red, 1.0, 0.5)
     assert f"38;2;{adjusted[0]};{adjusted[1]};{adjusted[2]}" in result
 
 

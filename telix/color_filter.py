@@ -86,7 +86,7 @@ PALETTES: dict[str, PaletteRGB] = {
 }
 
 # Detect potentially incomplete escape sequence at end of a chunk.
-_TRAILING_ESC = re.compile(r"\x1b(\[[\d;:]*)?$")
+TRAILING_ESC = re.compile(r"\x1b(\[[\d;:]*)?$")
 
 
 class ColorConfig(typing.NamedTuple):
@@ -117,7 +117,7 @@ class ColorConfig(typing.NamedTuple):
     force_black_bg: bool = False
 
 
-def _sgr_code_to_palette_index(code: int) -> int | None:
+def sgr_code_to_palette_index(code: int) -> int | None:
     """
     Map a basic SGR color code to a palette index (0-15).
 
@@ -135,7 +135,7 @@ def _sgr_code_to_palette_index(code: int) -> int | None:
     return None
 
 
-def _is_foreground_code(code: int) -> bool:
+def is_foreground_code(code: int) -> bool:
     """
     Return True if *code* is a foreground color SGR parameter.
 
@@ -145,7 +145,7 @@ def _is_foreground_code(code: int) -> bool:
     return (30 <= code <= 37) or (90 <= code <= 97)
 
 
-def _adjust_color(r: int, g: int, b: int, brightness: float, contrast: float) -> tuple[int, int, int]:
+def adjust_color(r: int, g: int, b: int, brightness: float, contrast: float) -> tuple[int, int, int]:
     """
     Apply brightness and contrast scaling to an RGB color.
 
@@ -181,7 +181,7 @@ class ColorFilter:
         self._config = config
         palette = PALETTES[config.palette_name]
         self._adjusted: list[tuple[int, int, int]] = [
-            _adjust_color(r, g, b, config.brightness, config.contrast) for r, g, b in palette
+            adjust_color(r, g, b, config.brightness, config.contrast) for r, g, b in palette
         ]
         bg = config.background_color
         self._bg_sgr = f"\x1b[48;2;{bg[0]};{bg[1]};{bg[2]}m"
@@ -212,7 +212,7 @@ class ColorFilter:
             text = self._buffer + text
             self._buffer = ""
 
-        match = _TRAILING_ESC.search(text)
+        match = TRAILING_ESC.search(text)
         if match:
             self._buffer = match.group()
             text = text[: match.start()]
@@ -367,9 +367,9 @@ class ColorFilter:
                 i += 1
                 continue
 
-            idx = _sgr_code_to_palette_index(p)
+            idx = sgr_code_to_palette_index(p)
             if idx is not None:
-                is_fg = _is_foreground_code(p)
+                is_fg = is_foreground_code(p)
                 if is_fg:
                     self._fg_idx = idx
                 if is_fg and bold and 30 <= p <= 37:
@@ -436,9 +436,9 @@ _PETSCII_CURSOR_CODES: dict[str, str] = {
 }
 
 # All PETSCII control chars handled by the filter.
-_PETSCII_FILTER_CHARS = frozenset(_PETSCII_COLOR_CODES) | frozenset(_PETSCII_CURSOR_CODES) | {"\x12", "\x92"}
+PETSCII_FILTER_CHARS = frozenset(_PETSCII_COLOR_CODES) | frozenset(_PETSCII_CURSOR_CODES) | {"\x12", "\x92"}
 
-_PETSCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_PETSCII_FILTER_CHARS))) + "]")
+PETSCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(PETSCII_FILTER_CHARS))) + "]")
 
 
 class PetsciiColorFilter:
@@ -462,7 +462,7 @@ class PetsciiColorFilter:
     def __init__(self, brightness: float = 1.0, contrast: float = 1.0) -> None:
         """Initialize PETSCII filter with optional brightness/contrast."""
         self._adjusted: list[tuple[int, int, int]] = [
-            _adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES["c64"]
+            adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES["c64"]
         ]
 
     def _sgr_for_index(self, idx: int) -> str:
@@ -477,9 +477,9 @@ class PetsciiColorFilter:
         :param text: Decoded PETSCII text (Unicode string).
         :returns: Text with PETSCII controls translated to ANSI.
         """
-        if not _PETSCII_CTRL_RE.search(text):
+        if not PETSCII_CTRL_RE.search(text):
             return text
-        return _PETSCII_CTRL_RE.sub(self._replace, text)
+        return PETSCII_CTRL_RE.sub(self._replace, text)
 
     def _replace(self, match: re.Match[str]) -> str:
         """Regex callback for a single PETSCII control character."""
@@ -516,7 +516,7 @@ _ATASCII_CONTROL_CODES: dict[str, str] = {
     "\u2192": "\x1b[C",  # ->  cursor right (0x1F / 0x9F)
 }
 
-_ATASCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_ATASCII_CONTROL_CODES))) + "]")
+ATASCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_ATASCII_CONTROL_CODES))) + "]")
 
 
 class AtasciiControlFilter:
@@ -540,9 +540,9 @@ class AtasciiControlFilter:
         :param text: Decoded ATASCII text (Unicode string).
         :returns: Text with control glyphs translated to ANSI.
         """
-        if not _ATASCII_CTRL_RE.search(text):
+        if not ATASCII_CTRL_RE.search(text):
             return text
-        return _ATASCII_CTRL_RE.sub(self._replace, text)
+        return ATASCII_CTRL_RE.sub(self._replace, text)
 
     @staticmethod
     def _replace(match: re.Match[str]) -> str:

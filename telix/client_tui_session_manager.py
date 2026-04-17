@@ -147,7 +147,7 @@ for _enc in reversed(ENCODINGS):
 _FONT_ENCODINGS: dict[str, tuple[str, int]] = {}
 
 
-def _init_font_encodings() -> None:
+def init_font_encodings() -> None:
     if _FONT_ENCODINGS:
         return
     from .fonts import font_registry
@@ -165,7 +165,7 @@ def resolve_encoding_font(enc: str) -> tuple[str, int | None]:
     :param enc: Encoding or font name from the session config.
     :returns: Tuple of (wire_encoding, font_id).
     """
-    _init_font_encodings()
+    init_font_encodings()
     if enc in _FONT_ENCODINGS:
         return _FONT_ENCODINGS[enc]
     return (enc, None)
@@ -421,6 +421,7 @@ class SessionConfig:
 
     # BBS compatibility
     clear_homes_cursor: bool = False
+    ff_clears_screen: bool = False
 
     # Metafont: octant bitmap font rendering
     metafont: bool = False
@@ -498,13 +499,15 @@ TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
 TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
 
 
-def _append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
-    """Append ``--clear-homes-cursor`` to *cmd* when enabled."""
+def append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--clear-homes-cursor`` and ``--ff-clears-screen`` to *cmd* when enabled."""
     if config.clear_homes_cursor:
         cmd.append("--clear-homes-cursor")
+    if config.ff_clears_screen:
+        cmd.append("--ff-clears-screen")
 
 
-def _append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
+def append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
     """Append ``--metafont`` related flags to *cmd* when metafont is enabled."""
     if not config.metafont:
         return
@@ -515,7 +518,7 @@ def _append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
         cmd.extend(["--metafont-rows", str(config.metafont_rows)])
 
 
-def _resolve_wire_encoding(config: SessionConfig) -> str:
+def resolve_wire_encoding(config: SessionConfig) -> str:
     """Return the wire encoding for *config*, resolving font names."""
     wire_enc, _ = resolve_encoding_font(config.encoding)
     return wire_enc
@@ -558,7 +561,7 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
     for attr, flag, default in CMD_STR_FLAGS:
         val = getattr(config, attr)
         if attr == "encoding":
-            val = _resolve_wire_encoding(config)
+            val = resolve_wire_encoding(config)
         if val != default:
             cmd.extend([flag, str(val)])
 
@@ -588,8 +591,8 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
             if opt := opt.strip():
                 cmd.extend([flag, opt])
 
-    _append_clear_homes_flag(cmd, config)
-    _append_metafont_flags(cmd, config)
+    append_clear_homes_flag(cmd, config)
+    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -658,7 +661,7 @@ def build_ws_command(config: SessionConfig) -> list[str]:
     ]:
         value = getattr(config, field)
         if field == "encoding":
-            value = _resolve_wire_encoding(config)
+            value = resolve_wire_encoding(config)
         if value != default:
             cmd += [flag, str(value)]
     if config.connect_timeout != 10.0:
@@ -669,8 +672,8 @@ def build_ws_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
-    _append_clear_homes_flag(cmd, config)
-    _append_metafont_flags(cmd, config)
+    append_clear_homes_flag(cmd, config)
+    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -704,8 +707,8 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
-    _append_clear_homes_flag(cmd, config)
-    _append_metafont_flags(cmd, config)
+    append_clear_homes_flag(cmd, config)
+    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -887,6 +890,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         col = table.columns.get("name")  # type: ignore[call-overload]
         if col is not None:
             col.width = name_w
+            table.refresh()
 
     def on_resize(self, event: textual.events.Resize) -> None:
         """Recalculate name column width on terminal resize."""
@@ -1507,6 +1511,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     #detected-bg-color {
         padding-top: 1;
     }
+    #metafont-label {
+        width: 34;
+        padding-top: 1;
+    }
     #bottom-bar {
         height: 3;
         margin-top: 1;
@@ -1699,9 +1707,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         if self.detected_bg is not None:
             r, g, b = self.detected_bg
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
+            is_black = (r, g, b) == (0, 0, 0)
+            indicator = "[green]\u2714[/]" if is_black else "[red]\u2718[/]"
             yield textual.containers.Horizontal(
                 textual.widgets.Label("Detected Background", classes="field-label-wide"),
-                textual.widgets.Static(f"[on rgb({r},{g},{b})]  [/] {hex_color}", id="detected-bg-color"),
+                textual.widgets.Static(
+                    f"[on rgb({r},{g},{b})]  [/] {hex_color} {indicator}", id="detected-bg-color"
+                ),
                 classes="field-row",
             )
         yield textual.containers.Horizontal(
@@ -1716,45 +1728,73 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             classes="field-row",
         )
         force_val = True if not has_detected else cfg.force_black_bg
-        with textual.containers.Horizontal():
+        with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("iCE Colors", classes="field-label")
-                yield textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
+                ice_switch = textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
+                ice_switch.tooltip = (
+                    "Interpret bright background colors in place of the rarely used blink attribute"
+                )
+                yield ice_switch
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}")
                 switch = textual.widgets.Switch(value=force_val, id="force-black-bg", disabled=not has_detected)
-                if not has_detected:
+                if has_detected:
+                    switch.tooltip = "Experimental, try and force background color to #000000"
+                else:
                     switch.tooltip = "Could not detect background color of your terminal"
                 yield switch
         mf_dim = "" if cfg.metafont else " dimmed"
-        with textual.containers.Horizontal():
+        with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("Clear Homes Cursor", classes="field-label")
-                yield textual.widgets.Switch(value=cfg.clear_homes_cursor, id="clear-homes-cursor")
+                chc_switch = textual.widgets.Switch(value=cfg.clear_homes_cursor, id="clear-homes-cursor")
+                chc_switch.tooltip = "Compatibility with SyncTERM bug popularly depended on by BBS systems"
+                yield chc_switch
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("Octant Metafonts", classes="field-label")
-                yield textual.widgets.Switch(value=cfg.metafont, id="metafont")
-            with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label(
-                    "Columns", id="metafont-cols-label", classes=f"field-label-short{mf_dim}"
+                yield textual.widgets.Label("FF is Clear+Home", classes="field-label")
+                ff_switch = textual.widgets.Switch(value=cfg.ff_clears_screen, id="ff-clears-screen")
+                ff_switch.tooltip = (
+                    "Treat Form Feed (0x0C) as clear screen and home cursor,"
+                    " a non-conforming terminal feature implemented in SyncTERM"
+                    " required by many BBS systems"
                 )
-                yield textual.widgets.Input(
-                    value=str(cfg.metafont_columns or ""),
-                    placeholder="auto",
-                    id="metafont-columns",
-                    classes="field-input-short",
-                    disabled=not cfg.metafont,
-                )
-                yield textual.widgets.Label(
-                    "Rows", id="metafont-rows-label", classes=f"field-label-short{mf_dim}"
-                )
-                yield textual.widgets.Input(
-                    value=str(cfg.metafont_rows or ""),
-                    placeholder="auto",
-                    id="metafont-rows",
-                    classes="field-input-short",
-                    disabled=not cfg.metafont,
-                )
+                yield ff_switch
+        with textual.containers.Horizontal(classes="switch-row"):
+            yield textual.widgets.Label(
+                "Octant Metafonts (experimental)", id="metafont-label"
+            )
+            mf_switch = textual.widgets.Switch(value=cfg.metafont, id="metafont")
+            mf_switch.tooltip = (
+                "Unicode 16 Octant blocks from Symbols for Legacy Computing"
+                " are used to recreate the font with unicode blocks"
+            )
+            yield mf_switch
+        with textual.containers.Horizontal(classes="switch-row"):
+            yield textual.widgets.Label(
+                "Columns", id="metafont-cols-label", classes=f"field-label-short{mf_dim}"
+            )
+            cols_input = textual.widgets.Input(
+                value=str(cfg.metafont_columns or ""),
+                placeholder="auto",
+                id="metafont-columns",
+                classes="field-input-short",
+                disabled=not cfg.metafont,
+            )
+            cols_input.tooltip = "Fixed size for Octant Metafonts (experimental)"
+            yield cols_input
+            yield textual.widgets.Label(
+                "Rows", id="metafont-rows-label", classes=f"field-label-short{mf_dim}"
+            )
+            rows_input = textual.widgets.Input(
+                value=str(cfg.metafont_rows or ""),
+                placeholder="auto",
+                id="metafont-rows",
+                classes="field-input-short",
+                disabled=not cfg.metafont,
+            )
+            rows_input.tooltip = "Fixed size for Octant Metafonts (experimental)"
+            yield rows_input
 
     def compose_advanced_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Advanced tab pane."""
@@ -1916,6 +1956,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             if not force_bg.disabled:
                 force_bg.value = True
             self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = True
+            self.query_one("#ff-clears-screen", textual.widgets.Switch).value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
             self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, REPL off, MCCP Compression {compress_label}")
@@ -1936,6 +1977,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
             if not force_bg.disabled:
                 force_bg.value = False
+            self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = False
+            self.query_one("#ff-clears-screen", textual.widgets.Switch).value = False
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "yes"
             self.notify(
@@ -2016,7 +2059,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
 
     def update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
-        from telix.color_filter import PALETTES, _adjust_color
+        from telix.color_filter import PALETTES, adjust_color
 
         palette_name = self.query_one("#colormatch", textual.widgets.Select).value
         preview = self.query_one("#palette-preview", textual.widgets.Static)
@@ -2026,7 +2069,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         brightness = self._parse_pct("#color-brightness", 100) / 100.0
         contrast = self._parse_pct("#color-contrast", 100) / 100.0
         palette = [
-            _adjust_color(r, g, b, brightness, contrast)
+            adjust_color(r, g, b, brightness, contrast)
             for r, g, b in PALETTES[palette_name]  # type: ignore[index]
         ]
         force_black = self.query_one("#force-black-bg", textual.widgets.Switch).value
@@ -2195,6 +2238,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
         cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
         cfg.clear_homes_cursor = self.query_one("#clear-homes-cursor", textual.widgets.Switch).value
+        cfg.ff_clears_screen = self.query_one("#ff-clears-screen", textual.widgets.Switch).value
         cfg.metafont = self.query_one("#metafont", textual.widgets.Switch).value
         mf_cols = self.query_one("#metafont-columns", textual.widgets.Input).value.strip()
         cfg.metafont_columns = int(mf_cols) if mf_cols.isdigit() and int(mf_cols) > 0 else None

@@ -25,7 +25,7 @@ from telix.macros import (
 
 # local
 from telix.client_repl import expand_commands
-from telix.client_repl_commands import EDIT_RE, TOGGLE_RE, REPL_ACTION_RE, WALK_DIALOG_RE, _dispatch_repl_action
+from telix.client_repl_commands import EDIT_RE, TOGGLE_RE, REPL_ACTION_RE, WALK_DIALOG_RE, dispatch_repl_action
 
 SK = "test.host:23"
 
@@ -375,40 +375,40 @@ def test_walk_dialog_re(cmd, expected_action):
     assert m.group(1).lower() == expected_action
 
 
-def test_dispatch_repl_action_calls_help():
+def testdispatch_repl_action_calls_help():
     called = []
     ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"help": lambda: called.append("help")}))
     log = logging.getLogger("test")
-    assert _dispatch_repl_action("`help`", ctx, log) is True
+    assert dispatch_repl_action("`help`", ctx, log) is True
     assert called == ["help"]
 
 
-def test_dispatch_repl_action_calls_edit():
+def testdispatch_repl_action_calls_edit():
     called = []
     ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"edit": called.append}))
     log = logging.getLogger("test")
-    assert _dispatch_repl_action("`edit macros`", ctx, log) is True
+    assert dispatch_repl_action("`edit macros`", ctx, log) is True
     assert called == ["macros"]
 
 
-def test_dispatch_repl_action_calls_toggle():
+def testdispatch_repl_action_calls_toggle():
     called = []
     ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={"toggle_highlights": lambda: called.append("th")}))
     log = logging.getLogger("test")
-    assert _dispatch_repl_action("`toggle highlights`", ctx, log) is True
+    assert dispatch_repl_action("`toggle highlights`", ctx, log) is True
     assert called == ["th"]
 
 
-def test_dispatch_repl_action_returns_false_for_plain():
+def testdispatch_repl_action_returns_false_for_plain():
     ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={}))
     log = logging.getLogger("test")
-    assert _dispatch_repl_action("look", ctx, log) is False
+    assert dispatch_repl_action("look", ctx, log) is False
 
 
-def test_dispatch_repl_action_noop_when_missing():
+def testdispatch_repl_action_noop_when_missing():
     ctx = types.SimpleNamespace(repl=types.SimpleNamespace(actions={}))
     log = logging.getLogger("test")
-    assert _dispatch_repl_action("`help`", ctx, log) is True
+    assert dispatch_repl_action("`help`", ctx, log) is True
 
 
 @pytest.mark.parametrize(

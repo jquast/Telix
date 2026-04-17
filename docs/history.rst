@@ -5,6 +5,16 @@ History
 -------------------
 
 - bugfix: correct some kinds of VGA color filtering
+- bugfix: session manager table not redrawn on terminal resize
+- enhancement: Display tab -- green checkmark or red X for detected background color
+- enhancement: Display tab -- tooltips for iCE Colors, Force Black BG, Clear Homes Cursor,
+  Octant Metafonts, Columns, and Rows
+- enhancement: Display tab -- Octant Metafonts labeled "(experimental)" on its own row
+- enhancement: Display tab -- improved layout for Clear Homes Cursor and metafont settings
+- enhancement: new "FF is Clear+Home" toggle -- treats Form Feed (0x0C) as clear screen
+  and home cursor, a SyncTERM compatibility feature required by many BBS systems
+- enhancement: BBS preset enables Clear Homes Cursor and FF is Clear+Home; MUD disables both
+- enhancement: ``--ff-clears-screen`` CLI flag and ``--reinit`` sets BBS presets accordingly
 
 0.1.7 -- 2026-03-16
 -------------------

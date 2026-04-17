@@ -13,21 +13,21 @@ import pytest
 
 # local
 from telix.client_repl import confirm_dialog
-from telix.client_repl_dialogs import _patch_signal_for_thread
+from telix.client_repl_dialogs import patch_signal_for_thread
 
 
 def test_patch_signal_skips_winch_without_sigwinch(monkeypatch):
     """SIGWINCH forwarding is skipped when signal.SIGWINCH is absent (Windows)."""
     monkeypatch.delattr(signal, "SIGWINCH", raising=False)
     original = signal.signal
-    with _patch_signal_for_thread():
+    with patch_signal_for_thread():
         assert signal.signal is not original
     assert signal.signal is original
 
 
 @pytest.fixture()
 def mock_thread(monkeypatch: Any) -> Any:
-    """Stub _run_in_thread and run_confirm_dialog to write a result file without launching Textual."""
+    """Stub run_in_thread and run_confirm_dialog to write a result file without launching Textual."""
     result_data: dict[str, bool] = {"confirmed": False}
 
     class Holder:
@@ -38,7 +38,7 @@ def mock_thread(monkeypatch: Any) -> Any:
             json.dump(Holder.data, f)
 
     monkeypatch.setattr("telix.client_tui_dialogs.run_confirm_dialog", fake_run_confirm)
-    monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", lambda t, **kw: t())
+    monkeypatch.setattr("telix.client_repl_dialogs.run_in_thread", lambda t, **kw: t())
     monkeypatch.setattr("telix.client_repl.restore_after_subprocess", lambda buf: None)
     monkeypatch.setattr("telix.client_repl.terminal_cleanup", lambda: "")
     monkeypatch.setattr(

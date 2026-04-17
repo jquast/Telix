@@ -48,7 +48,7 @@ def gmcp_lookup_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
     return None
 
 
-def _gmcp_walk(dotted_path: str, gmcp: dict[str, typing.Any]) -> typing.Any:
+def gmcp_walk(dotted_path: str, gmcp: dict[str, typing.Any]) -> typing.Any:
     """
     Resolve a dot-separated path against the GMCP data dict.
 
@@ -106,9 +106,9 @@ def gmcp_lookup_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
     return None
 
 
-def _gmcp_dotted_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
+def gmcp_dotted_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
     """Resolve a dotted raw key like ``Char.Guild.Stats.Water`` to an int or str."""
-    raw = _gmcp_walk(key, gmcp)
+    raw = gmcp_walk(key, gmcp)
     if raw is None:
         return None
     try:
@@ -117,14 +117,14 @@ def _gmcp_dotted_raw(key: str, gmcp: dict[str, typing.Any]) -> int | str | None:
         return str(raw)
 
 
-def _gmcp_dotted_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
+def gmcp_dotted_pct(key: str, gmcp: dict[str, typing.Any]) -> int | None:
     """Resolve a dotted pct key like ``Char.Guild.Stats.Water`` to a 0--100 int."""
     base = key[:-1] if key.endswith("%") else key
     parts = base.rsplit(".", 1)
     if len(parts) != 2:
         return None
     pkg_path, field = parts
-    pkg = _gmcp_walk(pkg_path, gmcp)
+    pkg = gmcp_walk(pkg_path, gmcp)
     if not isinstance(pkg, dict):
         return None
     cur_raw = pkg.get(field)
@@ -210,7 +210,7 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
             threshold = int(threshold_str)
             if is_dotted:
                 if gmcp:
-                    value = _gmcp_dotted_pct(key, gmcp)
+                    value = gmcp_dotted_pct(key, gmcp)
             else:
                 if gmcp:
                     value = gmcp_lookup_pct(key, gmcp)
@@ -227,7 +227,7 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
                 threshold = threshold_str
             if is_dotted:
                 if gmcp:
-                    value = _gmcp_dotted_raw(key, gmcp)
+                    value = gmcp_dotted_raw(key, gmcp)
             else:
                 if gmcp:
                     value = gmcp_lookup_raw(key, gmcp)

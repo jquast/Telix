@@ -750,7 +750,7 @@ def macro_send(ctx: "TelixSessionContext", log: logging.Logger, cmd: str) -> Non
     ctx.writer.write(cmd + "\r\n")
 
 
-def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Logger) -> bool:
+def dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Logger) -> bool:
     """
     Dispatch a REPL action backtick command via ``ctx.repl_actions``.
 
@@ -843,7 +843,7 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
     while idx < len(parts):
         cmd = parts[idx]
 
-        if _dispatch_repl_action(cmd, ctx, log):
+        if dispatch_repl_action(cmd, ctx, log):
             idx += 1
             continue
 

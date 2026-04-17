@@ -39,16 +39,21 @@ class BBSScreen(pyte.Screen):
 
 # SyncTERM font switching: ESC [ <slot> ; <font_id> SPACE D
 # CSI with intermediate character ' ' and final character 'D'.
-_SYNCTERM_FONT_RE = re.compile(r"\x1b\[(\d+);(\d+) D")
+SYNCTERM_FONT_RE = re.compile(r"\x1b\[(\d+);(\d+) D")
+
+# Device Status Report (DSR): CSI 6 n -- requests cursor position report.
+# BBS systems send this to detect ANSI support; pyte has no output transport
+# to reply, so we intercept it and send the response ourselves.
+DSR_RE = re.compile(r"\x1b\[6n")
 
 # CSI sequences with intermediate bytes (0x20-0x2F) that pyte does not handle.
 # pyte's parser treats these as standard CSI and passes extra params to handlers
 # that don't expect them, causing crashes.  Strip them before feeding to pyte.
-_CSI_WITH_INTERMEDIATE = re.compile(r"\x1b\[[\d;]*[\x20-\x2f]+[\x40-\x7e]")
+CSI_WITH_INTERMEDIATE = re.compile(r"\x1b\[[\d;]*[\x20-\x2f]+[\x40-\x7e]")
 
 # Synchronized output: DEC private mode 2026.
-_SYNC_START = "\033[?2026h"
-_SYNC_END = "\033[?2026l"
+SYNC_START = "\033[?2026h"
+SYNC_END = "\033[?2026l"
 
 # pyte uses named colors for the basic 16, hex strings for 256/24-bit.
 _PYTE_COLOR_NAMES: dict[str, int] = {
@@ -62,7 +67,7 @@ _PYTE_COLOR_NAMES: dict[str, int] = {
 _XTERM_256: list[tuple[int, int, int]] | None = None
 
 
-def _build_xterm_256() -> list[tuple[int, int, int]]:
+def build_xterm_256() -> list[tuple[int, int, int]]:
     global _XTERM_256
     if _XTERM_256 is not None:
         return _XTERM_256
@@ -79,7 +84,7 @@ def _build_xterm_256() -> list[tuple[int, int, int]]:
     return _XTERM_256
 
 
-def _pyte_color_to_rgb(
+def pyte_color_to_rgb(
     color: str,
     bold: bool,
     is_fg: bool,
@@ -110,7 +115,7 @@ def _pyte_color_to_rgb(
 
     try:
         idx = int(color)
-        xterm = _build_xterm_256()
+        xterm = build_xterm_256()
         if 0 <= idx < len(xterm):
             return xterm[idx]
     except ValueError:
@@ -196,7 +201,27 @@ class MetaTerminalWriter:
             else:
                 log.warning("unknown font id %d in slot %d", font_id, slot)
             return ""
-        return _SYNCTERM_FONT_RE.sub(_on_match, text)
+        return SYNCTERM_FONT_RE.sub(_on_match, text)
+
+    def _intercept_device_queries(self, text: str) -> str:
+        """Strip DSR (Device Status Report) and send CPR back to the BBS.
+
+        BBS systems send ``CSI 6 n`` to detect ANSI support.  pyte has no
+        output transport to reply, so we intercept it here and write the
+        Cursor Position Report (``CSI row ; col R``) to the telnet writer.
+
+        :param text: Input text that may contain DSR sequences.
+        :returns: Text with DSR sequences removed.
+        """
+        if "\x1b[6n" not in text:
+            return text
+        row = self.screen.cursor.y + 1
+        col = self.screen.cursor.x + 1
+        writer = self.ctx.writer
+        if writer is not None:
+            cpr = f"\x1b[{row};{col}R".encode("ascii")
+            writer.write(cpr)
+        return DSR_RE.sub("", text)
 
     def _char_to_code(self, char_data: str) -> int:
         """Convert a pyte character to a font codepage byte value.
@@ -251,7 +276,7 @@ class MetaTerminalWriter:
             self._prev_buffer.clear()
             self._needs_full_redraw = True
 
-        buf: list[str] = [_SYNC_START]
+        buf: list[str] = [SYNC_START]
         force = self._needs_full_redraw
         self._needs_full_redraw = False
         dirty_rows = set(range(self.rows)) if force else self.screen.dirty
@@ -278,8 +303,8 @@ class MetaTerminalWriter:
                     continue
                 self._prev_buffer[(vrow, vcol)] = key
 
-                fg = _pyte_color_to_rgb(char.fg, char.bold, True, self.palette)
-                bg = _pyte_color_to_rgb(char.bg, False, False, self.palette)
+                fg = pyte_color_to_rgb(char.fg, char.bold, True, self.palette)
+                bg = pyte_color_to_rgb(char.bg, False, False, self.palette)
                 if char.reverse:
                     fg, bg = bg, fg
 
@@ -293,7 +318,7 @@ class MetaTerminalWriter:
                     buf.append(f"\033[{row_pos};{real_col}H{line}")
 
         buf.append("\033[0m")
-        buf.append(_SYNC_END)
+        buf.append(SYNC_END)
 
         if len(buf) > 3:
             self._output("".join(buf))
@@ -336,6 +361,13 @@ class MetaTerminalWriter:
 
         :param data: Raw bytes from the remote BBS connection.
         """
+        from . import client_shell
+
+        if self.ctx.repl.ff_clears_screen:
+            data = client_shell.replace_ff_with_clear(data)
+        if self.ctx.repl.clear_homes_cursor:
+            data = client_shell.inject_home_before_clear(data)
+
         self._apply_pending_resize()
 
         cur_encoding = self.encoding
@@ -344,8 +376,9 @@ class MetaTerminalWriter:
             self._decoder._encoding = cur_encoding  # type: ignore[attr-defined]
 
         text = self._decoder.decode(data)
+        text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
-        text = _CSI_WITH_INTERMEDIATE.sub("", text)
+        text = CSI_WITH_INTERMEDIATE.sub("", text)
 
         if text:
             self.stream.feed(text)

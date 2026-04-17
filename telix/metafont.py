@@ -57,7 +57,7 @@ _OCTANT_SPECIALS: dict[int, int] = {
 _SPECIAL_KEYS_SORTED: list[int] = sorted(_OCTANT_SPECIALS)
 
 
-def _build_octant_table() -> list[str]:
+def build_octant_table() -> list[str]:
     """Build lookup table mapping 8-bit pattern to Unicode octant character.
 
     Bit positions correspond to the 2x4 cell grid::
@@ -80,7 +80,7 @@ def _build_octant_table() -> list[str]:
     return table
 
 
-OCTANT = _build_octant_table()
+OCTANT = build_octant_table()
 
 
 class BitmapFont:
@@ -111,7 +111,7 @@ _font_cache: dict[int, BitmapFont] = {}
 _font_bin_data: bytes | None = None
 
 
-def _load_font_bin() -> bytes:
+def load_font_bin() -> bytes:
     global _font_bin_data
     if _font_bin_data is None:
         _font_bin_data = FONT_BIN_PATH.read_bytes()
@@ -129,7 +129,7 @@ def load_font(font_id: int) -> BitmapFont:
         return _font_cache[font_id]
 
     entry = font_registry.FONT_BY_ID[font_id]
-    bin_data = _load_font_bin()
+    bin_data = load_font_bin()
     font_data = bin_data[entry.bin_offset:entry.bin_offset + font_registry.FONT_BYTES]
     font = BitmapFont(font_id, font_data, entry.name, entry.encoding)
     _font_cache[font_id] = font

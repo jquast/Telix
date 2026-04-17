@@ -8,7 +8,7 @@ import pytest
 
 from telix.metaterminal import (
     MetaTerminalWriter,
-    _pyte_color_to_rgb,
+    pyte_color_to_rgb,
     _PYTE_COLOR_NAMES,
 )
 from telix.color_filter import PALETTES
@@ -36,6 +36,8 @@ class FakeWriter:
 class FakeRepl:
     metafont_columns = None
     metafont_rows = None
+    ff_clears_screen = False
+    clear_homes_cursor = False
 
 
 class FakeCtx:
@@ -44,6 +46,7 @@ class FakeCtx:
     def __init__(self, encoding="cp437"):
         self.encoding = encoding
         self.repl = FakeRepl()
+        self.writer = None
 
 
 VGA = PALETTES["vga"]
@@ -71,30 +74,30 @@ class TestBBSScreen:
 class TestPyteColorToRgb:
 
     def test_default_fg(self):
-        assert _pyte_color_to_rgb("default", False, True, VGA) == VGA[7]
+        assert pyte_color_to_rgb("default", False, True, VGA) == VGA[7]
 
     def test_default_bg(self):
-        assert _pyte_color_to_rgb("default", False, False, VGA) == VGA[0]
+        assert pyte_color_to_rgb("default", False, False, VGA) == VGA[0]
 
     def test_named_red(self):
-        assert _pyte_color_to_rgb("red", False, True, VGA) == VGA[1]
+        assert pyte_color_to_rgb("red", False, True, VGA) == VGA[1]
 
     def test_bold_brightens_fg(self):
-        assert _pyte_color_to_rgb("red", True, True, VGA) == VGA[9]
+        assert pyte_color_to_rgb("red", True, True, VGA) == VGA[9]
 
     def test_bold_does_not_brighten_bg(self):
-        assert _pyte_color_to_rgb("red", True, False, VGA) == VGA[1]
+        assert pyte_color_to_rgb("red", True, False, VGA) == VGA[1]
 
     def test_hex_color(self):
-        assert _pyte_color_to_rgb("ff8000", False, True, VGA) == (255, 128, 0)
+        assert pyte_color_to_rgb("ff8000", False, True, VGA) == (255, 128, 0)
 
     def test_256_color_index(self):
-        result = _pyte_color_to_rgb("196", False, True, VGA)
+        result = pyte_color_to_rgb("196", False, True, VGA)
         assert isinstance(result, tuple)
         assert len(result) == 3
 
     def test_unknown_returns_default(self):
-        assert _pyte_color_to_rgb("nonsense", False, True, VGA) == VGA[7]
+        assert pyte_color_to_rgb("nonsense", False, True, VGA) == VGA[7]
 
 
 class TestMetaTerminalWriter:
@@ -224,6 +227,21 @@ class TestMetaTerminalWriter:
         assert mtw.font.font_id == 26
         assert mtw.encoding == "cp437"
         assert mtw._decoder is decoder_before
+
+    def test_dsr_sends_cpr_response(self):
+        inner = FakeWriter()
+        ctx = FakeCtx()
+        fake_writer = FakeWriter()
+        ctx.writer = fake_writer
+        mtw = MetaTerminalWriter(inner, ctx, columns=80, rows=25)
+        mtw.write(b"\x1b[6n")
+        cpr = b"".join(fake_writer.chunks)
+        assert cpr == b"\x1b[1;1R"
+
+    def test_dsr_stripped_from_pyte_input(self):
+        mtw, inner = self._make_writer(columns=10, rows=3)
+        mtw.write(b"\x1b[6nA")
+        assert mtw.screen.buffer[0][0].data == "A"
 
     def test_full_redraw_after_font_switch(self):
         mtw, inner = self._make_writer(columns=5, rows=2)
