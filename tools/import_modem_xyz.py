@@ -64,8 +64,6 @@ def _parse_line(line: str, entry_type: str, default_encoding: str = "utf-8") -> 
     # Field 2: encoding (non-numeric string)
     if rest and rest[0].lower() in _KNOWN_ENCODINGS:
         encoding = rest.pop(0).lower()
-        if encoding == "topaz":
-            encoding = "latin1"
 
     # Field 3: columns (numeric)
     if rest and rest[0].isdigit():

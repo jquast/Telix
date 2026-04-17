@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def _safe_get_blocking(fd: int) -> "bool | None":
+def safe_get_blocking(fd: int) -> "bool | None":
     """Return ``os.get_blocking(fd)`` or ``None`` when unavailable or invalid."""
     try:
         return os.get_blocking(fd)
@@ -45,7 +45,7 @@ def _safe_get_blocking(fd: int) -> "bool | None":
 
 
 @contextlib.contextmanager
-def _patch_signal_for_thread() -> Iterator[None]:
+def patch_signal_for_thread() -> Iterator[None]:
     """
     Forward ``signal.signal()`` calls from the TUI worker thread to the main thread.
 
@@ -91,7 +91,7 @@ def _patch_signal_for_thread() -> Iterator[None]:
             original(signal.SIGWINCH, old_winch)
 
 
-def _prepare_terminal() -> None:
+def prepare_terminal() -> None:
     """Reset the terminal for a TUI: clear screen and flush buffers."""
     from .client_repl import get_term, terminal_cleanup
 
@@ -103,7 +103,7 @@ def _prepare_terminal() -> None:
     sys.__stderr__.flush()
 
 
-def _run_in_thread(
+def run_in_thread(
     target: Callable[[], None], replay_buf: typing.Any | None = None, cleanup_files: list[str] | None = None
 ) -> None:
     """
@@ -122,7 +122,7 @@ def _run_in_thread(
     from .client_repl import blocking_fds, restore_after_subprocess
 
     global subprocess_is_active
-    log.debug("_run_in_thread: starting worker thread")
+    log.debug("run_in_thread: starting worker thread")
     subprocess_is_active = True
     thread_exc: BaseException | None = None
 
@@ -135,7 +135,7 @@ def _run_in_thread(
             raise
 
     try:
-        with _patch_signal_for_thread(), blocking_fds():
+        with patch_signal_for_thread(), blocking_fds():
             t = threading.Thread(target=wrapped_target, daemon=True)
             t.start()
             t.join()
@@ -182,17 +182,17 @@ def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: typing.
         "confirm_dialog: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_confirm_dialog(title, body, warning or "", result_path), replay_buf=replay_buf
     )
 
@@ -237,8 +237,8 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
     os.close(fd)
 
     log.debug("randomwalk_dialog: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_randomwalk_dialog(
             result_path, default_visit_level, default_room_change_cmd, default_triggers, default_command_delay
         ),
@@ -298,8 +298,8 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
     os.close(fd)
 
     log.debug("autodiscover_dialog: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_autodiscover_dialog(
             result_path, default_strategy, default_room_change_cmd, default_triggers, default_command_delay
         ),
@@ -382,8 +382,8 @@ def show_help(macro_defs: "typing.Any" = None, replay_buf: typing.Any | None = N
     """
     from . import client_tui_base
 
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_base.launch_editor_in_thread(client_tui_base.CommandHelpScreen(topic="keybindings")),
         replay_buf=replay_buf,
     )
@@ -478,8 +478,8 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_unified_editor(params),
         replay_buf=replay_buf,
         cleanup_files=[capture_file] if capture_file else None,
@@ -572,9 +572,9 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         "tui_editor: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s editor_type=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         editor_type,
@@ -582,8 +582,8 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(target, replay_buf=replay_buf)
+    prepare_terminal()
+    run_in_thread(target, replay_buf=replay_buf)
 
     if editor_type == "macros":
         reload_macros(ctx, path, session_key, log)
@@ -680,8 +680,8 @@ def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: typing.Any | None
             json.dump({"captures": captures, "capture_log": capture_log}, fh)
 
     log.debug("chat_viewer: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_captures.run_chat_viewer(chat_file, session_key, initial_channel, capture_file),
         replay_buf=replay_buf,
         cleanup_files=[capture_file] if capture_file else None,
@@ -711,17 +711,17 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: typing.Any | Non
         "room_browser: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_base.launch_editor_in_thread(
             client_tui_rooms.RoomBrowserScreen(
                 rooms_path=rp, session_key=session_key, current_room_file=crp, fasttravel_file=ftp

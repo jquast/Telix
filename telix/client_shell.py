@@ -39,6 +39,7 @@ from . import (
     rooms,
     macros,
     trigger,
+    terminal,
     client_repl,
     highlighter,
     progressbars,
@@ -127,6 +128,89 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
 
 
+# ED 2 (erase display) without an adjacent HOME -- inject HOME before it.
+# Matches \033[2J that is NOT immediately preceded by \033[H or \033[1;1H.
+ED2 = b"\x1b[2J"
+HOME = b"\x1b[H"
+HOME_ED2 = b"\x1b[H\x1b[2J"
+
+
+def inject_home_before_clear(data: bytes) -> bytes:
+    """Insert ``CSI H`` before any ``CSI 2 J`` not already preceded by ``CSI H``.
+
+    BBS software often sends ``ED 2`` expecting it to also home the cursor
+    (CTerm/SyncTERM behavior), but VT100-spec terminals and pyte do not.
+    This injects the missing ``HOME`` so the real terminal behaves as expected.
+    """
+    if ED2 not in data:
+        return data
+    # Already has HOME before every ED 2 -- fast path
+    if HOME_ED2 in data and data.count(ED2) == data.count(HOME_ED2):
+        return data
+    result = bytearray()
+    i = 0
+    while i < len(data):
+        ed2_pos = data.find(ED2, i)
+        if ed2_pos == -1:
+            result.extend(data[i:])
+            break
+        result.extend(data[i:ed2_pos])
+        # Check if HOME immediately precedes
+        if len(result) >= 3 and result[-3:] == bytearray(HOME):
+            result.extend(ED2)
+        else:
+            result.extend(HOME_ED2)
+        i = ed2_pos + len(ED2)
+    return bytes(result)
+
+
+FF = b"\x0c"
+
+
+def replace_ff_with_clear(data: bytes) -> bytes:
+    """Replace Form Feed (``0x0C``) with ``CSI H CSI 2 J`` (home + erase display).
+
+    SyncTERM and many BBS terminals treat FF as a clear-screen-and-home
+    operation.  Standard VT100 terminals do not.  This rewrites FF so the
+    real terminal clears as the BBS expects.
+    """
+    if FF not in data:
+        return data
+    return data.replace(FF, HOME_ED2)
+
+
+class ClearHomesWriter:
+    """Wraps a stream writer to apply BBS clear-screen compatibility rewrites.
+
+    Used in raw mode without a color filter when ``clear_homes_cursor`` or
+    ``ff_clears_screen`` is enabled.
+
+    :param inner: The underlying ``asyncio.StreamWriter``.
+    :param clear_homes_cursor: Inject HOME before lone ED 2 sequences.
+    :param ff_clears_screen: Replace Form Feed with HOME + ED 2.
+    """
+
+    def __init__(
+        self,
+        inner: asyncio.StreamWriter,
+        clear_homes_cursor: bool = True,
+        ff_clears_screen: bool = False,
+    ) -> None:
+        self.inner = inner
+        self.clear_homes_cursor = clear_homes_cursor
+        self.ff_clears_screen = ff_clears_screen
+
+    def write(self, data: bytes) -> None:
+        if self.ff_clears_screen:
+            data = replace_ff_with_clear(data)
+        if self.clear_homes_cursor:
+            data = inject_home_before_clear(data)
+        self.inner.write(data)
+
+    def __getattr__(self, name: str) -> typing.Any:
+        return getattr(self.inner, name)
+
+
 class ColorFilteredWriter:
     """
     Wraps an ``asyncio.StreamWriter`` to apply the session color filter to all writes.
@@ -149,6 +233,10 @@ class ColorFilteredWriter:
 
     def write(self, data: bytes) -> None:
         """Filter *data* through the color filter if one is active, then write."""
+        if self.ctx.repl.ff_clears_screen:
+            data = replace_ff_with_clear(data)
+        if self.ctx.repl.clear_homes_cursor:
+            data = inject_home_before_clear(data)
         cf = self.ctx.repl.color_filter
         if cf is not None:
             cur_encoding = self.ctx.encoding or self.encoding
@@ -196,7 +284,7 @@ def build_session_key(
 
         # Strip telix-specific args (e.g. --colormatch none) before passing to telnetlib3's parser
         # so they don't get misread as the positional port argument.
-        stripped = _main_mod._build_telix_parser().parse_known_args(sys.argv[1:])[1]
+        stripped = _main_mod.build_telix_parser().parse_known_args(sys.argv[1:])[1]
         with contextlib.redirect_stderr(_stderr_buf):
             args = telnetlib3.client._get_argument_parser().parse_known_args(stripped)[0]
         if args.host and not args.host.startswith(("ws://", "wss://")):
@@ -229,7 +317,7 @@ def want_repl(
     return ctx.repl.enabled and getattr(writer, "mode", "local") == "local"
 
 
-def _setup_color_filter(
+def setup_color_filter(
     ctx: session_context.TelixSessionContext,
     writer: (
         telnetlib3.stream_writer.TelnetWriter
@@ -298,7 +386,7 @@ def _setup_color_filter(
         r, g, b = (int(x) for x in fg_env.split(","))
         fg_color = (r, g, b)
 
-    force_black_bg = getattr(args, "force_black_bg", False)
+    force_black_bg = args.force_black_bg
     if force_black_bg:
         bg_color = (0, 0, 0)
         fg_color = None
@@ -316,7 +404,7 @@ def _setup_color_filter(
     ctx.repl.erase_eol = True
 
 
-def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
+def setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     """
     Set ``ctx.ansi_keys`` from the telix CLI ``--ansi-keys`` flag.
 
@@ -328,7 +416,108 @@ def _setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     args = ctx.color_args
     if args is None:
         return
-    ctx.repl.ansi_keys = bool(getattr(args, "ansi_keys", False))
+    ctx.repl.ansi_keys = args.ansi_keys
+
+
+def setup_clear_homes(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure the clear-homes-cursor option from telix CLI args.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.clear_homes_cursor = args.clear_homes_cursor
+    ctx.repl.ff_clears_screen = args.ff_clears_screen
+
+
+def setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure metafont rendering from telix CLI args.
+
+    Reads ``ctx.color_args`` for ``--metafont``, ``--metafont-font-id``,
+    and ``--metafont-columns`` flags.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.metafont = args.metafont
+    ctx.repl.metafont_columns = args.metafont_columns
+    ctx.repl.metafont_rows = args.metafont_rows
+
+
+def make_raw_stdout(
+    stdout: asyncio.StreamWriter,
+    ctx: "session_context.TelixSessionContext",
+    tty_shell: "typing.Any | None" = None,
+    writer: "typing.Any | None" = None,
+) -> "asyncio.StreamWriter | ColorFilteredWriter":
+    """
+    Build the raw-mode stdout wrapper appropriate for the session config.
+
+    Returns a :class:`MetaTerminalWriter` when metafont is enabled,
+    a :class:`ColorFilteredWriter` when a color filter is active,
+    or the raw *stdout* otherwise.
+
+    When metafont is enabled, also patches NAWS reporting on *writer* to
+    return the virtual terminal size, and sets *tty_shell.on_resize* to
+    schedule a resize on the next write (no I/O from the signal handler).
+
+    :param stdout: The underlying asyncio stream to real stdout.
+    :param ctx: Session context with display configuration.
+    :param tty_shell: Terminal shell object (for resize callback).
+    :param writer: Telnet/WS/SSH writer (for NAWS patching).
+    :returns: Wrapped or raw stdout writer.
+    """
+    if ctx.repl.metafont:
+        from . import metaterminal
+        from .fonts import font_registry
+
+        real_rows, real_cols = terminal.get_terminal_size()
+        columns = ctx.repl.metafont_columns
+        rows = ctx.repl.metafont_rows
+        if columns is None:
+            columns = real_cols // 4 if real_cols else 80
+        if rows is None:
+            rows = real_rows // 4 if real_rows else 25
+        mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows)
+
+        if writer is not None and hasattr(writer, "handle_send_naws"):
+            def _metafont_naws() -> tuple[int, int]:
+                return mtw.virtual_size()
+            writer.handle_send_naws = _metafont_naws  # type: ignore[method-assign]
+
+        if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
+            import signal
+            try:
+                loop = asyncio.get_event_loop()
+
+                def _metafont_winch() -> None:
+                    real_rows, real_cols = terminal.get_terminal_size()
+                    mtw.resize(real_cols, real_rows)
+                    tty_shell._resize_pending.set()
+                    if hasattr(writer, "local_option"):
+                        import telnetlib3.telopt
+                        if writer.local_option.enabled(telnetlib3.telopt.NAWS):
+                            writer._send_naws()
+
+                loop.add_signal_handler(signal.SIGWINCH, _metafont_winch)
+            except (RuntimeError, ValueError):
+                pass
+
+        return mtw
+    if ctx.repl.color_filter is not None:
+        return ColorFilteredWriter(stdout, ctx)
+    if ctx.repl.clear_homes_cursor or ctx.repl.ff_clears_screen:
+        return ClearHomesWriter(
+            stdout,
+            clear_homes_cursor=ctx.repl.clear_homes_cursor,
+            ff_clears_screen=ctx.repl.ff_clears_screen,
+        )
+    return stdout
 
 
 async def telix_client_shell(
@@ -358,13 +547,15 @@ async def telix_client_shell(
         session_key=build_session_key(telnet_writer),
         encoding=telnet_writer.fn_encoding(incoming=True),
     )
-    ctx.repl.enabled = True
+    ctx.repl.enabled = not _main_mod._color_args.no_repl
 
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)
 
-    _setup_color_filter(ctx, telnet_writer)
-    _setup_ansi_keys(ctx)
+    setup_color_filter(ctx, telnet_writer)
+    setup_ansi_keys(ctx)
+    setup_clear_homes(ctx)
+    setup_metafont(ctx)
 
     # 3. Setup GMCP callbacks
     base_on_gmcp = telnet_writer._ext_callback.get(telnetlib3.telopt.GMCP)
@@ -437,12 +628,17 @@ async def telix_client_shell(
         banner_sep = "\r\n" if tty_shell._istty else linesep
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -484,7 +680,8 @@ async def telix_client_shell(
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=telnet_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 telnet_reader,
                 telnet_writer,
@@ -537,7 +734,9 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
     ctx.raw_mode = True
 
     load_configs(ctx)
-    _setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
+    setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
+    setup_clear_homes(ctx)
+    setup_metafont(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
 
@@ -549,12 +748,17 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
         escape_name = telnetlib3.accessories.name_unicode(keyboard_escape)
         stdout.write(f"Escape character is '{escape_name}'.{linesep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -565,7 +769,8 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ssh_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ssh_reader,  # type: ignore[arg-type]
                 ssh_writer,  # type: ignore[arg-type]
@@ -609,8 +814,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     # 2. Load per-session configs.
     load_configs(ctx)
 
-    # 2b. Set up color filter from CLI args.
-    _setup_color_filter(ctx, ws_writer)
+    # 2b. Set up color filter and metafont from CLI args.
+    setup_color_filter(ctx, ws_writer)
+    setup_clear_homes(ctx)
+    setup_metafont(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
     def on_gmcp(package: str, data: typing.Any) -> None:
@@ -646,12 +853,17 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         banner_sep = "\r\n" if tty_shell._istty else linesep
         stdout.write(f"Escape character is '{escape_name}'.{banner_sep}".encode())
 
+        raw_stdout_ref: list[typing.Any] = [None]
+
         def handle_close(msg: str) -> None:
             cf = ctx.repl.color_filter
             if cf is not None:
                 flush = cf.flush()
                 if flush:
                     stdout.write(flush.encode())
+            rs = raw_stdout_ref[0]
+            if rs is not None and hasattr(rs, "cleanup"):
+                rs.cleanup()
             stdout.write(f"\033[m{linesep}{msg}{linesep}".encode())
             tty_shell.cleanup_winch()
 
@@ -673,7 +885,8 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
             )
-            raw_stdout = ColorFilteredWriter(stdout, ctx) if ctx.repl.color_filter is not None else stdout
+            raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ws_writer)
+            raw_stdout_ref[0] = raw_stdout
             await telnetlib3.client_shell._raw_event_loop(
                 ws_reader,  # type: ignore[arg-type]
                 ws_writer,  # type: ignore[arg-type]

@@ -26,6 +26,10 @@ Features
 - **BBS/Scene Art** support for `CP437`_, `PETSCII`_, `ATASCII`_, `iCE colors`_, by translation of
   ANSI color codes and legacy encodings to modern 24-bit color codes and terminal encoding (usually
   utf-8).
+- **Octant Metafonts** render BBS bitmap fonts (CP437, Topaz, MicroKnight, P0T NOoDLE, and all 45
+  `SyncTERM`_ fonts) using Unicode octant block characters.  Each 8x16 glyph is displayed as a 4x4
+  block of real terminal cells with 24-bit color, giving pixel-accurate BBS art rendering in any
+  modern terminal.
 
 Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
 
@@ -43,6 +47,7 @@ Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
 .. _iCE colors: https://forum.16colo.rs/t/ice-colors-or-blinking-text/27
 .. _`websocket subprotocols`: https://mudstandards.org/websocket/
 .. _TELNETS: https://www.micropolis.com/support/kb/micropolis-bbs-faq#Is_there_a_secure_Telnet
+.. _SyncTERM: https://syncterm.bbsdev.net/
 
 Installation
 ------------
@@ -95,7 +100,9 @@ Connect directly via WebSocket::
                  [--typescript-mode {append,rewrite}] [--key-file FILE]
                  [--username USER] [--background-color COLOR] [--bbs]
                  [--color-brightness N] [--color-contrast N]
-                 [--colormatch PALETTE] [--mud] [--no-ice-colors]
+                 [--colormatch PALETTE] [--mud] [--clear-homes-cursor]
+                 [--metafont] [--metafont-columns N] [--metafont-rows N]
+                 [--no-ice-colors]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -163,6 +170,11 @@ Connect directly via WebSocket::
       --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
                             disable)
       --mud                 apply MUD connection presets
+      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm
+                            compatibility)
+      --metafont            render using octant bitmap metafonts
+      --metafont-columns N  force virtual terminal columns for metafont (e.g. 40)
+      --metafont-rows N     force virtual terminal rows for metafont (default: 25)
       --no-ice-colors       disable iCE color (blink as bright background) support
 
 .. end-cli-help

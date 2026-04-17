@@ -17,7 +17,7 @@ import telnetlib3.client
 from . import mtts, directory, ws_client, ssh_client, client_tui_dialogs, client_tui_session_manager
 
 
-def _parse_option_list(values: list[str]) -> set[bytes]:
+def parse_option_list(values: list[str]) -> set[bytes]:
     """
     Parse a list of option arguments, splitting comma-separated values.
 
@@ -34,7 +34,7 @@ def _parse_option_list(values: list[str]) -> set[bytes]:
 
 
 # Module-level store for telix-specific args, set by main() before
-# telnetlib3 starts the shell.  Read by client_shell._setup_color_filter().
+# telnetlib3 starts the shell.  Read by client_shell.setup_color_filter().
 _color_args: argparse.Namespace | None = None
 
 
@@ -68,7 +68,7 @@ def _detect_terminal_colors() -> "str | None":
     return sw.name if sw is not None else None
 
 
-def _build_telix_parser() -> argparse.ArgumentParser:
+def build_telix_parser() -> argparse.ArgumentParser:
     """
     Build argument parser for telix-specific CLI flags.
 
@@ -81,23 +81,30 @@ def _build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--color-contrast", type=float, default=1.0, dest="color_contrast")
     parser.add_argument("--background-color", default="#000000", dest="background_color")
     parser.add_argument("--no-ice-colors", action="store_true", default=False, dest="no_ice_colors")
+    parser.add_argument("--force-black-bg", action="store_true", default=False, dest="force_black_bg")
+    parser.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
     parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
+    parser.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
+    parser.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
+    parser.add_argument("--metafont", action="store_true", default=False, dest="metafont")
+    parser.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
+    parser.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
     return parser
 
 
-def _strip_telix_args() -> argparse.Namespace:
+def strip_telix_args() -> argparse.Namespace:
     """
     Parse and remove telix-specific flags from ``sys.argv``.
 
     :returns: Namespace with the parsed telix-specific values.
     """
-    parser = _build_telix_parser()
+    parser = build_telix_parser()
     telix_args, remaining = parser.parse_known_args(sys.argv[1:])
     sys.argv[1:] = remaining
     return telix_args
 
 
-def _build_help_parser() -> argparse.ArgumentParser:
+def build_help_parser() -> argparse.ArgumentParser:
     """
     Build a unified help-only parser showing all telix options.
 
@@ -181,6 +188,21 @@ def _build_help_parser() -> argparse.ArgumentParser:
     )
     telix.add_argument("--mud", action="store_true", help="apply MUD connection presets")
     telix.add_argument(
+        "--clear-homes-cursor", action="store_true",
+        help="inject cursor home before clear screen (BBS/CTerm compatibility)",
+    )
+    telix.add_argument(
+        "--ff-clears-screen", action="store_true",
+        help="treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)",
+    )
+    telix.add_argument("--metafont", action="store_true", help="render using octant bitmap metafonts")
+    telix.add_argument(
+        "--metafont-columns", metavar="N", type=int, help="force virtual terminal columns for metafont (e.g. 40)"
+    )
+    telix.add_argument(
+        "--metafont-rows", metavar="N", type=int, help="force virtual terminal rows for metafont (default: 25)"
+    )
+    telix.add_argument(
         "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
     )
 
@@ -194,7 +216,7 @@ def reinit() -> None:
     print(f"Loaded {len(sessions)} sessions from directory.")
 
 
-BBS_TELNET_FLAGS = ["--raw-mode", "--colormatch", "vga"]
+BBS_TELNET_FLAGS = ["--raw-mode", "--colormatch", "vga", "--clear-homes-cursor", "--ff-clears-screen"]
 
 MUD_TELNET_FLAGS = ["--line-mode", "--compression", "--colormatch", "none", "--no-ice-colors"]
 
@@ -212,7 +234,7 @@ def pop_server_type() -> str:
     return ""
 
 
-def _get_argv_value(flag: str, default: str) -> str:
+def get_argv_value(flag: str, default: str) -> str:
     """
     Return the value of a ``--flag`` argument from ``sys.argv``.
 
@@ -229,13 +251,13 @@ def _get_argv_value(flag: str, default: str) -> str:
     return default
 
 
-def _get_term_value() -> str:
+def get_term_value() -> str:
     """
     Return the terminal type for MTTS negotiation.
 
     Uses ``--term`` from ``sys.argv`` if present, otherwise ``$TERM``, or "ansi" when not present.
     """
-    return _get_argv_value("--term", os.environ.get("TERM", "ansi"))
+    return get_argv_value("--term", os.environ.get("TERM", "ansi"))
 
 
 def main() -> None:
@@ -257,7 +279,7 @@ def main() -> None:
 
     # Intercept --help early to show unified help output.
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
-        _build_help_parser().parse_args(["--help"])
+        build_help_parser().parse_args(["--help"])
         return
 
     detected_sw_name = _detect_terminal_colors()
@@ -293,12 +315,20 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
+            force_black_bg=False,
+            ansi_keys=False,
+            no_repl=no_repl,
+            clear_homes_cursor=False,
+            ff_clears_screen=False,
+            metafont=False,
+            metafont_columns=None,
+            metafont_rows=None,
         )
         compression: bool | None = True if args.compression else (False if args.no_compression else None)
-        always_do = _parse_option_list(args.always_do)
-        always_will = _parse_option_list(args.always_will)
-        always_dont = _parse_option_list(args.always_dont)
-        always_wont = _parse_option_list(args.always_wont)
+        always_do = parse_option_list(args.always_do)
+        always_will = parse_option_list(args.always_will)
+        always_dont = parse_option_list(args.always_dont)
+        always_wont = parse_option_list(args.always_wont)
         gmcp_modules = [m.strip() for m in args.gmcp_modules.split(",") if m.strip()] if args.gmcp_modules else None
         send_environ = (
             tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
@@ -365,6 +395,14 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
+            force_black_bg=False,
+            ansi_keys=False,
+            no_repl=False,
+            clear_homes_cursor=False,
+            ff_clears_screen=False,
+            metafont=False,
+            metafont_columns=None,
+            metafont_rows=None,
         )
         try:
             asyncio.run(
@@ -398,7 +436,7 @@ def main() -> None:
         sys.argv.extend(MUD_TELNET_FLAGS)
 
     # Parse and strip telix-specific flags so telnetlib3 doesn't see them.
-    telix_args = _strip_telix_args()
+    telix_args = strip_telix_args()
     _color_args = telix_args
 
     # Inject the telix shell so telnetlib3 uses our REPL-aware shell.
@@ -408,14 +446,14 @@ def main() -> None:
     # garbage on screen).  BBS connections also benefit from this fix since
     # gambatte-style servers negotiate WILL ECHO + SGA (kludge mode) and the
     # default telnetlib3 shell computes local_echo before negotiation completes.
-    if "--shell" not in sys.argv and not telix_args.no_repl:
+    if "--shell" not in sys.argv:
         sys.argv.insert(1, "--shell=telix.client_shell.telix_client_shell")
 
     # Install MTTS TTYPE cycling and MNES for MUD connections.
     if server_type != "bbs":
         is_ssl = "--ssl" in sys.argv or "--ssl-no-verify" in sys.argv
         mtts.install_mtts(
-            _get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=_get_argv_value("--encoding", "utf-8")
+            get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=get_argv_value("--encoding", "utf-8")
         )
 
     try:

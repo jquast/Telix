@@ -76,11 +76,55 @@ The session editor has a **Server Type** radio (BBS / MUD) that applies
 recommended defaults for the connection:
 
 **BBS** sets Color Palette to vga, iCE Colors on, Raw mode, REPL off,
-and MCCP Compression to passive.  Most BBSs require an 80-column by
-25-line terminal.
+Clear Homes Cursor on, and MCCP Compression to passive.  Most BBSs
+require an 80-column by 25-line terminal.
 
 **MUD** sets MCCP Compression on, Line mode, REPL on, Color Palette
 to none, and iCE Colors off.  Most MUDs expect a screen width of 100
 or 120 columns.
 
 These are starting points -- all fields remain editable after selection.
+
+### Encoding/Font
+
+The Encoding/Font selector on the Terminal tab accepts both standard
+Python encoding names (``utf8``, ``cp437``, ``latin-1``, etc.) and
+SyncTERM bitmap font names:
+
+| Font name | Wire encoding | SyncTERM ID |
+|-----------|---------------|-------------|
+| **topaz** | iso-8859-1 | 42 |
+| **topaz-plus** | iso-8859-1 | 40 |
+| **microknight** | iso-8859-1 | 41 |
+| **microknight-plus** | iso-8859-1 | 39 |
+| **p0t-noodle** | iso-8859-1 | 37 |
+| **mosoul** | iso-8859-1 | 38 |
+
+When a font name is selected and Octant Metafonts is enabled, telix
+uses the font's wire encoding for the connection and renders using
+that font's bitmap glyphs.
+
+### Display options
+
+The Display tab includes color and rendering options:
+
+| Option | Description |
+|--------|-------------|
+| **Color Palette** | VGA, xterm, or none |
+| **Brightness / Contrast** | Color adjustment percentages |
+| **iCE Colors** | Use blink attribute as bright background |
+| **Force Black BG** | Override detected background to black |
+| **Clear Homes Cursor** | Inject cursor-home before clear-screen (CTerm compatibility) |
+| **Octant Metafonts** | Render using bitmap fonts as Unicode octant block characters |
+| **Columns / Rows** | Force virtual terminal size for metafont (blank = auto) |
+
+**Clear Homes Cursor** compensates for BBS software that sends
+``ESC[2J`` (erase display) expecting the cursor to also return home,
+which is a SyncTERM/CTerm behavior not present in standard VT100
+terminals.  Enabled by default for BBS server type.
+
+**Octant Metafonts** renders each BBS character as a 4x4 block of
+Unicode octant characters, giving pixel-accurate bitmap font rendering.
+The initial font is selected from the Encoding/Font setting; BBS
+software can switch fonts dynamically via SyncTERM font sequences.
+All 45 SyncTERM fonts are supported.

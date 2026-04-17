@@ -18,11 +18,11 @@ from telix.client_shell import (
     want_repl,
     load_configs,
     ws_client_shell,
-    _setup_ansi_keys,
+    setup_ansi_keys,
     ssh_client_shell,
     build_session_key,
     telix_client_shell,
-    _setup_color_filter,
+    setup_color_filter,
 )
 from telix.ws_transport import GMCP, WebSocketWriter
 from telix.session_context import TelixSessionContext
@@ -446,46 +446,47 @@ class TestWsClientShellTypescript:
 
 
 class TestSetupAnsiKeys:
-    """_setup_ansi_keys works with the color_args on the session context."""
+    """setup_ansi_keys works with the color_args on the session context."""
 
     def _make_telnet_color_args(self, **kwargs):
-        """Build an argparse.Namespace matching _build_telix_parser() output (no ansi_keys)."""
+        """Build an argparse.Namespace matching build_telix_parser() output."""
         import argparse
 
-        return argparse.Namespace(
+        defaults = dict(
             colormatch="vga",
             color_brightness=1.0,
             color_contrast=1.0,
             background_color="#000000",
             no_ice_colors=False,
             no_repl=False,
-            **kwargs,
+            ansi_keys=False,
         )
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
 
-    def test_does_not_raise_with_telnet_color_args(self) -> None:
-        """_setup_ansi_keys does not crash when ansi_keys is absent from color_args."""
+    def test_defaults_false(self) -> None:
         ctx = TelixSessionContext()
         ctx.color_args = self._make_telnet_color_args()
-        _setup_ansi_keys(ctx)
+        setup_ansi_keys(ctx)
         assert ctx.repl.ansi_keys is False
 
     def test_sets_ansi_keys_true_when_present(self) -> None:
-        """_setup_ansi_keys sets ctx.repl.ansi_keys=True when the flag is present in color_args."""
+        """setup_ansi_keys sets ctx.repl.ansi_keys=True when the flag is present in color_args."""
         ctx = TelixSessionContext()
         ctx.color_args = self._make_telnet_color_args(ansi_keys=True)
-        _setup_ansi_keys(ctx)
+        setup_ansi_keys(ctx)
         assert ctx.repl.ansi_keys is True
 
     def test_no_op_when_color_args_none(self) -> None:
-        """_setup_ansi_keys is a no-op when color_args is None (non-main invocation)."""
+        """setup_ansi_keys is a no-op when color_args is None (non-main invocation)."""
         ctx = TelixSessionContext()
         ctx.color_args = None
-        _setup_ansi_keys(ctx)
+        setup_ansi_keys(ctx)
         assert ctx.repl.ansi_keys is False
 
 
 class TestSetupColorFilter:
-    """_setup_color_filter works with color_args on the session context."""
+    """setup_color_filter works with color_args on the session context."""
 
     def _make_color_args(self, **kwargs):
         import argparse
@@ -496,36 +497,37 @@ class TestSetupColorFilter:
             "color_contrast": 1.0,
             "background_color": "#000000",
             "no_ice_colors": False,
+            "force_black_bg": False,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
 
     def test_attaches_color_filter_for_vga(self) -> None:
-        """_setup_color_filter attaches a ColorFilter for the default VGA palette."""
+        """setup_color_filter attaches a ColorFilter for the default VGA palette."""
         ctx = TelixSessionContext()
         ctx.color_args = self._make_color_args()
         writer = MagicMock()
         writer.ctx.encoding = "utf-8"
         writer.default_encoding = "utf-8"
-        _setup_color_filter(ctx, writer)
+        setup_color_filter(ctx, writer)
         assert ctx.repl.color_filter is not None
 
     def test_invalid_hex_background_color_does_not_raise(self) -> None:
-        """_setup_color_filter does not crash for a malformed background color string."""
+        """setup_color_filter does not crash for a malformed background color string."""
         ctx = TelixSessionContext()
         ctx.color_args = self._make_color_args(background_color="#ZZZZZZ")
         writer = MagicMock()
         writer.ctx.encoding = "utf-8"
         writer.default_encoding = "utf-8"
-        _setup_color_filter(ctx, writer)
+        setup_color_filter(ctx, writer)
         assert ctx.repl.color_filter is not None
 
     def test_none_colormatch_skips_filter(self) -> None:
-        """_setup_color_filter does nothing when colormatch is 'none'."""
+        """setup_color_filter does nothing when colormatch is 'none'."""
         ctx = TelixSessionContext()
         ctx.color_args = self._make_color_args(colormatch="none")
         writer = MagicMock()
-        _setup_color_filter(ctx, writer)
+        setup_color_filter(ctx, writer)
         assert ctx.repl.color_filter is None
 
 
@@ -647,6 +649,84 @@ class TestColorFilteredWriter:
             ts_file.close()
 
         assert ts_file.closed
+
+
+class TestInjectHomeBeforeClear:
+
+    def test_no_ed2_passthrough(self):
+        from telix.client_shell import inject_home_before_clear
+        data = b"hello\x1b[mworld"
+        assert inject_home_before_clear(data) == data
+
+    def test_lone_ed2_gets_home(self):
+        from telix.client_shell import inject_home_before_clear
+        data = b"\x1b[0m\x1b[2Jtext"
+        result = inject_home_before_clear(data)
+        assert b"\x1b[H\x1b[2J" in result
+
+    def test_paired_ed2_unchanged(self):
+        from telix.client_shell import inject_home_before_clear
+        data = b"\x1b[H\x1b[2Jtext"
+        assert inject_home_before_clear(data) == data
+
+    def test_multiple_ed2_mixed(self):
+        from telix.client_shell import inject_home_before_clear
+        data = b"\x1b[H\x1b[2Jfirst\x1b[2Jsecond"
+        result = inject_home_before_clear(data)
+        assert result.count(b"\x1b[H\x1b[2J") == 2
+
+    def test_color_filtered_writer_applies(self):
+        ctx = TelixSessionContext()
+        ctx.repl.clear_homes_cursor = True
+        inner = MagicMock()
+        inner.write = MagicMock()
+        writer = ColorFilteredWriter(inner, ctx)
+        writer.write(b"\x1b[2Jtext")
+        written = inner.write.call_args[0][0]
+        assert b"\x1b[H\x1b[2J" in written
+
+
+class TestReplaceFfWithClear:
+
+    def test_no_ff_passthrough(self):
+        from telix.client_shell import replace_ff_with_clear
+        data = b"hello\x1b[mworld"
+        assert replace_ff_with_clear(data) == data
+
+    def test_ff_replaced(self):
+        from telix.client_shell import replace_ff_with_clear
+        data = b"\x0c\x1b[0m\x1b[41m  ### "
+        result = replace_ff_with_clear(data)
+        assert b"\x0c" not in result
+        assert b"\x1b[H\x1b[2J" in result
+
+    def test_multiple_ff(self):
+        from telix.client_shell import replace_ff_with_clear
+        data = b"first\x0csecond\x0cthird"
+        result = replace_ff_with_clear(data)
+        assert result.count(b"\x1b[H\x1b[2J") == 2
+        assert b"\x0c" not in result
+
+    def test_color_filtered_writer_applies_ff(self):
+        ctx = TelixSessionContext()
+        ctx.repl.ff_clears_screen = True
+        inner = MagicMock()
+        inner.write = MagicMock()
+        writer = ColorFilteredWriter(inner, ctx)
+        writer.write(b"\x0ctext")
+        written = inner.write.call_args[0][0]
+        assert b"\x1b[H\x1b[2J" in written
+        assert b"\x0c" not in written
+
+    def test_clear_homes_writer_applies_ff(self):
+        from telix.client_shell import ClearHomesWriter
+        inner = MagicMock()
+        inner.write = MagicMock()
+        writer = ClearHomesWriter(inner, clear_homes_cursor=False, ff_clears_screen=True)
+        writer.write(b"\x0ctext")
+        written = inner.write.call_args[0][0]
+        assert b"\x1b[H\x1b[2J" in written
+        assert b"\x0c" not in written
 
 
 class TestSshClientShellNoLocalEcho:
