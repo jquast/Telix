@@ -171,6 +171,46 @@ def resolve_encoding_font(enc: str) -> tuple[str, int | None]:
     return (enc, None)
 
 
+_GRAPHICS_CAPS: tuple[bool, bool] | None = None
+
+
+def detect_graphics_caps() -> tuple[bool, bool]:
+    """Detect terminal graphics capabilities (kitty, sixel).
+
+    Prefers the pre-detected values from :envvar:`TELIX_HAS_KITTY` and
+    :envvar:`TELIX_HAS_SIXEL` (set by :func:`~telix.main._detect_terminal_colors`
+    before Textual takes over the terminal).  Falls back to querying
+    :mod:`blessed` directly.
+
+    Results are cached in the module-level ``_GRAPHICS_CAPS`` tuple.
+
+    :returns: ``(has_kitty, has_sixel)`` tuple.
+    """
+    global _GRAPHICS_CAPS
+    if _GRAPHICS_CAPS is not None:
+        return _GRAPHICS_CAPS
+    import os as _os
+    env_kitty = _os.environ.get("TELIX_HAS_KITTY")
+    env_sixel = _os.environ.get("TELIX_HAS_SIXEL")
+    if env_kitty is not None and env_sixel is not None:
+        _GRAPHICS_CAPS = (env_kitty == "1", env_sixel == "1")
+        return _GRAPHICS_CAPS
+    try:
+        import sys
+
+        import blessed
+        if not sys.stdout.isatty():
+            _GRAPHICS_CAPS = (False, False)
+            return _GRAPHICS_CAPS
+        term = blessed.Terminal()
+        has_kitty = bool(term.does_kitty_graphics(timeout=0.3))
+        has_sixel = bool(term.does_sixel(timeout=0.3))
+        _GRAPHICS_CAPS = (has_kitty, has_sixel)
+    except Exception:
+        _GRAPHICS_CAPS = (False, False)
+    return _GRAPHICS_CAPS
+
+
 def normalize_encoding(enc: str) -> str:
     """
     Return the ENCODINGS entry that best matches *enc*, or ``ENCODINGS[0]``.
@@ -423,6 +463,9 @@ class SessionConfig:
     clear_homes_cursor: bool = False
     ff_clears_screen: bool = False
 
+    # Graphics: kitty/sixel terminal graphics rendering
+    graphics_font: bool = False
+
     # Metafont: octant bitmap font rendering
     metafont: bool = False
     metafont_columns: int | None = None
@@ -505,6 +548,12 @@ def append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
         cmd.append("--clear-homes-cursor")
     if config.ff_clears_screen:
         cmd.append("--ff-clears-screen")
+
+
+def append_graphics_flags(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--use-graphics-font`` to *cmd* when graphics font is enabled."""
+    if config.graphics_font:
+        cmd.append("--use-graphics-font")
 
 
 def append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
@@ -592,6 +641,7 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
 
     append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     append_metafont_flags(cmd, config)
     return cmd
 
@@ -673,6 +723,7 @@ def build_ws_command(config: SessionConfig) -> list[str]:
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
     append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     append_metafont_flags(cmd, config)
     return cmd
 
@@ -708,6 +759,7 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
     if config.typescript:
         cmd += ["--typescript", config.typescript]
     append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     append_metafont_flags(cmd, config)
     return cmd
 
@@ -874,7 +926,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         table.add_column("Port", width=6, key="port")
         table.add_column("Enc", width=5, key="enc")
         table.add_column("Last", width=8, key="last")
-        table.add_column("Flags", width=12, key="flags")
+        table.add_column("Flags", width=18, key="flags")
         self.resize_name_column()
         self.refresh_table()
         if table.row_count > 0:
@@ -918,6 +970,10 @@ class SessionListScreen(textual.screen.Screen[None]):
             parts.append("!repl")
         if cfg.typescript:
             parts.append("ts")
+        if cfg.graphics_font:
+            parts.append("gfx")
+        if cfg.metafont:
+            parts.append("oct")
         return " ".join(parts)
 
     def add_rows(self, table: "textual.widgets.DataTable[object]", items: list[tuple[str, SessionConfig]]) -> None:
@@ -1384,6 +1440,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     .switch-row {
         height: 3;
     }
+    #font-graphics-row {
+        height: 5;
+    }
     .conn-label {
         width: 8;
         text-align: right;
@@ -1481,16 +1540,16 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         color: $text-muted;
     }
     #enc-label {
-        width: 10;
+        width: 9;
         padding-top: 1;
     }
     #enc-errors-label {
-        width: 12;
+        width: 10;
         padding-top: 1;
         padding-left: 4;
     }
     #encoding {
-        max-width: 20;
+        max-width: 26;
     }
     #encoding-errors {
         max-width: 15;
@@ -1709,13 +1768,15 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
             is_black = (r, g, b) == (0, 0, 0)
             indicator = "[green]\u2714[/]" if is_black else "[red]\u2718[/]"
-            yield textual.containers.Horizontal(
-                textual.widgets.Label("Detected Background", classes="field-label-wide"),
-                textual.widgets.Static(
-                    f"[on rgb({r},{g},{b})]  [/] {hex_color} {indicator}", id="detected-bg-color"
-                ),
-                classes="field-row",
+            maybe_not = "" if is_black else "NOT "
+            tt = f"Your background is {maybe_not}detected as black, which is required for correct artwork display on most BBS and MUDs."
+            bg_label = textual.widgets.Label("Detected Background", classes="field-label-wide")
+            bg_label.tooltip = tt
+            bg_display = textual.widgets.Static(
+                f"[on rgb({r},{g},{b})]  [/] {hex_color} {indicator}", id="detected-bg-color"
             )
+            bg_display.tooltip = tt
+            yield textual.containers.Horizontal(bg_label, bg_display, classes="field-row")
         yield textual.containers.Horizontal(
             textual.widgets.Label("Brightness %", classes="field-label"),
             textual.widgets.Input(
@@ -1744,7 +1805,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 else:
                     switch.tooltip = "Could not detect background color of your terminal"
                 yield switch
-        mf_dim = "" if cfg.metafont else " dimmed"
         with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("Clear Homes Cursor", classes="field-label")
@@ -1760,40 +1820,75 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     " required by many BBS systems"
                 )
                 yield ff_switch
-        with textual.containers.Horizontal(classes="switch-row"):
-            yield textual.widgets.Label(
-                "Octant Metafonts (experimental)", id="metafont-label"
+        # Font Graphics radio group (mutually exclusive: none / kitty+sixel / metafont)
+        has_kitty, has_sixel = detect_graphics_caps()
+        if has_kitty:
+            gfx_radio_label = "Kitty Graphics"
+            gfx_supported = True
+        elif has_sixel:
+            gfx_radio_label = "Sixel Graphics"
+            gfx_supported = True
+        else:
+            gfx_radio_label = "Kitty/Sixel Graphics (unsupported)"
+            gfx_supported = False
+        # If graphics was previously selected but is now unsupported, fall back to None.
+        if cfg.graphics_font and not gfx_supported:
+            active = "none"
+        elif cfg.graphics_font:
+            active = "gfx"
+        elif cfg.metafont:
+            active = "metafont"
+        else:
+            active = "none"
+        cols_rows_enabled = active != "none"
+        mf_dim = "" if cols_rows_enabled else " dimmed"
+        with textual.containers.Horizontal(id="font-graphics-row"):
+            gfx_radio = textual.widgets.RadioSet(
+                textual.widgets.RadioButton("None", value=active == "none", id="gfx-none"),
+                textual.widgets.RadioButton(
+                    gfx_radio_label,
+                    value=active == "gfx",
+                    disabled=not gfx_supported,
+                    id="gfx-graphics",
+                ),
+                textual.widgets.RadioButton(
+                    "Octants (Unicode 17)",
+                    value=active == "metafont",
+                    id="gfx-metafont",
+                ),
+                id="font-graphics",
             )
-            mf_switch = textual.widgets.Switch(value=cfg.metafont, id="metafont")
-            mf_switch.tooltip = (
-                "Unicode 16 Octant blocks from Symbols for Legacy Computing"
-                " are used to recreate the font with unicode blocks"
+            gfx_radio.tooltip = (
+                "Kitty/Sixel: render using terminal inline graphics."
+                " Metafonts: render using Unicode octant block characters."
+                " Only one may be active."
             )
-            yield mf_switch
+            yield textual.widgets.Label("Font Graphics", classes="field-label")
+            yield gfx_radio
         with textual.containers.Horizontal(classes="switch-row"):
             yield textual.widgets.Label(
                 "Columns", id="metafont-cols-label", classes=f"field-label-short{mf_dim}"
             )
             cols_input = textual.widgets.Input(
                 value=str(cfg.metafont_columns or ""),
-                placeholder="auto",
+                placeholder="80",
                 id="metafont-columns",
                 classes="field-input-short",
-                disabled=not cfg.metafont,
+                disabled=not cols_rows_enabled,
             )
-            cols_input.tooltip = "Fixed size for Octant Metafonts (experimental)"
+            cols_input.tooltip = "Virtual terminal columns (default 80)"
             yield cols_input
             yield textual.widgets.Label(
                 "Rows", id="metafont-rows-label", classes=f"field-label-short{mf_dim}"
             )
             rows_input = textual.widgets.Input(
                 value=str(cfg.metafont_rows or ""),
-                placeholder="auto",
+                placeholder="25",
                 id="metafont-rows",
                 classes="field-input-short",
-                disabled=not cfg.metafont,
+                disabled=not cols_rows_enabled,
             )
-            rows_input.tooltip = "Fixed size for Octant Metafonts (experimental)"
+            rows_input.tooltip = "Virtual terminal rows (default 25)"
             yield rows_input
 
     def compose_advanced_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
@@ -1914,6 +2009,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             else:
                 repl_switch.value = True
             self.query_one("#repl-label", textual.widgets.Label).set_class(is_raw, "dimmed")
+        elif event.radio_set.id == "font-graphics":
+            pressed = event.pressed
+            enabled = pressed is not None and pressed.id != "gfx-none"
+            for widget_id in ("#metafont-columns", "#metafont-rows"):
+                self.query_one(widget_id, textual.widgets.Input).disabled = not enabled
+            for label_id in ("#metafont-cols-label", "#metafont-rows-label"):
+                self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
         """
@@ -2050,12 +2152,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """Handle switch changes for palette and other toggles."""
         if event.switch.id in ("ice-colors", "force-black-bg"):
             self.update_palette_preview()
-        elif event.switch.id == "metafont":
-            enabled = event.value
-            for widget_id in ("#metafont-columns", "#metafont-rows"):
-                self.query_one(widget_id, textual.widgets.Input).disabled = not enabled
-            for label_id in ("#metafont-cols-label", "#metafont-rows-label"):
-                self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
@@ -2239,16 +2335,20 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
         cfg.clear_homes_cursor = self.query_one("#clear-homes-cursor", textual.widgets.Switch).value
         cfg.ff_clears_screen = self.query_one("#ff-clears-screen", textual.widgets.Switch).value
-        cfg.metafont = self.query_one("#metafont", textual.widgets.Switch).value
+        font_gfx = self.query_one("#font-graphics", textual.widgets.RadioSet).pressed_button
+        if font_gfx is not None and font_gfx.id == "gfx-graphics":
+            cfg.graphics_font = True
+            cfg.metafont = False
+        elif font_gfx is not None and font_gfx.id == "gfx-metafont":
+            cfg.graphics_font = False
+            cfg.metafont = True
+        else:
+            cfg.graphics_font = False
+            cfg.metafont = False
         mf_cols = self.query_one("#metafont-columns", textual.widgets.Input).value.strip()
         cfg.metafont_columns = int(mf_cols) if mf_cols.isdigit() and int(mf_cols) > 0 else None
         mf_rows = self.query_one("#metafont-rows", textual.widgets.Input).value.strip()
         cfg.metafont_rows = int(mf_rows) if mf_rows.isdigit() and int(mf_rows) > 0 else None
-
-        enc = cfg.encoding
-        wire_enc, font_id = resolve_encoding_font(enc)
-        if font_id is not None:
-            cfg.metafont = True
 
         if not cfg.force_black_bg and self.detected_bg is not None:
             r, g, b = self.detected_bg

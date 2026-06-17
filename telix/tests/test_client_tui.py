@@ -109,6 +109,15 @@ def test_persistence_load_empty(tui_tmp_paths, monkeypatch) -> None:
     assert not load_sessions()
 
 
+def test_metafont_false_survives_roundtrip_with_font_encoding(tui_tmp_paths) -> None:
+    cfg = SessionConfig(host="example.com", port=23, encoding="topaz", metafont=False)
+    save_sessions({"srv": cfg})
+    loaded = load_sessions()
+    assert loaded["srv"].metafont is False
+    assert loaded["srv"].metafont_columns is None
+    assert loaded["srv"].metafont_rows is None
+
+
 def test_build_command_minimal() -> None:
     cfg = SessionConfig(host="example.com", port=23)
     cmd = build_command(cfg)

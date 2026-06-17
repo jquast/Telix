@@ -57,6 +57,8 @@ def _detect_terminal_colors() -> "str | None":
         bg = term.get_bgcolor(timeout=0.5, bits=8)
         fg = term.get_fgcolor(timeout=0.5, bits=8)
         sw = term.get_software_version(timeout=0.5)
+        has_kitty = bool(term.does_kitty_graphics(timeout=0.3))
+        has_sixel = bool(term.does_sixel(timeout=0.3))
     if bg != (-1, -1, -1):
         os.environ["TELIX_DETECTED_BG"] = f"{bg[0]},{bg[1]},{bg[2]}"
     else:
@@ -65,6 +67,8 @@ def _detect_terminal_colors() -> "str | None":
         os.environ["TELIX_DETECTED_FG"] = f"{fg[0]},{fg[1]},{fg[2]}"
     else:
         os.environ.pop("TELIX_DETECTED_FG", None)
+    os.environ["TELIX_HAS_KITTY"] = "1" if has_kitty else "0"
+    os.environ["TELIX_HAS_SIXEL"] = "1" if has_sixel else "0"
     return sw.name if sw is not None else None
 
 
@@ -86,6 +90,7 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
     parser.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
     parser.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
+    parser.add_argument("--use-graphics-font", action="store_true", default=False, dest="use_graphics_font")
     parser.add_argument("--metafont", action="store_true", default=False, dest="metafont")
     parser.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
     parser.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
@@ -195,6 +200,7 @@ def build_help_parser() -> argparse.ArgumentParser:
         "--ff-clears-screen", action="store_true",
         help="treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)",
     )
+    telix.add_argument("--use-graphics-font", action="store_true", help="render using kitty/sixel terminal graphics")
     telix.add_argument("--metafont", action="store_true", help="render using octant bitmap metafonts")
     telix.add_argument(
         "--metafont-columns", metavar="N", type=int, help="force virtual terminal columns for metafont (e.g. 40)"
@@ -320,6 +326,7 @@ def main() -> None:
             no_repl=no_repl,
             clear_homes_cursor=False,
             ff_clears_screen=False,
+            use_graphics_font=False,
             metafont=False,
             metafont_columns=None,
             metafont_rows=None,
@@ -400,6 +407,7 @@ def main() -> None:
             no_repl=False,
             clear_homes_cursor=False,
             ff_clears_screen=False,
+            use_graphics_font=False,
             metafont=False,
             metafont_columns=None,
             metafont_rows=None,

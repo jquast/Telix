@@ -432,6 +432,18 @@ def setup_clear_homes(ctx: "session_context.TelixSessionContext") -> None:
     ctx.repl.ff_clears_screen = args.ff_clears_screen
 
 
+def setup_graphics_font(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure kitty/sixel graphics rendering from telix CLI args.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.graphics_font = args.use_graphics_font
+
+
 def setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
     """
     Configure metafont rendering from telix CLI args.
@@ -472,9 +484,54 @@ def make_raw_stdout(
     :param writer: Telnet/WS/SSH writer (for NAWS patching).
     :returns: Wrapped or raw stdout writer.
     """
+    if ctx.repl.graphics_font:
+        import blessed
+
+        from . import graphics_writer, graphics_renderer
+
+        term = blessed.Terminal()
+        protocol = graphics_renderer.detect_graphics_protocol(term)
+        if protocol is None:
+            log.warning("graphics_font enabled but no graphics protocol detected; falling back")
+        else:
+            real_rows, real_cols = terminal.get_terminal_size()
+            px_h, px_w = term.get_sixel_height_and_width(timeout=0.5)
+            if px_h == -1:
+                px_h, px_w = 0, 0
+            cell_px_w = px_w // real_cols if px_w and real_cols else 0
+            cell_px_h = px_h // real_rows if px_h and real_rows else 0
+            log.debug("cell px: %dx%d (from XTWINOPS 14t/16t)", cell_px_w, cell_px_h)
+            gtw = graphics_writer.GraphicsWriter(
+                stdout, ctx, protocol, cell_px_w=cell_px_w, cell_px_h=cell_px_h,
+            )
+
+            if writer is not None and hasattr(writer, "handle_send_naws"):
+                def _gfx_naws() -> tuple[int, int]:
+                    return gtw.virtual_size()
+                writer.handle_send_naws = _gfx_naws  # type: ignore[method-assign]
+
+            if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
+                import signal
+                try:
+                    loop = asyncio.get_event_loop()
+
+                    def _gfx_winch() -> None:
+                        real_rows, real_cols = terminal.get_terminal_size()
+                        gtw.resize(real_cols, real_rows)
+                        tty_shell._resize_pending.set()
+                        if hasattr(writer, "local_option"):
+                            import telnetlib3.telopt
+                            if writer.local_option.enabled(telnetlib3.telopt.NAWS):
+                                writer._send_naws()
+
+                    loop.add_signal_handler(signal.SIGWINCH, _gfx_winch)
+                except (RuntimeError, ValueError):
+                    pass
+
+            return gtw
+
     if ctx.repl.metafont:
         from . import metaterminal
-        from .fonts import font_registry
 
         real_rows, real_cols = terminal.get_terminal_size()
         columns = ctx.repl.metafont_columns
@@ -555,6 +612,7 @@ async def telix_client_shell(
     setup_color_filter(ctx, telnet_writer)
     setup_ansi_keys(ctx)
     setup_clear_homes(ctx)
+    setup_graphics_font(ctx)
     setup_metafont(ctx)
 
     # 3. Setup GMCP callbacks
@@ -736,6 +794,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
     load_configs(ctx)
     setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
     setup_clear_homes(ctx)
+    setup_graphics_font(ctx)
     setup_metafont(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
@@ -817,6 +876,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     # 2b. Set up color filter and metafont from CLI args.
     setup_color_filter(ctx, ws_writer)
     setup_clear_homes(ctx)
+    setup_graphics_font(ctx)
     setup_metafont(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).

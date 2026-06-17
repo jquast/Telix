@@ -9,15 +9,14 @@ Used in raw/BBS mode when the ``metafont`` option is enabled.
 """
 
 import re
-import codecs
 import asyncio
 import logging
 
 import pyte
 
 from . import metafont, terminal, session_context
-from .color_filter import PALETTES
 from .fonts import font_registry
+from .color_filter import PALETTES
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +147,6 @@ class MetaTerminalWriter:
         self.inner = inner
         self.ctx = ctx
         self.encoding = encoding or ctx.encoding or "utf-8"
-        self._decoder: codecs.IncrementalDecoder | None = None
         self.columns = columns
         self.rows = rows
         self.screen = BBSScreen(columns, rows)
@@ -191,7 +189,6 @@ class MetaTerminalWriter:
                 self._needs_full_redraw = True
                 if new_font.encoding != old_encoding:
                     self.encoding = new_font.encoding
-                    self._decoder = None
                     log.debug(
                         "font switch: slot=%d font_id=%d (%s), encoding %s -> %s",
                         slot, font_id, new_font.name, old_encoding, new_font.encoding,
@@ -359,7 +356,11 @@ class MetaTerminalWriter:
     def write(self, data: bytes) -> None:
         """Decode, feed to pyte, and render changes.
 
-        :param data: Raw bytes from the remote BBS connection.
+        *data* arrives via telnetlib3's ``_raw_event_loop`` which decodes
+        wire bytes using the connection encoding (e.g. iso-8859-1) and then
+        re-encodes the resulting ``str`` as UTF-8 with ``out.encode()``
+        before writing to ``stdout``.  We decode as UTF-8 to recover the
+        original Unicode string, undoing that re-encoding step.
         """
         from . import client_shell
 
@@ -370,12 +371,7 @@ class MetaTerminalWriter:
 
         self._apply_pending_resize()
 
-        cur_encoding = self.encoding
-        if self._decoder is None or cur_encoding != getattr(self._decoder, "_encoding", ""):
-            self._decoder = codecs.getincrementaldecoder(cur_encoding)(errors="replace")
-            self._decoder._encoding = cur_encoding  # type: ignore[attr-defined]
-
-        text = self._decoder.decode(data)
+        text = data.decode("utf-8", errors="replace")
         text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
         text = CSI_WITH_INTERMEDIATE.sub("", text)

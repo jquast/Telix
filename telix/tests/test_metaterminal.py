@@ -1,19 +1,15 @@
 """Tests for telix.metaterminal -- pyte-based octant meta terminal."""
 
-import asyncio
 import types
+import asyncio
 
 import pyte
 import pytest
 
-from telix.metaterminal import (
-    MetaTerminalWriter,
-    pyte_color_to_rgb,
-    _PYTE_COLOR_NAMES,
-)
-from telix.color_filter import PALETTES
-from telix.metafont import OCTANT, CELLS_PER_CHAR_X, CELLS_PER_CHAR_Y
 from telix.fonts import font_registry
+from telix.metafont import OCTANT, CELLS_PER_CHAR_X, CELLS_PER_CHAR_Y
+from telix.color_filter import PALETTES
+from telix.metaterminal import _PYTE_COLOR_NAMES, MetaTerminalWriter, pyte_color_to_rgb
 
 
 class FakeWriter:
@@ -219,14 +215,15 @@ class TestMetaTerminalWriter:
         assert mtw.font.font_id == 24
         assert mtw.encoding == "iso-8859-1"
 
-    def test_font_switch_same_encoding_no_decoder_reset(self):
+    def test_font_switch_same_encoding_keeps_state(self):
         mtw, inner = self._make_writer()
         mtw.write(b"A")
-        decoder_before = mtw._decoder
         mtw.write(b"\x1b[0;26 D")
         assert mtw.font.font_id == 26
         assert mtw.encoding == "cp437"
-        assert mtw._decoder is decoder_before
+        mtw.write(b"B")
+        assert mtw.screen.buffer[0][0].data == "A"
+        assert mtw.screen.buffer[0][1].data == "B"
 
     def test_dsr_sends_cpr_response(self):
         inner = FakeWriter()
@@ -250,3 +247,18 @@ class TestMetaTerminalWriter:
         mtw.write(b"\x1b[0;42 DX")
         output = inner.output
         assert "\033[" in output
+
+    def test_utf8_decode_reverses_raw_event_loop_encoding(self):
+        """MetaTerminalWriter decodes stdin as UTF-8, not the connection encoding.
+
+        telnetlib3's _raw_event_loop decodes wire bytes as the connection
+        encoding (e.g. iso-8859-1) and re-encodes the str as UTF-8 via
+        out.encode() before writing to stdout.  MetaTerminalWriter decodes
+        as UTF-8 to recover the original Unicode string, preventing
+        double-encoding that would split a single glyph into two.
+        """
+        mtw, inner = self._make_writer(columns=10, rows=3, encoding="iso-8859-1")
+        inner.clear()
+        mtw.write(b"\xc2\xa4")
+        assert mtw.screen.buffer[0][0].data == "\u00a4"
+        assert mtw.screen.buffer[0].get(1) is None
