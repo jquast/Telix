@@ -6,6 +6,7 @@ Used in raw/BBS mode when the ``metafont`` option is enabled.
 
 import re
 import time
+import typing
 import asyncio
 import logging
 
@@ -83,12 +84,22 @@ def handle_cursor_shape(text: str) -> tuple[str, int | None, bool | None]:
         return text, 2, False
     return text, val, val in (1, 3, 5)
 
+
+def intercept_device_queries(screen: pyte.Screen, ctx_writer: typing.Any, text: str) -> None:
+    """Send CPR response if DSR is present in *text*."""
+    if "\x1b[6n" not in text:
+        return
+    row = screen.cursor.y + 1
+    col = screen.cursor.x + 1
+    if ctx_writer is not None:
+        ctx_writer.write(f"\x1b[{row};{col}R")
+
 # Synchronized output: DEC private mode 2026.
 SYNC_START = "\033[?2026h"
 SYNC_END = "\033[?2026l"
 
 # pyte uses named colors for the basic 16, hex strings for 256/24-bit.
-_PYTE_COLOR_NAMES: dict[str, int] = {
+PYTE_COLOR_NAMES: dict[str, int] = {
     "black": 0, "red": 1, "green": 2, "brown": 3,
     "blue": 4, "magenta": 5, "cyan": 6, "white": 7,
     "brightblack": 8, "brightred": 9, "brightgreen": 10, "brightyellow": 11,
@@ -96,13 +107,13 @@ _PYTE_COLOR_NAMES: dict[str, int] = {
 }
 
 # xterm 256-color palette: 16 standard + 216 color cube + 24 grayscale
-_XTERM_256: list[tuple[int, int, int]] | None = None
+XTERM_256: list[tuple[int, int, int]] | None = None
 
 
 def build_xterm_256() -> list[tuple[int, int, int]]:
-    global _XTERM_256
-    if _XTERM_256 is not None:
-        return _XTERM_256
+    global XTERM_256
+    if XTERM_256 is not None:
+        return XTERM_256
     palette: list[tuple[int, int, int]] = list(PALETTES["vga"])
     cube_values = [0, 95, 135, 175, 215, 255]
     for r in cube_values:
@@ -112,8 +123,8 @@ def build_xterm_256() -> list[tuple[int, int, int]]:
     for i in range(24):
         v = 8 + 10 * i
         palette.append((v, v, v))
-    _XTERM_256 = palette
-    return _XTERM_256
+    XTERM_256 = palette
+    return XTERM_256
 
 
 def pyte_color_to_rgb(
@@ -133,8 +144,8 @@ def pyte_color_to_rgb(
     if color == "default":
         return palette[7] if is_fg else palette[0]
 
-    if color in _PYTE_COLOR_NAMES:
-        idx = _PYTE_COLOR_NAMES[color]
+    if color in PYTE_COLOR_NAMES:
+        idx = PYTE_COLOR_NAMES[color]
         if bold and is_fg and idx < 8:
             idx += 8
         return palette[idx] if idx < len(palette) else (170, 170, 170)
@@ -240,23 +251,6 @@ class MetaTerminalWriter:
             return ""
         return SYNCTERM_FONT_RE.sub(_on_match, text)
 
-    def _intercept_device_queries(self, text: str) -> None:
-        """Send CPR response for any DSR (Device Status Report) in *text*.
-
-        Must be called after :meth:`~pyte.Stream.feed` so that cursor
-        movement commands (e.g. ``\\x1b[255B`` ``\\x1b[255C``) in the
-        same chunk have been processed by pyte before we report the
-        virtual cursor position back to the BBS.
-        """
-        if "\x1b[6n" not in text:
-            return
-        row = self.screen.cursor.y + 1
-        col = self.screen.cursor.x + 1
-        writer = self.ctx.writer
-        if writer is not None:
-            cpr = f"\x1b[{row};{col}R"
-            writer.write(cpr)
-
     def _char_to_code(self, char_data: str) -> int:
         """Convert pyte character to font codepage byte value.
 
@@ -347,11 +341,10 @@ class MetaTerminalWriter:
 
         buf.append("\033[0m")
 
-        # Draw cursor: re-render the cursor cell with SGR reverse video.
+        # Draw cursor with reverse video.
         do_cursor = not self._cursor_hidden
         if do_cursor and self._cursor_blink:
-            phase = int(time.monotonic() * 1000) % 1000
-            do_cursor = phase < 500
+            do_cursor = int(time.monotonic() * 1000) % 1000 < 500
         if do_cursor:
             cx = self.screen.cursor.x
             cy = self.screen.cursor.y
@@ -366,28 +359,24 @@ class MetaTerminalWriter:
                     fg, bg = bg, fg
                 char_code = self._char_to_code(char.data)
                 lines = metafont.render_cell(char_code, fg, bg, self.font)
-                shape = self._cursor_shape
                 for i, line in enumerate(lines):
                     row_pos = cur_base + i
                     if row_pos > max_real_row:
                         break
-                    if shape in (0, 1, 2):
+                    block = self._cursor_shape in (0, 1, 2)
+                    uline = (self._cursor_shape in (3, 4)
+                             and i == metafont.CELLS_PER_CHAR_Y - 1)
+                    if block or uline:
                         buf.append(
                             f"\033[{row_pos};{cur_col}H\033[7m{line}\033[27m"
                         )
-                    elif shape in (3, 4):
-                        if i == metafont.CELLS_PER_CHAR_Y - 1:
-                            buf.append(
-                                f"\033[{row_pos};{cur_col}H\033[7m{line}\033[27m"
-                            )
-                        else:
-                            buf.append(
-                                f"\033[{row_pos};{cur_col}H{line}"
-                            )
-                    else:
+                    elif self._cursor_shape in (5, 6):
                         buf.append(
-                            f"\033[{row_pos};{cur_col}H\033[7m{line[0]}\033[27m{line[1:]}"
+                            f"\033[{row_pos};{cur_col}H\033[7m{line[0]}"
+                            f"\033[27m{line[1:]}"
                         )
+                    else:
+                        buf.append(f"\033[{row_pos};{cur_col}H{line}")
 
         buf.append(SYNC_END)
 
@@ -457,7 +446,7 @@ class MetaTerminalWriter:
         if text:
             self.stream.feed(text)
 
-        self._intercept_device_queries(text)
+        intercept_device_queries(self.screen, self.ctx.writer, text)
 
         prev_hidden = self._cursor_hidden
         self._cursor_hidden = self.screen.cursor.hidden

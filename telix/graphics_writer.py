@@ -20,6 +20,7 @@ from .metaterminal import (
     XTGETTCAP_DCS_RE,
     BBSScreen,
     handle_cursor_shape,
+    intercept_device_queries,
     pyte_color_to_rgb,
 )
 
@@ -68,7 +69,6 @@ class GraphicsWriter:
         self.palette = PALETTES.get("vga", PALETTES["vga"])
         self.font = metafont.load_font(font_id if font_id is not None else font_registry.DEFAULT_FONT_ID)
         self._needs_full_redraw = True
-        self._render_scheduled = False
         self._render_timer: asyncio.TimerHandle | None = None
         self._last_render_time = 0.0
         self._rendering = False
@@ -82,8 +82,6 @@ class GraphicsWriter:
         real_rows, real_cols = terminal.get_terminal_size()
         self._real_rows = real_rows
         self._real_cols = real_cols
-        self._image_w = columns * FONT_CELL_W
-        self._image_h = rows * FONT_CELL_H
         self._cell_px_w = cell_px_w
         self._cell_px_h = cell_px_h
         self._glyph_cache: np.ndarray | None = None
@@ -132,22 +130,6 @@ class GraphicsWriter:
             return ""
 
         return SYNCTERM_FONT_RE.sub(_on_match, text)
-
-    def _intercept_device_queries(self, text: str) -> None:
-        """Send CPR response for any DSR (Device Status Report) in *text*.
-
-        Must be called after :meth:`~pyte.Stream.feed` so that cursor
-        movement commands in the same chunk have been processed by pyte
-        before we report the virtual cursor position back to the BBS.
-        """
-        if "\x1b[6n" not in text:
-            return
-        row = self.screen.cursor.y + 1
-        col = self.screen.cursor.x + 1
-        writer = self.ctx.writer
-        if writer is not None:
-            cpr = f"\x1b[{row};{col}R"
-            writer.write(cpr)
 
     def _char_to_code(self, char_data: str) -> int:
         """Convert a pyte character to a font codepage byte value."""
@@ -295,7 +277,6 @@ class GraphicsWriter:
     def _do_render(self) -> None:
         """Build and write a single frame to the transport."""
         self._last_render_time = time.monotonic()
-        self._render_scheduled = False
         self._render_timer = None
 
     
@@ -436,7 +417,7 @@ class GraphicsWriter:
         if text:
             self.stream.feed(text)
 
-        self._intercept_device_queries(text)
+        intercept_device_queries(self.screen, self.ctx.writer, text)
 
         # Shells toggle DECTCEM constantly; we ignore pyte's cursor.hidden.
         cursor_moved = (

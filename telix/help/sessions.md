@@ -104,6 +104,23 @@ When a font name is selected and Octant Metafonts is enabled, telix
 uses the font's wire encoding for the connection and renders using
 that font's bitmap glyphs.
 
+### Font Graphics
+
+The **Font Graphics** radio on the Terminal tab selects the rendering
+engine for bitmap fonts:
+
+| Option | Description |
+|--------|-------------|
+| **None** | Standard terminal text (no bitmap rendering) |
+| **Kitty/Sixel** | Render using terminal inline graphics protocol |
+| **Octant Metafonts** | Render using Unicode octant block characters |
+
+The Kitty/Sixel option requires a terminal that supports the Kitty
+graphics protocol or sixel.
+
+**Octant Metafonts** requires Unicode 16.0 font support for the
+Symbols for Legacy Computing block (U+1CD00 - U+1CDE5).
+
 ### Display options
 
 The Display tab includes color and rendering options:

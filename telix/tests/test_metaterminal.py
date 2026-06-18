@@ -9,7 +9,7 @@ import pytest
 from telix.fonts import font_registry
 from telix.metafont import OCTANT, CELLS_PER_CHAR_X, CELLS_PER_CHAR_Y
 from telix.color_filter import PALETTES
-from telix.metaterminal import _PYTE_COLOR_NAMES, MetaTerminalWriter, pyte_color_to_rgb
+from telix.metaterminal import PYTE_COLOR_NAMES, MetaTerminalWriter, pyte_color_to_rgb
 
 
 class FakeWriter:
