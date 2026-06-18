@@ -13,17 +13,23 @@ from telix.metaterminal import _PYTE_COLOR_NAMES, MetaTerminalWriter, pyte_color
 
 
 class FakeWriter:
-    """Captures bytes written to the 'terminal'."""
+    """Captures data written to the 'terminal'."""
 
     def __init__(self):
-        self.chunks: list[bytes] = []
+        self.chunks: list[str | bytes] = []
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: str | bytes) -> None:
         self.chunks.append(data)
 
     @property
     def output(self) -> str:
-        return b"".join(self.chunks).decode("utf-8", errors="replace")
+        parts: list[str] = []
+        for c in self.chunks:
+            if isinstance(c, bytes):
+                parts.append(c.decode("utf-8", errors="replace"))
+            else:
+                parts.append(c)
+        return "".join(parts)
 
     def clear(self):
         self.chunks.clear()
@@ -232,8 +238,8 @@ class TestMetaTerminalWriter:
         ctx.writer = fake_writer
         mtw = MetaTerminalWriter(inner, ctx, columns=80, rows=25)
         mtw.write(b"\x1b[6n")
-        cpr = b"".join(fake_writer.chunks)
-        assert cpr == b"\x1b[1;1R"
+        cpr = fake_writer.output
+        assert cpr == "\x1b[1;1R"
 
     def test_dsr_stripped_from_pyte_input(self):
         mtw, inner = self._make_writer(columns=10, rows=3)

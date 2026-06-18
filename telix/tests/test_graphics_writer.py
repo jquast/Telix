@@ -12,17 +12,23 @@ from telix.graphics_renderer import DCS_END, DCS_START, APC_END, APC_START
 
 
 class FakeWriter:
-    """Captures bytes written to the 'terminal'."""
+    """Captures data written to the 'terminal'."""
 
     def __init__(self):
-        self.chunks: list[bytes] = []
+        self.chunks: list[str | bytes] = []
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: str | bytes) -> None:
         self.chunks.append(data)
 
     @property
     def output(self) -> str:
-        return b"".join(self.chunks).decode("utf-8", errors="replace")
+        parts: list[str] = []
+        for c in self.chunks:
+            if isinstance(c, bytes):
+                parts.append(c.decode("utf-8", errors="replace"))
+            else:
+                parts.append(c)
+        return "".join(parts)
 
     def clear(self):
         self.chunks.clear()
@@ -114,8 +120,8 @@ class TestGraphicsWriter:
         from telix.graphics_writer import GraphicsWriter
         gtw = GraphicsWriter(inner, ctx, "sixel", columns=80, rows=25)
         gtw.write(b"\x1b[6n")
-        cpr = b"".join(fake_writer.chunks)
-        assert cpr == b"\x1b[1;1R"
+        cpr = fake_writer.output
+        assert cpr == "\x1b[1;1R"
 
     def test_dsr_stripped_from_pyte_input(self):
         gtw, inner = self._make_writer(columns=10, rows=3)
@@ -147,14 +153,12 @@ class TestGraphicsWriter:
         gtw, inner = self._make_writer(columns=10, rows=3, protocol="sixel")
         inner.clear()
         gtw.write(b"A")
-        # First write renders immediately (no prior frame).
+        # Render is async; advance loop so the task runs.
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.sleep(0))
         assert len(inner.chunks) > 0
         inner.clear()
         gtw.write(b"B")
-        # Second write within cooldown schedules a timer; may or may not
-        # have rendered by now depending on clock granularity.
-        # After advancing the loop, the scheduled timer should fire.
-        loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.sleep(0.05))
         assert len(inner.chunks) > 0
 

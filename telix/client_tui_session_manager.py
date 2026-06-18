@@ -758,9 +758,6 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
-    append_clear_homes_flag(cmd, config)
-    append_graphics_flags(cmd, config)
-    append_metafont_flags(cmd, config)
     return cmd
 
 

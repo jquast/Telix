@@ -180,7 +180,7 @@ async def run_ssh_client(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for the ``telix-ssh`` entry point."""
-    parser = argparse.ArgumentParser(prog="telix-ssh", description="Connect to an SSH BBS/MUD server.")
+    parser = argparse.ArgumentParser(prog="telix", description="SSH connection (internal subprocess)")
     parser.add_argument("host", help="SSH server hostname")
 
     conn = parser.add_argument_group("Connection options")
@@ -231,6 +231,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="color contrast multiplier (default: 1.0)",
     )
+    telix.add_argument(
+        "--force-black-bg",
+        action="store_true",
+        default=False,
+        dest="force_black_bg",
+        help="use pure black background, ignoring detected background color",
+    )
     return parser
 
 
@@ -252,6 +259,7 @@ def main() -> None:
         color_contrast=args.color_contrast,
         background_color=args.background_color,
         no_ice_colors=args.no_ice_colors,
+        force_black_bg=args.force_black_bg,
     )
 
     asyncio.run(

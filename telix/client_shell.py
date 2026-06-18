@@ -740,17 +740,27 @@ async def telix_client_shell(
             )
             raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=telnet_writer)
             raw_stdout_ref[0] = raw_stdout
-            await telnetlib3.client_shell._raw_event_loop(
-                telnet_reader,
-                telnet_writer,
-                tty_shell,
-                stdin,
-                raw_stdout,
-                keyboard_escape,
-                state,
-                handle_close,
-                check_want_repl,
-            )
+            try:
+                await telnetlib3.client_shell._raw_event_loop(
+                    telnet_reader,
+                    telnet_writer,
+                    tty_shell,
+                    stdin,
+                    raw_stdout,
+                    keyboard_escape,
+                    state,
+                    handle_close,
+                    check_want_repl,
+                )
+            except Exception:
+                log.exception("Unhandled exception in raw event loop")
+                raw_stdout._output("\033[?25h\033[?1049l")
+                raw_stdout._output("\r\n\r\n[press Enter to return to session manager]\r\n")
+                try:
+                    await asyncio.get_event_loop().run_in_executor(None, input)
+                except Exception:
+                    pass
+                break
             tty_shell.disconnect_stdin(stdin)  # pylint: disable=no-member
             # Carry forward state from the raw loop.
             switched_to_raw = state.switched_to_raw

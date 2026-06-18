@@ -76,8 +76,8 @@ class GraphicsWriter:
         self._last_render_time = 0.0
         self._rendering = False
         self._did_initial_clear = False
-        self._pending_resize: tuple[int, int] | None = None
         self._need_px_query = False
+        self._pending_resize: tuple[int, int] | None = None
         real_rows, real_cols = terminal.get_terminal_size()
         self._real_rows = real_rows
         self._real_cols = real_cols
@@ -91,7 +91,7 @@ class GraphicsWriter:
         self._init_screen()
 
     def _output(self, data: str) -> None:
-        """Write a string to the terminal transport."""
+        """Write short control sequences via the asyncio transport."""
         self.inner.write(data.encode("utf-8"))
 
     def _init_screen(self) -> None:
@@ -139,7 +139,7 @@ class GraphicsWriter:
         col = self.screen.cursor.x + 1
         writer = self.ctx.writer
         if writer is not None:
-            cpr = f"\x1b[{row};{col}R".encode("ascii")
+            cpr = f"\x1b[{row};{col}R"
             writer.write(cpr)
         return DSR_RE.sub("", text)
 
@@ -150,10 +150,11 @@ class GraphicsWriter:
         cp = ord(char_data)
         if cp < 0x80:
             return cp
+        enc = getattr(self.font, "encoding", None) or "cp437"
         try:
-            encoded = char_data.encode(self.font.encoding, errors="replace")
+            encoded = char_data.encode(enc, errors="replace")
             return encoded[0] if encoded else 0x3F
-        except LookupError:
+        except (LookupError, ValueError, TypeError):
             return 0x3F
 
     def _ensure_glyph_cache(self) -> None:
@@ -225,6 +226,7 @@ class GraphicsWriter:
                 bg_buf[2] = bg[2] / 255.0
 
                 cp = self._char_to_code(char.data)
+                cp = max(0, min(255, cp))  # clamp to valid glyph index
                 glyph = cache[cp]
                 py = vrow * FONT_CELL_H
                 px = vcol * FONT_CELL_W
@@ -237,12 +239,12 @@ class GraphicsWriter:
         return bitmap, colors
 
     def _query_pixel_dims(self) -> None:
-        """Re-query terminal cell pixel dimensions via XTWINOPS.
+        """Query terminal cell pixel dimensions via XTWINOPS.
 
-        Only called on the first render; subsequent resizes use
-        :func:`terminal.get_terminal_size` for character dimensions.
-        The pixel query is expensive (~300ms timeout) and cell pixel
-        size rarely changes after the initial detection.
+        Safe to call because telnetlib3 calls ``await stdout.drain()``
+        after each ``stdout.write()`` (telnetlib3 >= 4.0.5), so stdout
+        is idle between frames.  DCS query bytes will not interleave
+        with sixel DCS / kitty APC frame data.
         """
         try:
             import blessed
@@ -257,58 +259,76 @@ class GraphicsWriter:
             pass
 
     def _render_full(self) -> None:
-        """Render the full pyte screen as a sixel or kitty image."""
+        """Render the full pyte screen (sync wrapper, dispatches to async)."""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self._render_frame_sync()
+            return
+        loop.create_task(self._render_frame())
+
+    def _render_frame_sync(self) -> None:
+        """Synchronous fallback when no event loop is available."""
         self._rendering = True
         try:
-            self._last_render_time = time.monotonic()
-            self._render_scheduled = False
-            self._render_timer = None
-
-            if self._need_px_query:
-                self._need_px_query = False
-                self._query_pixel_dims()
-
-            if self._update_real_size():
-                self._needs_full_redraw = True
-
-            bitmap, colors = self._build_pixel_buffers()
-
-            scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
-            scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
-            scale = min(scale_w, scale_h)  # uniform, preserves glyph aspect ratio
-            if scale > 1:
-                colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
-
-            scaled_w = self._image_w * scale
-            scaled_h = self._image_h * scale
-
-            buf = io.StringIO()
-            buf.write(SYNC_START)
-            if not self._did_initial_clear or self._needs_full_redraw:
-                buf.write("\033[H\033[2J")
-                self._did_initial_clear = True
-
-            # Anchor sixel at origin so new frames always overwrite old ones.
-            # Kitty can center since it auto-scales to cell grid.
-            if self.protocol == "kitty":
-                cw = self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W
-                ch = self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H
-                cols_needed = max(1, (scaled_w + cw - 1) // cw)
-                rows_needed = max(1, (scaled_h + ch - 1) // ch)
-                offset_row = max(1, (self._real_rows - rows_needed) // 2 + 1)
-                offset_col = max(1, (self._real_cols - cols_needed) // 2 + 1)
-                buf.write(f"\033[{offset_row};{offset_col}H")
-            else:
-                buf.write("\033[H")
-
-            if self.protocol == "kitty":
-                graphics_renderer.encode_kitty(colors, buf)
-            else:
-                graphics_renderer.encode_sixel(colors, buf)
-            buf.write(SYNC_END)
-            self._output_frame(buf.getvalue())
+            self._do_render()
         finally:
             self._rendering = False
+
+    async def _render_frame(self) -> None:
+        """Render a frame asynchronously, awaiting transport drain."""
+        self._rendering = True
+        try:
+            self._do_render()
+            await self.inner.drain()
+        finally:
+            self._rendering = False
+
+    def _do_render(self) -> None:
+        """Build and write a single frame to the transport."""
+        self._last_render_time = time.monotonic()
+        self._render_scheduled = False
+        self._render_timer = None
+
+    
+        if self._update_real_size():
+            self._needs_full_redraw = True
+
+        bitmap, colors = self._build_pixel_buffers()
+
+        scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
+        scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
+        scale = min(scale_w, scale_h)
+        if scale > 1:
+            colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
+
+        scaled_w = self._image_w * scale
+        scaled_h = self._image_h * scale
+
+        buf = io.StringIO()
+        buf.write(SYNC_START)
+        if not self._did_initial_clear or self._needs_full_redraw:
+            buf.write("\033[H\033[2J")
+            self._did_initial_clear = True
+
+        if self.protocol == "kitty":
+            cw = self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W
+            ch = self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H
+            cols_needed = max(1, (scaled_w + cw - 1) // cw)
+            rows_needed = max(1, (scaled_h + ch - 1) // ch)
+            offset_row = max(1, (self._real_rows - rows_needed) // 2 + 1)
+            offset_col = max(1, (self._real_cols - cols_needed) // 2 + 1)
+            buf.write(f"\033[{offset_row};{offset_col}H")
+        else:
+            buf.write("\033[H")
+
+        if self.protocol == "kitty":
+            graphics_renderer.encode_kitty(colors, buf)
+        else:
+            graphics_renderer.encode_sixel(colors, buf)
+        buf.write(SYNC_END)
+
+        self._output(buf.getvalue())
 
     def _update_real_size(self) -> bool:
         """Re-query the real terminal size.
@@ -322,6 +342,7 @@ class GraphicsWriter:
         self._real_rows = real_rows
         self._real_cols = real_cols
         self._did_initial_clear = False
+        self._need_px_query = True
         self._needs_full_redraw = True
         return True
 
@@ -370,9 +391,12 @@ class GraphicsWriter:
     def write(self, data: bytes) -> None:
         """Decode, feed to pyte, and schedule a render.
 
-        *data* arrives via telnetlib3's ``_raw_event_loop`` which decodes
-        wire bytes using the connection encoding and then re-encodes as
-        UTF-8.  We decode as UTF-8 to recover the original Unicode string.
+        Called synchronously by telnetlib3's ``_raw_event_loop``.
+        ``StreamWriter.write()`` is sync (buffers data); only
+        ``drain()`` is async.  Rendering is dispatched to an async
+        task via ``_render_full() -> create_task()`` so the frame
+        build + ``drain()`` can be awaited there without blocking
+        the event loop.
         """
         from . import client_shell
 
@@ -402,7 +426,6 @@ class GraphicsWriter:
         """
         self._real_cols = real_cols
         self._real_rows = real_rows
-        self._need_px_query = True
         self._needs_full_redraw = True
         self._schedule_render()
 
