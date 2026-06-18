@@ -928,23 +928,27 @@ class TestActionConnectScreenRefresh:
 
         connect_screen._screen.refresh.assert_called_once()
 
-    def test_nonzero_exit_calls_os_exit(self, connect_screen):
-        """os._exit() is called with the subprocess returncode on non-zero exit."""
+    def test_nonzero_exit_shows_return_prompt(self, connect_screen):
+        """Non-zero exit shows the press-Enter prompt instead of calling os._exit."""
         mock_proc = MagicMock()
         mock_proc.returncode = 1
+        mock_stdout = MagicMock()
+        mock_stdin = MagicMock()
 
         with (
             patch("telix.client_tui_session_manager.subprocess.Popen", return_value=mock_proc),
             patch(
-                "telix.client_tui_session_manager.os.get_terminal_size", return_value=MagicMock(lines=24, columns=80)
+                "telix.client_tui_session_manager.os.get_terminal_size",
+                return_value=MagicMock(lines=24, columns=80),
             ),
             patch("telix.client_tui_session_manager.os.set_blocking", create=True),
-            patch("telix.client_tui_session_manager.sys.stdout"),
-            patch("telix.client_tui_session_manager.sys.stdin"),
+            patch("telix.client_tui_session_manager.sys.stdout", mock_stdout),
+            patch("telix.client_tui_session_manager.sys.stdin", mock_stdin),
             patch("telix.client_tui_session_manager.os._exit") as mock_os_exit,
         ):
             connect_screen.action_connect()
-        mock_os_exit.assert_called_once_with(1)
+        mock_os_exit.assert_not_called()
+        mock_stdin.readline.assert_called_once()
 
 
 class TestReadPrimarySelection:

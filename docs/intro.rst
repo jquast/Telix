@@ -87,6 +87,8 @@ Connect directly via WebSocket::
 
     telix wss://dev.cryosphere.org:4443/telnet/
 
+For a full list of CLI options:
+
 .. begin-cli-help
 .. code-block:: text
 

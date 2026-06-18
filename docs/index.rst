@@ -7,6 +7,7 @@ Telix
    :caption: User Guide
 
    intro
+   tour
    session-manager
    keybindings
    macros

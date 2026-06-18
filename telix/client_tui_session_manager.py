@@ -1286,8 +1286,6 @@ class SessionListScreen(textual.screen.Screen[None]):
                 proc = subprocess.Popen(cmd, env=env)
                 proc.wait()
                 _elapsed = time.monotonic() - _t0
-                if proc.returncode:
-                    os._exit(proc.returncode)
             except KeyboardInterrupt:
                 if proc is not None:
                     proc.terminate()
@@ -1306,10 +1304,11 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # have left raw mode, SGR attributes, mouse tracking,
                 # or alternate screen active.
                 sys.stdout.write(terminal_cleanup(clear_screen=False))
-                sys.stdout.flush()
-                # Pause so the final output (disconnect message, error, etc.)
-                # is visible before the TUI redraws over it.
-                sys.stdout.write("\r\n[press Enter to return to session manager]\r\n")
+                # Move cursor to bottom of screen so the prompt sits
+                # below any error output from the child process.
+                tsize = os.get_terminal_size()
+                sys.stdout.write(f"\x1b[{tsize.lines};{tsize.columns}H\r\n\r\n")
+                sys.stdout.write("[press Enter to return to session manager]\r\n")
                 sys.stdout.flush()
                 sys.stdin.readline()
         self.refresh_table()

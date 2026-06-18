@@ -22,7 +22,7 @@ macro editor (Alt + M).
 | **Ctrl + L** | Repaint screen |
 | **Ctrl + ]** | Disconnect |
 
-### GMCP Keys (available when server supports GMCP)
+### GMCP Keys
 
 | Key | Action |
 |-----|--------|
@@ -30,6 +30,8 @@ macro editor (Alt + M).
 | **F4** | Autodiscover (explore unvisited exits) |
 | **F5** | Resume last walk |
 | **Alt + R** | Browse rooms / travel |
+
+Available when the server supports GMCP.
 
 ### Line Editing
 
