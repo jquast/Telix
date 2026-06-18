@@ -749,6 +749,12 @@ async def telix_client_shell(
                 local_echo = not telnet_writer.will_echo
                 linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
+            if not ctx.repl.ansi_keys:
+                _real_read = stdin.read
+                async def _delete_to_backspace(n: int = -1) -> bytes:
+                    data = await _real_read(n)
+                    return data.replace(b"\x7f", b"\x08")
+                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
@@ -850,6 +856,12 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             if tty_shell._save_mode is not None:
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
+            if not ctx.repl.ansi_keys:
+                _real_read = stdin.read
+                async def _delete_to_backspace(n: int = -1) -> bytes:
+                    data = await _real_read(n)
+                    return data.replace(b"\x7f", b"\x08")
+                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
@@ -993,6 +1005,12 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
+            if not ctx.repl.ansi_keys:
+                _real_read = stdin.read
+                async def _delete_to_backspace(n: int = -1) -> bytes:
+                    data = await _real_read(n)
+                    return data.replace(b"\x7f", b"\x08")
+                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
             )

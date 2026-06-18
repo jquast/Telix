@@ -72,6 +72,67 @@ class TestBBSScreen:
         assert s.cursor.x == 9
         assert s.cursor.y == 4
 
+    def test_decawm_disabled_by_default(self):
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        assert pyte.modes.DECAWM not in s.mode
+
+    def test_decawm_not_re_enabled_by_set_mode(self):
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("\033[?7h")
+        assert pyte.modes.DECAWM not in s.mode
+
+    def test_decawm_not_re_enabled_by_ris(self):
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("\033c")
+        assert pyte.modes.DECAWM not in s.mode
+
+    def test_full_line_no_unwanted_wrap(self):
+        """Write 80 'X' characters on an 80-column screen.
+
+        With DECAWM disabled, all 80 chars stay on the same line.
+        With DECAWM enabled, the 80th char wraps to line 2.
+        """
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("X" * 80)
+        assert s.buffer[0][0].data == "X"
+        assert s.buffer[0][79].data == "X"
+        assert s.buffer[1].get(0) is None
+
+    def test_full_line_crlf_no_double_spacing(self):
+        """Write 80 'X' + CR+LF, then more text.
+
+        Without DECAWM, the CR+LF produces one newline, text at line 2.
+        With DECAWM, the 80th char wraps first (creating line 2), then
+        CR+LF pushes to line 3, creating a blank line.
+        """
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("X" * 80 + "\r\nABCD")
+        assert s.buffer[0][0].data == "X"
+        assert s.buffer[0][79].data == "X"
+        assert s.buffer[1][0].data == "A"
+        assert s.buffer[1][1].data == "B"
+        assert s.buffer[1][2].data == "C"
+        assert s.buffer[1][3].data == "D"
+
+    def test_80th_column_character_remains_last_on_line(self):
+        """79 then a character: both on line 0, no wrap to line 1."""
+        from telix.metaterminal import BBSScreen
+        s = BBSScreen(80, 25)
+        st = pyte.Stream(s)
+        st.feed("A" * 79 + "B")
+        assert s.buffer[0][78].data == "A"
+        assert s.buffer[0][79].data == "B"
+        assert s.buffer[1].get(0) is None
+
 
 class TestPyteColorToRgb:
 

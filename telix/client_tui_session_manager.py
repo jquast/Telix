@@ -1400,7 +1400,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         height: 100%;
         border: round $surface-lighten-2;
         background: $surface;
-        padding: 1 1;
+        padding: 0 1;
     }
     #tab-bar {
         height: 1;
@@ -1462,7 +1462,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         height: 5;
     }
     .conn-label {
-        width: 8;
+        width: 4;
         text-align: right;
         padding-top: 1;
     }
@@ -1753,7 +1753,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 yield textual.widgets.Label("Advanced REPL", id="repl-label", classes=f"field-label{repl_dim}")
                 yield textual.widgets.Switch(value=not cfg.no_repl, id="use-repl", disabled=cfg.mode == "raw")
         enc = normalize_encoding(cfg.encoding or "utf8")
-        is_retro = enc.lower() in ("atascii", "petscii")
         with textual.containers.Horizontal(classes="field-row"):
             yield textual.widgets.Label("Encoding/Font", id="enc-label")
             yield textual.widgets.Select([(e, e) for e in ENCODINGS], value=enc, id="encoding", allow_blank=False)
@@ -1761,16 +1760,15 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             yield textual.widgets.Select(
                 [(v, v) for v in ("replace", "ignore", "strict")], value=cfg.encoding_errors, id="encoding-errors"
             )
-        dim = "" if is_retro else " dimmed"
         with textual.containers.Horizontal(id="keys-eol-row"):
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("ANSI Keys", id="ansi-keys-label", classes=f"field-label{dim}")
-                sw = textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys", disabled=not is_retro)
-                sw.tooltip = "Required for Windows"
+                yield textual.widgets.Label("ANSI Keys", id="ansi-keys-label", classes="field-label")
+                sw = textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys")
+                sw.tooltip = "Send raw ANSI escape sequences for arrow/function keys"
                 yield sw
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("ASCII EOL", id="ascii-eol-label", classes=f"field-label{dim}")
-                yield textual.widgets.Switch(value=cfg.ascii_eol, id="ascii-eol", disabled=not is_retro)
+                yield textual.widgets.Label("ASCII EOL", id="ascii-eol-label", classes="field-label")
+                yield textual.widgets.Switch(value=cfg.ascii_eol, id="ascii-eol")
 
     def compose_display_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Display tab pane."""
@@ -2124,6 +2122,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         self.query_one("#ssh-details-row").set_class(is_ssh, "visible")
         self.query_one("#compression-row").display = not is_ssh
         self.query_one("#mode-radio", textual.widgets.RadioSet).disabled = is_ssh
+        if is_ssh:
+            self.select_radio("mode-radio", "mode-raw")
+            self.select_radio("server-type-radio", "type-bbs")
         compression_radio = self.query_one("#compression-radio", textual.widgets.RadioSet)
         if is_ssl:
             self.select_radio("compression-radio", "compress-no")
@@ -2153,14 +2154,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """React to Select widget changes."""
         if event.select.id == "colormatch":
             self.update_palette_preview()
-        elif event.select.id == "encoding":
-            is_retro = str(event.value).lower() in ("atascii", "petscii")
-            self.query_one("#ansi-keys", textual.widgets.Switch).disabled = not is_retro
-            self.query_one("#ascii-eol", textual.widgets.Switch).disabled = not is_retro
-            for label_id in ("#ansi-keys-label", "#ascii-eol-label"):
-                label = self.query_one(label_id, textual.widgets.Label)
-                label.set_class(not is_retro, "dimmed")
-
     def on_input_changed(self, event: textual.widgets.Input.Changed) -> None:
         """Update palette preview when brightness/contrast changes."""
         if event.input.id in ("color-brightness", "color-contrast"):

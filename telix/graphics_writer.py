@@ -30,6 +30,17 @@ from .metaterminal import (
 
 log = logging.getLogger(__name__)
 
+# DECSCUSR: CSI Ps SP q -- set cursor shape (xterm extension).
+# Ps: 0=default, 1=blink block, 2=steady block, 3=blink underline,
+# 4=steady underline, 5=blink bar, 6=steady bar.
+DECSCUSR_RE = re.compile(r"\x1b\[(\d) q")
+
+# XTGETTCAP DCS sequences emitted by terminal query libraries
+# (blessed, ncurses).  pyte does not handle DCS, so these render
+# as visible garbage unless stripped before feeding pyte.
+# Matches: DCS +q <hex> ST  (7-bit form: \x1bP+q...\x1b\\)
+XTGETTCAP_DCS_RE = re.compile(r"\x1bP\+q[^\x1b\x07]*(\x1b\\|\x07)")
+
 MIN_RENDER_INTERVAL = 0.033  # ~30 fps
 
 FONT_CELL_W = 8
@@ -79,6 +90,12 @@ class GraphicsWriter:
         self._rendering = False
         self._did_initial_clear = False
         self._need_px_query = False
+        self._cursor_shape: int = 2  # steady block, DECSCUSR default
+        self._cursor_blink: bool = False
+        self._cursor_hidden: bool = False
+        self._prev_cursor_x: int = 0
+        self._prev_cursor_y: int = 0
+        self._blink_timer: asyncio.TimerHandle | None = None
         self._pending_resize: tuple[int, int] | None = None
         real_rows, real_cols = terminal.get_terminal_size()
         self._real_rows = real_rows
@@ -105,6 +122,7 @@ class GraphicsWriter:
         if self._render_timer is not None:
             self._render_timer.cancel()
             self._render_timer = None
+        self._cancel_blink()
         self._output("\033[?25h\033[?1049l")
 
     def _handle_font_switch(self, text: str) -> str:
@@ -132,6 +150,25 @@ class GraphicsWriter:
             return ""
 
         return SYNCTERM_FONT_RE.sub(_on_match, text)
+
+    def _handle_cursor_shape(self, text: str) -> str:
+        """Strip and process DECSCUSR cursor shape sequences.
+
+        Must be called before ``CSI_WITH_INTERMEDIATE`` strips them.
+        Processes all occurrences in *text*; the last one wins
+        (later sequences override earlier ones in the same chunk).
+        """
+        matches = list(DECSCUSR_RE.finditer(text))
+        if matches:
+            # Use the LAST match (most recent override).
+            val = int(matches[-1].group(1))
+            if val == 0:
+                self._cursor_shape = 2
+                self._cursor_blink = False
+            else:
+                self._cursor_shape = val
+                self._cursor_blink = val in (1, 3, 5)
+        return DECSCUSR_RE.sub("", text)
 
     def _intercept_device_queries(self, text: str) -> str:
         """Strip DSR and send CPR back to the BBS."""
@@ -200,45 +237,81 @@ class GraphicsWriter:
         self._needs_full_redraw = False
 
         dirty_rows = set(range(self.rows)) if force else self.screen.dirty
-        if not dirty_rows:
-            bitmap = np.any(colors > 0.001, axis=2).astype(np.float32)
-            return bitmap, colors
+        if dirty_rows:
+            if force:
+                colors.fill(0.0)
 
-        if force:
-            colors.fill(0.0)
+            fg_buf = np.empty(3, dtype=np.float32)
+            bg_buf = np.empty(3, dtype=np.float32)
 
-        fg_buf = np.empty(3, dtype=np.float32)
-        bg_buf = np.empty(3, dtype=np.float32)
+            for vrow in range(self.rows):
+                if vrow not in dirty_rows:
+                    continue
+                row_data = self.screen.buffer.get(vrow, {})
+                for vcol in range(self.columns):
+                    char = row_data.get(vcol, self.screen.default_char)
+                    fg = pyte_color_to_rgb(char.fg, char.bold, True, self.palette)
+                    bg = pyte_color_to_rgb(char.bg, False, False, self.palette)
+                    if char.reverse:
+                        fg, bg = bg, fg
+                    fg_buf[0] = fg[0] / 255.0
+                    fg_buf[1] = fg[1] / 255.0
+                    fg_buf[2] = fg[2] / 255.0
+                    bg_buf[0] = bg[0] / 255.0
+                    bg_buf[1] = bg[1] / 255.0
+                    bg_buf[2] = bg[2] / 255.0
 
-        for vrow in range(self.rows):
-            if vrow not in dirty_rows:
-                continue
-            row_data = self.screen.buffer.get(vrow, {})
-            for vcol in range(self.columns):
-                char = row_data.get(vcol, self.screen.default_char)
-                fg = pyte_color_to_rgb(char.fg, char.bold, True, self.palette)
-                bg = pyte_color_to_rgb(char.bg, False, False, self.palette)
-                if char.reverse:
-                    fg, bg = bg, fg
-                fg_buf[0] = fg[0] / 255.0
-                fg_buf[1] = fg[1] / 255.0
-                fg_buf[2] = fg[2] / 255.0
-                bg_buf[0] = bg[0] / 255.0
-                bg_buf[1] = bg[1] / 255.0
-                bg_buf[2] = bg[2] / 255.0
-
-                cp = self._char_to_code(char.data)
-                cp = max(0, min(255, cp))  # clamp to valid glyph index
-                glyph = cache[cp]
-                py = vrow * FONT_CELL_H
-                px = vcol * FONT_CELL_W
-                region = colors[py : py + FONT_CELL_H, px : px + FONT_CELL_W]
-                region[:] = bg_buf
-                region[glyph] = fg_buf
+                    cp = self._char_to_code(char.data)
+                    cp = max(0, min(255, cp))  # clamp to valid glyph index
+                    glyph = cache[cp]
+                    py = vrow * FONT_CELL_H
+                    px = vcol * FONT_CELL_W
+                    region = colors[py : py + FONT_CELL_H, px : px + FONT_CELL_W]
+                    region[:] = bg_buf
+                    region[glyph] = fg_buf
 
         self.screen.dirty.clear()
+        self._draw_cursor(colors)
         bitmap = np.any(colors > 0.001, axis=2).astype(np.float32)
         return bitmap, colors
+
+    def _draw_cursor(self, colors: np.ndarray) -> None:
+        """Draw the cursor on the pixel buffer using inverse video.
+
+        Reads cursor shape, blink, and hidden state.  Blinking cursors
+        toggle visibility every 500 ms (2 Hz phase).  The cursor region
+        is drawn by inverting pixel values (``1.0 - value``), producing
+        the classic reverse-video effect.
+
+        :param colors: ``(H, W, 3)`` float32 pixel array, modified in-place.
+        """
+        if self._cursor_blink:
+            phase = int(time.monotonic() * 1000) % 1000
+            if phase >= 500:
+                log.debug("blink hidden phase")
+                return
+            log.debug("blink visible phase, shape=%d", self._cursor_shape)
+        cx = self.screen.cursor.x
+        cy = self.screen.cursor.y
+        if not (0 <= cx < self.columns and 0 <= cy < self.rows):
+            return
+        py = cy * FONT_CELL_H
+        px = cx * FONT_CELL_W
+        shape = self._cursor_shape
+        if shape in (0, 1, 2):  # block
+            y0, y1 = py, py + FONT_CELL_H
+            x0, x1 = px, px + FONT_CELL_W
+        elif shape in (3, 4):  # underline (bottom 2 pixel rows)
+            y0, y1 = py + FONT_CELL_H - 2, py + FONT_CELL_H
+            x0, x1 = px, px + FONT_CELL_W
+        else:  # bar (left 2 pixel columns)
+            y0, y1 = py, py + FONT_CELL_H
+            x0, x1 = px, px + 2
+        h, w = colors.shape[:2]
+        y0 = max(0, y0); y1 = min(h, y1)
+        x0 = max(0, x0); x1 = min(w, x1)
+        if y1 > y0 and x1 > x0:
+            colors[y0:y1, x0:x1] = 1.0 - colors[y0:y1, x0:x1]
 
     def _query_pixel_dims(self) -> None:
         """Query terminal cell pixel dimensions via XTWINOPS.
@@ -378,6 +451,37 @@ class GraphicsWriter:
             delay = MIN_RENDER_INTERVAL - elapsed
             self._render_timer = loop.call_later(delay, self._render_full)
 
+    def _manage_blink(self) -> None:
+        """Start or cancel the blink timer based on cursor blink state.
+
+        When the cursor is blinking and visible, a repeating 250 ms
+        timer fires renders so the blink phase toggles even when no
+        server data arrives.  The timer is cancelled when the cursor
+        stops blinking or becomes hidden.
+        """
+        should_blink = self._cursor_blink
+        if should_blink and self._blink_timer is None:
+            loop = asyncio.get_event_loop()
+            self._blink_timer = loop.call_later(0.5, self._on_blink_tick)
+            log.debug("blink timer started")
+        elif not should_blink and self._blink_timer is not None:
+            self._blink_timer.cancel()
+            self._blink_timer = None
+            log.debug("blink timer cancelled")
+
+    def _on_blink_tick(self) -> None:
+        """Blink timer callback: render a frame and re-arm."""
+        self._blink_timer = None
+        log.debug("blink tick")
+        self._schedule_render()
+        self._manage_blink()
+
+    def _cancel_blink(self) -> None:
+        """Cancel the blink timer unconditionally."""
+        if self._blink_timer is not None:
+            self._blink_timer.cancel()
+            self._blink_timer = None
+
     def write(self, data: bytes) -> None:
         """Decode, feed to pyte, and schedule a render.
 
@@ -400,12 +504,35 @@ class GraphicsWriter:
         text = data.decode("utf-8", errors="replace")
         text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
+        prev_shape = self._cursor_shape
+        prev_blink = self._cursor_blink
+        text = self._handle_cursor_shape(text)
+        shape_changed = (self._cursor_shape != prev_shape
+                         or self._cursor_blink != prev_blink)
         text = CSI_WITH_INTERMEDIATE.sub("", text)
+        text = XTGETTCAP_DCS_RE.sub("", text)
 
         if text:
             self.stream.feed(text)
 
-        if self.screen.dirty or self._needs_full_redraw:
+        # DECTCEM (\033[?25h/l) is not used for graphics cursor visibility;
+        # shells toggle it constantly during display updates.  The graphics
+        # cursor is always visible (subject to blink/phase) and we ignore
+        # pyte's cursor.hidden tracking.
+
+        cursor_moved = (
+            self.screen.cursor.x != self._prev_cursor_x
+            or self.screen.cursor.y != self._prev_cursor_y
+        )
+        if cursor_moved and 0 <= self._prev_cursor_y < self.rows:
+            self.screen.dirty.add(self._prev_cursor_y)
+        self._prev_cursor_x = self.screen.cursor.x
+        self._prev_cursor_y = self.screen.cursor.y
+
+        self._manage_blink()
+
+        if (self.screen.dirty or self._needs_full_redraw
+                or cursor_moved or shape_changed):
             self._schedule_render()
 
     def resize(self, real_cols: int, real_rows: int) -> None:

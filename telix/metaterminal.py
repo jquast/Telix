@@ -9,6 +9,7 @@ Used in raw/BBS mode when the ``metafont`` option is enabled.
 """
 
 import re
+import time
 import asyncio
 import logging
 
@@ -28,13 +29,31 @@ class BBSScreen(pyte.Screen):
     Display, mode 2) as clearing the screen AND moving the cursor home.
     The VT100/ECMA-48 spec says ``ED 2`` should not move the cursor, but
     virtually all BBS software depends on the home behavior.
+
+    DECAWM (auto-wrap mode) is disabled because BBS software sends its
+    own ``CR+LF`` line endings.  With DECAWM enabled, pyte inserts an
+    extra ``CR+LF`` when text fills the rightmost column, doubling line
+    spacing and causing wrapped-character artifacts.
     """
+
+    def __init__(self, columns: int, lines: int) -> None:
+        super().__init__(columns, lines)
+        self.mode.discard(pyte.modes.DECAWM)
+
+    def set_mode(self, *modes: int, **kwargs) -> None:
+        super().set_mode(*modes, **kwargs)
+        self.mode.discard(pyte.modes.DECAWM)
+
+    def reset(self) -> None:
+        super().reset()
+        self.mode.discard(pyte.modes.DECAWM)
 
     def erase_in_display(self, how: int = 0, *args, **kwargs) -> None:
         super().erase_in_display(how, *args, **kwargs)
         if how == 2:
             self.cursor.x = 0
             self.cursor.y = 0
+
 
 # SyncTERM font switching: ESC [ <slot> ; <font_id> SPACE D
 # CSI with intermediate character ' ' and final character 'D'.
@@ -49,6 +68,14 @@ DSR_RE = re.compile(r"\x1b\[6n")
 # pyte's parser treats these as standard CSI and passes extra params to handlers
 # that don't expect them, causing crashes.  Strip them before feeding to pyte.
 CSI_WITH_INTERMEDIATE = re.compile(r"\x1b\[[\d;]*[\x20-\x2f]+[\x40-\x7e]")
+
+# DECSCUSR: CSI Ps SP q -- set cursor shape.
+DECSCUSR_RE = re.compile(r"\x1b\[(\d) q")
+
+# XTGETTCAP DCS sequences emitted by terminal query libraries.
+# pyte does not handle DCS, so these render as visible garbage
+# unless stripped before feeding pyte.
+XTGETTCAP_DCS_RE = re.compile(r"\x1bP\+q[^\x1b\x07]*(\x1b\\|\x07)")
 
 # Synchronized output: DEC private mode 2026.
 SYNC_START = "\033[?2026h"
@@ -158,6 +185,16 @@ class MetaTerminalWriter:
         self._prev_buffer: dict[tuple[int, int], tuple[str, str, str, bool, bool]] = {}
         self._needs_full_redraw = True
         self._pending_resize: tuple[int, int] | None = None
+        self._cursor_shape: int = 2
+        self._cursor_blink: bool = False
+        self._cursor_hidden: bool = False
+        self._prev_cursor_x: int = 0
+        self._prev_cursor_y: int = 0
+        self._cursor_shape: int = 2
+        self._cursor_blink: bool = False
+        self._cursor_hidden: bool = False
+        self._prev_cursor_x: int = 0
+        self._prev_cursor_y: int = 0
         real_rows, real_cols = terminal.get_terminal_size()
         self._real_rows = real_rows
         self._real_cols = real_cols
@@ -201,6 +238,22 @@ class MetaTerminalWriter:
                 log.warning("unknown font id %d in slot %d", font_id, slot)
             return ""
         return SYNCTERM_FONT_RE.sub(_on_match, text)
+
+    def _handle_cursor_shape(self, text: str) -> str:
+        """Strip and process DECSCUSR cursor shape sequences.
+
+        Processes all occurrences in *text*; the last one wins.
+        """
+        matches = list(DECSCUSR_RE.finditer(text))
+        if matches:
+            val = int(matches[-1].group(1))
+            if val == 0:
+                self._cursor_shape = 2
+                self._cursor_blink = False
+            else:
+                self._cursor_shape = val
+                self._cursor_blink = val in (1, 3, 5)
+        return DECSCUSR_RE.sub("", text)
 
     def _intercept_device_queries(self, text: str) -> str:
         """Strip DSR (Device Status Report) and send CPR back to the BBS.
@@ -317,6 +370,49 @@ class MetaTerminalWriter:
                     buf.append(f"\033[{row_pos};{real_col}H{line}")
 
         buf.append("\033[0m")
+
+        # Draw cursor: re-render the cursor cell with SGR reverse video.
+        do_cursor = not self._cursor_hidden
+        if do_cursor and self._cursor_blink:
+            phase = int(time.monotonic() * 1000) % 1000
+            do_cursor = phase < 500
+        if do_cursor:
+            cx = self.screen.cursor.x
+            cy = self.screen.cursor.y
+            if 0 <= cx < self.columns and 0 <= cy < self.rows:
+                cur_base = cy * metafont.CELLS_PER_CHAR_Y + 1
+                cur_col = cx * metafont.CELLS_PER_CHAR_X + 1
+                row_data = self.screen.buffer.get(cy, {})
+                char = row_data.get(cx, self.screen.default_char)
+                fg = pyte_color_to_rgb(char.fg, char.bold, True, self.palette)
+                bg = pyte_color_to_rgb(char.bg, False, False, self.palette)
+                if char.reverse:
+                    fg, bg = bg, fg
+                char_code = self._char_to_code(char.data)
+                lines = metafont.render_cell(char_code, fg, bg, self.font)
+                shape = self._cursor_shape
+                for i, line in enumerate(lines):
+                    row_pos = cur_base + i
+                    if row_pos > max_real_row:
+                        break
+                    if shape in (0, 1, 2):
+                        buf.append(
+                            f"\033[{row_pos};{cur_col}H\033[7m{line}\033[27m"
+                        )
+                    elif shape in (3, 4):
+                        if i == metafont.CELLS_PER_CHAR_Y - 1:
+                            buf.append(
+                                f"\033[{row_pos};{cur_col}H\033[7m{line}\033[27m"
+                            )
+                        else:
+                            buf.append(
+                                f"\033[{row_pos};{cur_col}H{line}"
+                            )
+                    else:
+                        buf.append(
+                            f"\033[{row_pos};{cur_col}H\033[7m{line[0]}\033[27m{line[1:]}"
+                        )
+
         buf.append(SYNC_END)
 
         if len(buf) > 3:
@@ -376,10 +472,26 @@ class MetaTerminalWriter:
         text = data.decode("utf-8", errors="replace")
         text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
+        text = self._handle_cursor_shape(text)
         text = CSI_WITH_INTERMEDIATE.sub("", text)
+        text = XTGETTCAP_DCS_RE.sub("", text)
 
         if text:
             self.stream.feed(text)
+
+        prev_hidden = self._cursor_hidden
+        self._cursor_hidden = self.screen.cursor.hidden
+        cursor_moved = (
+            self.screen.cursor.x != self._prev_cursor_x
+            or self.screen.cursor.y != self._prev_cursor_y
+        )
+        if cursor_moved and 0 <= self._prev_cursor_y < self.rows:
+            self.screen.dirty.add(self._prev_cursor_y)
+        self._prev_cursor_x = self.screen.cursor.x
+        self._prev_cursor_y = self.screen.cursor.y
+
+        if (self.screen.dirty or self._needs_full_redraw
+                or self._cursor_hidden != prev_hidden or cursor_moved):
             self._render_dirty()
 
     def resize(self, real_cols: int, real_rows: int) -> None:
