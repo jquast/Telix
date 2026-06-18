@@ -876,17 +876,21 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
 
                 raw_stdout.cleanup = _tee_cleanup  # type: ignore[attr-defined]
 
-            await telnetlib3.client_shell._raw_event_loop(
-                ssh_reader,  # type: ignore[arg-type]
-                ssh_writer,  # type: ignore[arg-type]
-                tty_shell,
-                stdin,
-                raw_stdout,
-                keyboard_escape,
-                state,
-                handle_close,
-                lambda: False,
-            )
+            try:
+                await telnetlib3.client_shell._raw_event_loop(
+                    ssh_reader,  # type: ignore[arg-type]
+                    ssh_writer,  # type: ignore[arg-type]
+                    tty_shell,
+                    stdin,
+                    raw_stdout,
+                    keyboard_escape,
+                    state,
+                    handle_close,
+                    lambda: False,
+                )
+            except Exception:
+                log.exception("Unhandled exception in SSH raw event loop")
+                handle_close("Connection closed.")
             tty_shell.disconnect_stdin(stdin)  # pylint: disable=no-member
         else:
             handle_close("Connection closed.")

@@ -298,12 +298,11 @@ class GraphicsWriter:
 
         bitmap, colors = self._build_pixel_buffers()
 
-        if self.protocol == "sixel":
-            scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
-            scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
-            scale = min(scale_w, scale_h)
-            if scale > 1:
-                colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
+        scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
+        scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
+        scale = min(scale_w, scale_h)
+        if scale > 1:
+            colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
 
         buf = io.StringIO()
         buf.write(SYNC_START)
