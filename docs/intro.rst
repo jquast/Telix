@@ -31,7 +31,7 @@ Features
   block of real terminal cells with 24-bit color, giving pixel-accurate BBS art rendering in any
   modern terminal.
 
-Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
+Built using Python libraries telnetlib3_, blessed_, textual_, wcwidth_, asyncssh_, websockets_, and numpy_.
 
 .. _telnetlib3: https://github.com/jquast/telnetlib3
 .. _blessed: https://github.com/jquast/blessed
@@ -48,6 +48,9 @@ Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
 .. _`websocket subprotocols`: https://mudstandards.org/websocket/
 .. _TELNETS: https://www.micropolis.com/support/kb/micropolis-bbs-faq#Is_there_a_secure_Telnet
 .. _SyncTERM: https://syncterm.bbsdev.net/
+.. _asyncssh: https://asyncssh.readthedocs.io/
+.. _websockets: https://websockets.readthedocs.io/
+.. _numpy: https://numpy.org/
 
 Installation
 ------------
@@ -88,21 +91,13 @@ Connect directly via WebSocket::
 .. begin-cli-help
 .. code-block:: text
 
-    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT]
-                 [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
-                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N]
-                 [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
-                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
-                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL]
-                 [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
-                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify]
-                 [--term TERM] [--typescript FILE]
-                 [--typescript-mode {append,rewrite}] [--key-file FILE]
-                 [--username USER] [--background-color COLOR] [--bbs]
-                 [--color-brightness N] [--color-contrast N]
-                 [--colormatch PALETTE] [--mud] [--clear-homes-cursor]
-                 [--metafont] [--metafont-columns N] [--metafont-rows N]
-                 [--no-ice-colors]
+    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
+                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N] [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
+                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE] [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL] [--no-repl]
+                 [--raw-mode] [--send-environ VARS] [--shell SHELL] [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM]
+                 [--typescript FILE] [--typescript-mode {append,rewrite}] [--key-file FILE] [--username USER] [--background-color COLOR]
+                 [--bbs] [--color-brightness N] [--color-contrast N] [--colormatch PALETTE] [--mud] [--clear-homes-cursor] [--ff-clears-screen]
+                 [--use-graphics-font] [--metafont] [--metafont-columns N] [--metafont-rows N] [--no-ice-colors]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -117,16 +112,11 @@ Connect directly via WebSocket::
       -h, --help            show this help message and exit
 
     Connection options:
-      --always-do OPT       always send DO for this option (comma-separated, named
-                            like GMCP)
-      --always-dont OPT     always send DONT for this option, refusing even
-                            natively supported
-      --always-will OPT     always send WILL for this option (comma-separated,
-                            named like MXP)
-      --always-wont OPT     always send WONT for this option, refusing even
-                            natively supported
-      --ansi-keys           transmit raw ANSI escape sequences for arrow/function
-                            keys
+      --always-do OPT       always send DO for this option (comma-separated, named like GMCP)
+      --always-dont OPT     always send DONT for this option, refusing even natively supported
+      --always-will OPT     always send WILL for this option (comma-separated, named like MXP)
+      --always-wont OPT     always send WONT for this option, refusing even natively supported
+      --ansi-keys           transmit raw ANSI escape sequences for arrow/function keys
       --ascii-eol           use ASCII CR/LF instead of encoding-native EOL
       --compression         request MCCP compression
       --connect-maxwait N   timeout for pending negotiation (default: 4.0)
@@ -144,8 +134,7 @@ Connect directly via WebSocket::
       --loglevel LOGLEVEL   logging level (default: warn)
       --no-repl             disable the interactive REPL (raw I/O only)
       --raw-mode            force raw-mode input (default: auto-detect)
-      --send-environ VARS   comma-separated environment variables to send via NEW-
-                            ENVIRON
+      --send-environ VARS   comma-separated environment variables to send via NEW-ENVIRON
       --shell SHELL         dotted path to shell coroutine
       --speed N             terminal speed to report (default: 38400)
       --ssl                 enable SSL/TLS (telnet only)
@@ -162,16 +151,15 @@ Connect directly via WebSocket::
 
     Telix options:
       --background-color COLOR
-                            terminal background color as #RRGGBB (default:
-                            #000000)
+                            terminal background color as #RRGGBB (default: #000000)
       --bbs                 apply BBS connection presets
       --color-brightness N  color brightness multiplier (default: 1.0)
       --color-contrast N    color contrast multiplier (default: 1.0)
-      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
-                            disable)
+      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to disable)
       --mud                 apply MUD connection presets
-      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm
-                            compatibility)
+      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm compatibility)
+      --ff-clears-screen    treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)
+      --use-graphics-font   render using kitty/sixel terminal graphics
       --metafont            render using octant bitmap metafonts
       --metafont-columns N  force virtual terminal columns for metafont (e.g. 40)
       --metafont-rows N     force virtual terminal rows for metafont (default: 25)

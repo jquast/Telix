@@ -1,10 +1,6 @@
 """Meta terminal: pyte virtual terminal with octant bitmap font rendering.
 
-Intercepts BBS output, feeds it through a pyte virtual terminal emulator,
-and re-renders the screen using bitmap font glyphs encoded as Unicode octant
-block characters.  Each BBS character cell becomes a 4x4 block of real
-terminal cells.
-
+Each BBS character cell becomes a 4x4 block of real terminal cells.
 Used in raw/BBS mode when the ``metafont`` option is enabled.
 """
 
@@ -59,11 +55,6 @@ class BBSScreen(pyte.Screen):
 # CSI with intermediate character ' ' and final character 'D'.
 SYNCTERM_FONT_RE = re.compile(r"\x1b\[(\d+);(\d+) D")
 
-# Device Status Report (DSR): CSI 6 n -- requests cursor position report.
-# BBS systems send this to detect ANSI support; pyte has no output transport
-# to reply, so we intercept it and send the response ourselves.
-DSR_RE = re.compile(r"\x1b\[6n")
-
 # CSI sequences with intermediate bytes (0x20-0x2F) that pyte does not handle.
 # pyte's parser treats these as standard CSI and passes extra params to handlers
 # that don't expect them, causing crashes.  Strip them before feeding to pyte.
@@ -76,6 +67,21 @@ DECSCUSR_RE = re.compile(r"\x1b\[(\d) q")
 # pyte does not handle DCS, so these render as visible garbage
 # unless stripped before feeding pyte.
 XTGETTCAP_DCS_RE = re.compile(r"\x1bP\+q[^\x1b\x07]*(\x1b\\|\x07)")
+
+
+def handle_cursor_shape(text: str) -> tuple[str, int | None, bool | None]:
+    """Strip DECSCUSR sequences and return (text, shape, blink).
+
+    Returns None for shape/blink when no cursor shape sequence is found.
+    """
+    matches = list(DECSCUSR_RE.finditer(text))
+    if not matches:
+        return text, None, None
+    val = int(matches[-1].group(1))
+    text = DECSCUSR_RE.sub("", text)
+    if val == 0:
+        return text, 2, False
+    return text, val, val in (1, 3, 5)
 
 # Synchronized output: DEC private mode 2026.
 SYNC_START = "\033[?2026h"
@@ -190,11 +196,6 @@ class MetaTerminalWriter:
         self._cursor_hidden: bool = False
         self._prev_cursor_x: int = 0
         self._prev_cursor_y: int = 0
-        self._cursor_shape: int = 2
-        self._cursor_blink: bool = False
-        self._cursor_hidden: bool = False
-        self._prev_cursor_x: int = 0
-        self._prev_cursor_y: int = 0
         real_rows, real_cols = terminal.get_terminal_size()
         self._real_rows = real_rows
         self._real_cols = real_cols
@@ -239,52 +240,27 @@ class MetaTerminalWriter:
             return ""
         return SYNCTERM_FONT_RE.sub(_on_match, text)
 
-    def _handle_cursor_shape(self, text: str) -> str:
-        """Strip and process DECSCUSR cursor shape sequences.
+    def _intercept_device_queries(self, text: str) -> None:
+        """Send CPR response for any DSR (Device Status Report) in *text*.
 
-        Processes all occurrences in *text*; the last one wins.
-        """
-        matches = list(DECSCUSR_RE.finditer(text))
-        if matches:
-            val = int(matches[-1].group(1))
-            if val == 0:
-                self._cursor_shape = 2
-                self._cursor_blink = False
-            else:
-                self._cursor_shape = val
-                self._cursor_blink = val in (1, 3, 5)
-        return DECSCUSR_RE.sub("", text)
-
-    def _intercept_device_queries(self, text: str) -> str:
-        """Strip DSR (Device Status Report) and send CPR back to the BBS.
-
-        BBS systems send ``CSI 6 n`` to detect ANSI support.  pyte has no
-        output transport to reply, so we intercept it here and write the
-        Cursor Position Report (``CSI row ; col R``) to the telnet writer.
-
-        :param text: Input text that may contain DSR sequences.
-        :returns: Text with DSR sequences removed.
+        Must be called after :meth:`~pyte.Stream.feed` so that cursor
+        movement commands (e.g. ``\\x1b[255B`` ``\\x1b[255C``) in the
+        same chunk have been processed by pyte before we report the
+        virtual cursor position back to the BBS.
         """
         if "\x1b[6n" not in text:
-            return text
+            return
         row = self.screen.cursor.y + 1
         col = self.screen.cursor.x + 1
         writer = self.ctx.writer
         if writer is not None:
             cpr = f"\x1b[{row};{col}R"
             writer.write(cpr)
-        return DSR_RE.sub("", text)
 
     def _char_to_code(self, char_data: str) -> int:
-        """Convert a pyte character to a font codepage byte value.
+        """Convert pyte character to font codepage byte value.
 
-        pyte stores characters as Unicode.  For codepage fonts (CP437, etc.),
-        we encode back to the font's codepage to get the byte value that
-        indexes into the font bitmap.  Characters that cannot be encoded
-        are mapped to 0x3F ('?') -- the font's own question mark glyph.
-
-        :param char_data: Single character from pyte screen buffer.
-        :returns: Byte value (0-255) in the font's encoding.
+        Characters not encodable in the font's codepage become 0x3F ('?').
         """
         if not char_data or char_data == " ":
             return 0x20
@@ -470,14 +446,18 @@ class MetaTerminalWriter:
         self._apply_pending_resize()
 
         text = data.decode("utf-8", errors="replace")
-        text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
-        text = self._handle_cursor_shape(text)
+        text, shape, blink = handle_cursor_shape(text)
+        if shape is not None:
+            self._cursor_shape = shape
+            self._cursor_blink = blink
         text = CSI_WITH_INTERMEDIATE.sub("", text)
         text = XTGETTCAP_DCS_RE.sub("", text)
 
         if text:
             self.stream.feed(text)
+
+        self._intercept_device_queries(text)
 
         prev_hidden = self._cursor_hidden
         self._cursor_hidden = self.screen.cursor.hidden
@@ -487,6 +467,9 @@ class MetaTerminalWriter:
         )
         if cursor_moved and 0 <= self._prev_cursor_y < self.rows:
             self.screen.dirty.add(self._prev_cursor_y)
+            # Invalidate cached old cursor position so the dirty loop
+            # re-renders it without reverse video.
+            self._prev_buffer.pop((self._prev_cursor_y, self._prev_cursor_x), None)
         self._prev_cursor_x = self.screen.cursor.x
         self._prev_cursor_y = self.screen.cursor.y
 

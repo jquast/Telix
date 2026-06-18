@@ -1,15 +1,8 @@
-"""Sixel and Kitty graphics protocol encoders for terminal image rendering.
+"""Sixel and Kitty graphics protocol encoders.
 
 Adapted from dapple_ (MIT license, Copyright (c) 2025 Alexander Towell).
 
 .. _dapple: https://github.com/queelius/dapple
-
-Terminal detection uses :mod:`blessed` for sixel and kitty graphics
-capability queries (DA1 and kitty graphics probe).
-
-Sixel format: ``ESC P q  <palette> <pixel data>  ESC \\``
-
-Kitty format: ``ESC _ G  key=value,... ; base64_data  ESC \\``
 """
 
 import io

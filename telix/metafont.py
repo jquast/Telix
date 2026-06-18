@@ -1,14 +1,7 @@
-"""Octant metafont rendering engine.
+"""Bitmap font rendering via Unicode octant block characters.
 
-Converts bitmap font glyphs into Unicode octant block characters (2x4 sub-pixels
-per terminal cell) for rendering BBS screens in modern terminals.
-
-An 8x16 bitmap glyph becomes a 4-wide x 4-tall block of real terminal cells,
-each cell encoding a 2x4 pixel region as a single octant character with
-foreground and background colors.
-
-Octant characters use Unicode 17.0 range U+1CD00--U+1CDE5 plus 26 legacy
-block element characters for common patterns.
+Each 8x16 bitmap glyph becomes a 4x4 block of real terminal cells,
+using Unicode octant characters (U+1CD00-U+1CDE5 plus legacy block elements).
 """
 
 import pathlib

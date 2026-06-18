@@ -53,6 +53,20 @@ log = logging.getLogger(__name__)
 __all__ = ("ssh_client_shell", "telix_client_shell", "ws_client_shell")
 
 
+def _apply_delete_to_backspace(stdin: typing.Any) -> None:
+    """Patch stdin so Delete (0x7f) is sent as Backspace (0x08).
+
+    BBS systems expect Backspace, but modern terminals send Delete in raw mode.
+    """
+    _real_read = stdin.read
+
+    async def _delete_to_backspace(n: int = -1) -> bytes:
+        data = await _real_read(n)
+        return data.replace(b"\x7f", b"\x08")
+
+    stdin.read = _delete_to_backspace  # type: ignore[method-assign]
+
+
 def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     """
     Create config/data directories and load all per-session config files into *ctx*.
@@ -477,6 +491,30 @@ def setup_font_id(ctx: "session_context.TelixSessionContext") -> None:
     ctx.repl.font_id = args.font_id
 
 
+def _setup_resize_and_naws(raw_stdout: typing.Any, writer: typing.Any, tty_shell: typing.Any) -> None:
+    """Wire SIGWINCH handler and NAWS reporting for a meta/graphics writer."""
+    if writer is not None and hasattr(writer, "handle_send_naws"):
+        def _naws() -> tuple[int, int]:
+            return raw_stdout.virtual_size()
+        writer.handle_send_naws = _naws  # type: ignore[method-assign]
+    if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
+        import signal
+        import telnetlib3.telopt
+        try:
+            loop = asyncio.get_event_loop()
+
+            def _winch() -> None:
+                real_rows, real_cols = terminal.get_terminal_size()
+                raw_stdout.resize(real_cols, real_rows)
+                tty_shell._resize_pending.set()
+                if hasattr(writer, "local_option") and writer.local_option.enabled(telnetlib3.telopt.NAWS):
+                    writer._send_naws()
+
+            loop.add_signal_handler(signal.SIGWINCH, _winch)
+        except (RuntimeError, ValueError):
+            pass
+
+
 def make_raw_stdout(
     stdout: asyncio.StreamWriter,
     ctx: "session_context.TelixSessionContext",
@@ -521,30 +559,7 @@ def make_raw_stdout(
                 stdout, ctx, protocol, cell_px_w=cell_px_w, cell_px_h=cell_px_h,
                 font_id=ctx.repl.font_id,
             )
-
-            if writer is not None and hasattr(writer, "handle_send_naws"):
-                def _gfx_naws() -> tuple[int, int]:
-                    return gtw.virtual_size()
-                writer.handle_send_naws = _gfx_naws  # type: ignore[method-assign]
-
-            if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
-                import signal
-                try:
-                    loop = asyncio.get_event_loop()
-
-                    def _gfx_winch() -> None:
-                        real_rows, real_cols = terminal.get_terminal_size()
-                        gtw.resize(real_cols, real_rows)
-                        tty_shell._resize_pending.set()
-                        if hasattr(writer, "local_option"):
-                            import telnetlib3.telopt
-                            if writer.local_option.enabled(telnetlib3.telopt.NAWS):
-                                writer._send_naws()
-
-                    loop.add_signal_handler(signal.SIGWINCH, _gfx_winch)
-                except (RuntimeError, ValueError):
-                    pass
-
+            _setup_resize_and_naws(gtw, writer, tty_shell)
             return gtw
 
     if ctx.repl.metafont:
@@ -554,30 +569,7 @@ def make_raw_stdout(
         rows = ctx.repl.metafont_rows or 25
         mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows,
                                                font_id=ctx.repl.font_id)
-
-        if writer is not None and hasattr(writer, "handle_send_naws"):
-            def _metafont_naws() -> tuple[int, int]:
-                return mtw.virtual_size()
-            writer.handle_send_naws = _metafont_naws  # type: ignore[method-assign]
-
-        if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
-            import signal
-            try:
-                loop = asyncio.get_event_loop()
-
-                def _metafont_winch() -> None:
-                    real_rows, real_cols = terminal.get_terminal_size()
-                    mtw.resize(real_cols, real_rows)
-                    tty_shell._resize_pending.set()
-                    if hasattr(writer, "local_option"):
-                        import telnetlib3.telopt
-                        if writer.local_option.enabled(telnetlib3.telopt.NAWS):
-                            writer._send_naws()
-
-                loop.add_signal_handler(signal.SIGWINCH, _metafont_winch)
-            except (RuntimeError, ValueError):
-                pass
-
+        _setup_resize_and_naws(mtw, writer, tty_shell)
         return mtw
     if ctx.repl.color_filter is not None:
         return ColorFilteredWriter(stdout, ctx)
@@ -750,11 +742,7 @@ async def telix_client_shell(
                 linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
-                _real_read = stdin.read
-                async def _delete_to_backspace(n: int = -1) -> bytes:
-                    data = await _real_read(n)
-                    return data.replace(b"\x7f", b"\x08")
-                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
+                _apply_delete_to_backspace(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
@@ -857,11 +845,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
-                _real_read = stdin.read
-                async def _delete_to_backspace(n: int = -1) -> bytes:
-                    data = await _real_read(n)
-                    return data.replace(b"\x7f", b"\x08")
-                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
+                _apply_delete_to_backspace(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
@@ -1006,11 +990,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
-                _real_read = stdin.read
-                async def _delete_to_backspace(n: int = -1) -> bytes:
-                    data = await _real_read(n)
-                    return data.replace(b"\x7f", b"\x08")
-                stdin.read = _delete_to_backspace  # type: ignore[method-assign]
+                _apply_delete_to_backspace(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
             )

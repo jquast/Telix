@@ -1,7 +1,7 @@
 """Replace the CLI --help block in intro.rst between marker comments."""
 
+import io
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -10,13 +10,22 @@ END_MARKER = ".. end-cli-help"
 
 
 def main() -> None:
-    """Run ``telix --help`` and inject the output into intro.rst."""
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "intro.rst"
+    """Capture ``telix --help`` output and inject it into the RST file."""
+    path = (
+        Path(sys.argv[1])
+        if len(sys.argv) > 1
+        else Path(__file__).resolve().parent.parent / "docs" / "intro.rst"
+    )
 
-    result = subprocess.run(["telix", "--help"], capture_output=True, text=True, check=True)
+    buf = io.StringIO()
+    # Import here so tox format step has telix available via usedevelop.
+    from telix.main import build_help_parser  # noqa: PLC0415
+
+    build_help_parser().print_help(file=buf)
+    help_text = buf.getvalue().rstrip()
 
     lines = [".. code-block:: text", ""]
-    for line in result.stdout.rstrip().splitlines():
+    for line in help_text.splitlines():
         lines.append(f"    {line}" if line else "")
     lines.append("")
     block = "\n".join(lines) + "\n"

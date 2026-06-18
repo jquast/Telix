@@ -23,7 +23,7 @@ Architecture
 
 Telix is primarily a TUI interface for MUD scripting over Telnet. It also includes support for
 BBS, and the WebSocket and SSH protocol. Telix is mainly a TUI and automation/scripting layer
-above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_.
+above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_, numpy_.
 
 wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.  wcwidth_ is used to
 measure the width of strings containing sequences and complex unicode. blessed_ is depended on for
@@ -31,66 +31,11 @@ general terminal support for access to terminal sequence, feature detection, and
 and to provide the REPL for MUD connections. telnetlib3_ also requires blessed, and, textual_ is
 used for all complex TUIs, which depends on its core library rich_.  For Windows systems, jinxed_ is
 used by both Telix and telnetlib3_ for msvcrt keyboard routines.
+numpy_ provides vectorized image processing for the sixel and kitty
+graphics renderers.
 
-Telix code file overview::
-
-    telix/
-    ├── main.py                 CLI entry (TUI or direct connect)
-    ├── session_context.py      Per-connection mutable state
-    ├── client_shell.py         Shell callback (drop-in for telnetlib3)
-    │
-    ├── ws_transport.py         WebSocket reader/writer adapters
-    ├── ws_client.py            WebSocket connection core (run_ws_client, build_parser)
-    │
-    ├── ssh_transport.py        SSH reader/writer adapters
-    ├── ssh_client.py           SSH connection core (run_ssh_client)
-    │
-    ├── scripts.py              Async Python scripting engine
-    │
-    ├── client_repl.py          blessed LineEditor REPL event loop
-    ├── client_repl_render.py   Toolbar / status line rendering
-    ├── client_repl_commands.py Command expansion and backtick dispatch
-    ├── client_repl_dialogs.py  Interactive dialogs (confirm, input)
-    ├── client_repl_travel.py   Room graph navigation
-    ├── repl_theme.py           Textual theme to REPL palette resolution
-    │
-    ├── client_tui.py           Re-export hub (backwards compat)
-    ├── client_tui_base.py      TUI foundation: sessions, base editors, app
-    ├── client_tui_editors.py   Re-export hub (backwards compat)
-    ├── client_tui_app.py       Textual app entry point and session launcher
-    ├── client_tui_macros.py    Macro editor
-    ├── client_tui_triggers.py  Trigger editor
-    ├── client_tui_highlights.py Highlight editor
-    ├── client_tui_bars.py      Progress bar editor
-    ├── client_tui_rooms.py     Room browser TUI
-    ├── client_tui_captures.py  Capture window (Alt+C)
-    ├── client_tui_dialogs.py   Confirmation dialogs, walk dialogs, tabbed editor
-    │
-    ├── trigger.py              Pattern-triggered automatic responses
-    ├── macros.py               Key-bound macro definitions
-    ├── highlighter.py          Regex-based output highlighting + captures
-    ├── rooms.py                GMCP Room.Info graph store (SQLite)
-    ├── chat.py                 GMCP Comm.Channel.Text persistence
-    ├── directory.py            Bundled MUD/BBS directory loader
-    ├── progressbars.py         Progress bar config loading/saving
-    ├── gmcp_snapshot.py        GMCP snapshot persistence
-    │
-    ├── color_filter.py         ANSI/PETSCII/ATASCII color palette translation
-    ├── terminal.py             Terminal abstraction (Unix/Win32 dispatch)
-    ├── terminal_unix.py        Unix terminal operations (termios, PTY)
-    ├── terminal_win32.py       Windows terminal operations (msvcrt)
-    ├── mtts.py                 MTTS terminal type standard bitvector
-    ├── mslp.py                 MSLP multiline softlink parser
-    │
-    ├── metafont.py             Octant block rendering engine (glyph-to-octant)
-    ├── metaterminal.py         pyte virtual terminal + octant output
-    ├── fonts/
-    │   ├── font_registry.py    SyncTERM font ID/name/encoding registry
-    │   └── syncterm_fonts.bin  All 45 SyncTERM 8x16 font bitmaps (180 KB)
-    │
-    ├── paths.py                XDG base directory resolution
-    ├── util.py                 Small internal helpers
-    └── help/                   Markdown help files loaded at runtime
+Run ``head -n 2 telix/*.py telix/fonts/*.py`` for a quick file overview.
+Each module also carries a one-line docstring describing its purpose.
 
 Developing
 ----------
@@ -411,4 +356,5 @@ Font bitmaps for all 45 SyncTERM fonts are stored in
 .. _ruff: https://docs.astral.sh/ruff/
 .. _asyncssh: https://asyncssh.readthedocs.io/
 .. _websockets: https://websockets.readthedocs.io/
+.. _numpy: https://numpy.org/
 .. _jinxed: https://github.com/rockhopper-Technologies/jinxed

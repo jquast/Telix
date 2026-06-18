@@ -25,7 +25,6 @@ class FontEntry(typing.NamedTuple):
     bin_offset: int
 
 
-# fmt: off
 FONT_TABLE: list[FontEntry] = [
     FontEntry(0, "Codepage 437 English", "cp437", "cp437", 0),
     FontEntry(1, "Codepage 1251 Cyrillic, (swiss)", "cp1251-swiss", "cp1251", 4096),
@@ -73,7 +72,6 @@ FONT_TABLE: list[FontEntry] = [
     FontEntry(43, "Prestel", "prestel", "iso-8859-1", 176128),
     FontEntry(44, "Atari ST", "atari-st", "iso-8859-1", 180224),
 ]
-# fmt: on
 
 FONT_BY_ID: dict[int, FontEntry] = {e.font_id: e for e in FONT_TABLE}
 

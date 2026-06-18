@@ -76,8 +76,8 @@ The session editor has a **Server Type** radio (BBS / MUD) that applies
 recommended defaults for the connection:
 
 **BBS** sets Color Palette to vga, iCE Colors on, Raw mode, REPL off,
-Clear Homes Cursor on, and MCCP Compression to passive.  Most BBSs
-require an 80-column by 25-line terminal.
+Clear Homes Cursor on, FF is Clear+Home on, and MCCP Compression to
+passive.  Most BBSs require an 80-column by 25-line terminal.
 
 **MUD** sets MCCP Compression on, Line mode, REPL on, Color Palette
 to none, and iCE Colors off.  Most MUDs expect a screen width of 100
@@ -115,6 +115,7 @@ The Display tab includes color and rendering options:
 | **iCE Colors** | Use blink attribute as bright background |
 | **Force Black BG** | Override detected background to black |
 | **Clear Homes Cursor** | Inject cursor-home before clear-screen (CTerm compatibility) |
+| **FF is Clear+Home** | Treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility) |
 | **Octant Metafonts** | Render using bitmap fonts as Unicode octant block characters |
 | **Columns / Rows** | Force virtual terminal size for metafont (blank = auto) |
 
@@ -122,6 +123,12 @@ The Display tab includes color and rendering options:
 ``ESC[2J`` (erase display) expecting the cursor to also return home,
 which is a SyncTERM/CTerm behavior not present in standard VT100
 terminals.  Enabled by default for BBS server type.
+
+**FF is Clear+Home** compensates for BBS software that sends a Form Feed
+(``\x0C``) character expecting the terminal to clear the screen and home
+the cursor.  Standard VT100 terminals scroll the screen on Form Feed;
+SyncTERM treats it as a clear-screen command.  Enabled by default for
+BBS server type.
 
 **Octant Metafonts** renders each BBS character as a 4x4 block of
 Unicode octant characters, giving pixel-accurate bitmap font rendering.

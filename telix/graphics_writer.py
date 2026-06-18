@@ -1,10 +1,4 @@
-"""Graphics writer: pyte virtual terminal rendered via sixel/kitty graphics.
-
-Feeds BBS output through a :class:`pyte.Screen` and re-renders the full
-virtual terminal as a pixel image using sixel or kitty graphics escape
-sequences.  Each BBS character cell is rendered using the bitmap font
-glyph, producing a 640x400 pixel image for an 80x25 virtual terminal.
-"""
+"""Graphics writer: pyte virtual terminal rendered via sixel/kitty graphics."""
 
 import io
 import re
@@ -19,27 +13,17 @@ from . import metafont, terminal, session_context, graphics_renderer
 from .fonts import font_registry
 from .color_filter import PALETTES
 from .metaterminal import (
-    DSR_RE,
     SYNC_END,
     SYNC_START,
     SYNCTERM_FONT_RE,
     CSI_WITH_INTERMEDIATE,
+    XTGETTCAP_DCS_RE,
     BBSScreen,
+    handle_cursor_shape,
     pyte_color_to_rgb,
 )
 
 log = logging.getLogger(__name__)
-
-# DECSCUSR: CSI Ps SP q -- set cursor shape (xterm extension).
-# Ps: 0=default, 1=blink block, 2=steady block, 3=blink underline,
-# 4=steady underline, 5=blink bar, 6=steady bar.
-DECSCUSR_RE = re.compile(r"\x1b\[(\d) q")
-
-# XTGETTCAP DCS sequences emitted by terminal query libraries
-# (blessed, ncurses).  pyte does not handle DCS, so these render
-# as visible garbage unless stripped before feeding pyte.
-# Matches: DCS +q <hex> ST  (7-bit form: \x1bP+q...\x1b\\)
-XTGETTCAP_DCS_RE = re.compile(r"\x1bP\+q[^\x1b\x07]*(\x1b\\|\x07)")
 
 MIN_RENDER_INTERVAL = 0.033  # ~30 fps
 
@@ -89,10 +73,8 @@ class GraphicsWriter:
         self._last_render_time = 0.0
         self._rendering = False
         self._did_initial_clear = False
-        self._need_px_query = False
-        self._cursor_shape: int = 2  # steady block, DECSCUSR default
+        self._cursor_shape: int = 2
         self._cursor_blink: bool = False
-        self._cursor_hidden: bool = False
         self._prev_cursor_x: int = 0
         self._prev_cursor_y: int = 0
         self._blink_timer: asyncio.TimerHandle | None = None
@@ -151,36 +133,21 @@ class GraphicsWriter:
 
         return SYNCTERM_FONT_RE.sub(_on_match, text)
 
-    def _handle_cursor_shape(self, text: str) -> str:
-        """Strip and process DECSCUSR cursor shape sequences.
+    def _intercept_device_queries(self, text: str) -> None:
+        """Send CPR response for any DSR (Device Status Report) in *text*.
 
-        Must be called before ``CSI_WITH_INTERMEDIATE`` strips them.
-        Processes all occurrences in *text*; the last one wins
-        (later sequences override earlier ones in the same chunk).
+        Must be called after :meth:`~pyte.Stream.feed` so that cursor
+        movement commands in the same chunk have been processed by pyte
+        before we report the virtual cursor position back to the BBS.
         """
-        matches = list(DECSCUSR_RE.finditer(text))
-        if matches:
-            # Use the LAST match (most recent override).
-            val = int(matches[-1].group(1))
-            if val == 0:
-                self._cursor_shape = 2
-                self._cursor_blink = False
-            else:
-                self._cursor_shape = val
-                self._cursor_blink = val in (1, 3, 5)
-        return DECSCUSR_RE.sub("", text)
-
-    def _intercept_device_queries(self, text: str) -> str:
-        """Strip DSR and send CPR back to the BBS."""
         if "\x1b[6n" not in text:
-            return text
+            return
         row = self.screen.cursor.y + 1
         col = self.screen.cursor.x + 1
         writer = self.ctx.writer
         if writer is not None:
             cpr = f"\x1b[{row};{col}R"
             writer.write(cpr)
-        return DSR_RE.sub("", text)
 
     def _char_to_code(self, char_data: str) -> int:
         """Convert a pyte character to a font codepage byte value."""
@@ -189,7 +156,7 @@ class GraphicsWriter:
         cp = ord(char_data)
         if cp < 0x80:
             return cp
-        enc = getattr(self.font, "encoding", None) or "cp437"
+        enc = self.font.encoding or "cp437"
         try:
             encoded = char_data.encode(enc, errors="replace")
             return encoded[0] if encoded else 0x3F
@@ -215,14 +182,7 @@ class GraphicsWriter:
         self._glyph_cache = cache
 
     def _build_pixel_buffers(self) -> tuple[np.ndarray, np.ndarray]:
-        """Render pyte screen to pixel arrays using precomputed glyph masks.
-
-        On the first call or after a full-redraw request, builds the
-        entire image cell by cell.  Otherwise only updates pixel regions
-        for rows marked dirty by pyte.
-
-        :returns: ``(bitmap, colors)`` where *colors* is ``(H, W, 3)`` float32.
-        """
+        """Return ``(bitmap, colors)`` float32 arrays for the current screen."""
         self._ensure_glyph_cache()
         cache = self._glyph_cache
         h = self.rows * FONT_CELL_H
@@ -276,21 +236,14 @@ class GraphicsWriter:
         return bitmap, colors
 
     def _draw_cursor(self, colors: np.ndarray) -> None:
-        """Draw the cursor on the pixel buffer using inverse video.
+        """Draw cursor on pixel buffer using inverse video.
 
-        Reads cursor shape, blink, and hidden state.  Blinking cursors
-        toggle visibility every 500 ms (2 Hz phase).  The cursor region
-        is drawn by inverting pixel values (``1.0 - value``), producing
-        the classic reverse-video effect.
-
-        :param colors: ``(H, W, 3)`` float32 pixel array, modified in-place.
+        Blinking cursors toggle visibility every 500 ms (2 Hz phase).
         """
         if self._cursor_blink:
             phase = int(time.monotonic() * 1000) % 1000
             if phase >= 500:
-                log.debug("blink hidden phase")
                 return
-            log.debug("blink visible phase, shape=%d", self._cursor_shape)
         cx = self.screen.cursor.x
         cy = self.screen.cursor.y
         if not (0 <= cx < self.columns and 0 <= cy < self.rows):
@@ -312,26 +265,6 @@ class GraphicsWriter:
         x0 = max(0, x0); x1 = min(w, x1)
         if y1 > y0 and x1 > x0:
             colors[y0:y1, x0:x1] = 1.0 - colors[y0:y1, x0:x1]
-
-    def _query_pixel_dims(self) -> None:
-        """Query terminal cell pixel dimensions via XTWINOPS.
-
-        Safe to call because telnetlib3 calls ``await stdout.drain()``
-        after each ``stdout.write()`` (telnetlib3 >= 4.0.5), so stdout
-        is idle between frames.  DCS query bytes will not interleave
-        with sixel DCS / kitty APC frame data.
-        """
-        try:
-            import blessed
-            term = blessed.Terminal()
-            px_h, px_w = term.get_sixel_height_and_width(timeout=0.3, force=True)
-            if px_w > 0 and self._real_cols:
-                self._cell_px_w = px_w // self._real_cols
-            if px_h > 0 and self._real_rows:
-                self._cell_px_h = px_h // self._real_rows
-            log.debug("cell px queried: %dx%d", self._cell_px_w, self._cell_px_h)
-        except Exception:
-            pass
 
     def _render_full(self) -> None:
         """Render the full pyte screen (sync wrapper, dispatches to async)."""
@@ -405,7 +338,6 @@ class GraphicsWriter:
         self._real_rows = real_rows
         self._real_cols = real_cols
         self._did_initial_clear = False
-        self._need_px_query = True
         self._needs_full_redraw = True
         return True
 
@@ -452,27 +384,17 @@ class GraphicsWriter:
             self._render_timer = loop.call_later(delay, self._render_full)
 
     def _manage_blink(self) -> None:
-        """Start or cancel the blink timer based on cursor blink state.
-
-        When the cursor is blinking and visible, a repeating 250 ms
-        timer fires renders so the blink phase toggles even when no
-        server data arrives.  The timer is cancelled when the cursor
-        stops blinking or becomes hidden.
-        """
+        """Start or cancel the blink timer based on cursor blink state."""
         should_blink = self._cursor_blink
         if should_blink and self._blink_timer is None:
             loop = asyncio.get_event_loop()
             self._blink_timer = loop.call_later(0.5, self._on_blink_tick)
-            log.debug("blink timer started")
         elif not should_blink and self._blink_timer is not None:
             self._blink_timer.cancel()
             self._blink_timer = None
-            log.debug("blink timer cancelled")
 
     def _on_blink_tick(self) -> None:
-        """Blink timer callback: render a frame and re-arm."""
         self._blink_timer = None
-        log.debug("blink tick")
         self._schedule_render()
         self._manage_blink()
 
@@ -486,11 +408,8 @@ class GraphicsWriter:
         """Decode, feed to pyte, and schedule a render.
 
         Called synchronously by telnetlib3's ``_raw_event_loop``.
-        ``StreamWriter.write()`` is sync (buffers data); only
-        ``drain()`` is async.  Rendering is dispatched to an async
-        task via ``_render_full() -> create_task()`` so the frame
-        build + ``drain()`` can be awaited there without blocking
-        the event loop.
+        Rendering is dispatched via ``create_task`` so ``drain()``
+        can be awaited without blocking the event loop.
         """
         from . import client_shell
 
@@ -502,11 +421,13 @@ class GraphicsWriter:
         self._apply_pending_resize()
 
         text = data.decode("utf-8", errors="replace")
-        text = self._intercept_device_queries(text)
         text = self._handle_font_switch(text)
         prev_shape = self._cursor_shape
         prev_blink = self._cursor_blink
-        text = self._handle_cursor_shape(text)
+        text, shape, blink = handle_cursor_shape(text)
+        if shape is not None:
+            self._cursor_shape = shape
+            self._cursor_blink = blink
         shape_changed = (self._cursor_shape != prev_shape
                          or self._cursor_blink != prev_blink)
         text = CSI_WITH_INTERMEDIATE.sub("", text)
@@ -515,11 +436,9 @@ class GraphicsWriter:
         if text:
             self.stream.feed(text)
 
-        # DECTCEM (\033[?25h/l) is not used for graphics cursor visibility;
-        # shells toggle it constantly during display updates.  The graphics
-        # cursor is always visible (subject to blink/phase) and we ignore
-        # pyte's cursor.hidden tracking.
+        self._intercept_device_queries(text)
 
+        # Shells toggle DECTCEM constantly; we ignore pyte's cursor.hidden.
         cursor_moved = (
             self.screen.cursor.x != self._prev_cursor_x
             or self.screen.cursor.y != self._prev_cursor_y

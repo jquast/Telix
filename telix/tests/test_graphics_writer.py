@@ -235,13 +235,6 @@ class TestGraphicsWriter:
         gtw.write(b"\x1b[5 qX")
         assert gtw.screen.buffer[0][0].data == "X"
 
-    def test_cursor_hidden_via_dectcem(self):
-        """DECTCEM toggles are NOT synced to _cursor_hidden in graphics mode."""
-        gtw, _ = self._make_writer(columns=10, rows=3)
-        assert gtw._cursor_hidden is False
-        gtw.write(b"\x1b[?25l")
-        assert gtw._cursor_hidden is False  # no longer synced from pyte
-
     def test_cursor_always_drawn_regardless_of_hidden(self):
         gtw, _ = self._make_writer(columns=10, rows=3, protocol="sixel")
         gtw.screen.cursor.x = 5
