@@ -128,6 +128,9 @@ async def run_ssh_client(
     term_type: str,
     shell: Callable[..., Awaitable[None]],
     color_args: "argparse.Namespace | None" = None,
+    encoding: str = "utf-8",
+    encoding_errors: str = "replace",
+    typescript: str = "",
 ) -> None:
     """
     Connect to an SSH server and run the telix shell.
@@ -145,15 +148,28 @@ async def run_ssh_client(
     :param term_type: Terminal type string (e.g. ``"xterm-256color"``).
     :param shell: Async callable ``shell(reader, writer)`` -- the REPL entry point.
     :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
+    :param encoding: Wire byte decoding (e.g. ``"utf-8"``, ``"iso-8859-1"``).
+    :param encoding_errors: Error handling for the wire decoder (default ``"replace"``).
     """
     reader = ssh_transport.SSHReader()
     writer = ssh_transport.SSHWriter(peername=(host, port))
     writer.color_args = color_args  # type: ignore[attr-defined]
+    writer.encoding = encoding
+    writer.encoding_errors = encoding_errors
+    writer.typescript = typescript  # type: ignore[attr-defined]
 
     shell_task = asyncio.ensure_future(shell(reader, writer))
 
     client_keys = [resolve_key_file(key_file)] if key_file else []
     cols, rows = shutil.get_terminal_size()
+
+    if color_args is not None:
+        if color_args.metafont:
+            cols = color_args.metafont_columns or 80
+            rows = color_args.metafont_rows or 25
+        elif color_args.use_graphics_font:
+            cols = 80
+            rows = 25
 
     async with asyncssh.connect(
         host,
@@ -196,6 +212,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--logfile", default="", metavar="FILE", help="write log to FILE")
     conn.add_argument("--typescript", default="", metavar="FILE", help="record session to FILE")
+    conn.add_argument("--encoding", default="utf-8", metavar="ENC", help="connection encoding (default: utf-8)")
+    conn.add_argument(
+        "--encoding-errors", default="replace", metavar="POLICY", help="encoding error handling (default: replace)"
+    )
 
     telix = parser.add_argument_group("Telix options")
     telix.add_argument(
@@ -238,6 +258,15 @@ def build_parser() -> argparse.ArgumentParser:
         dest="force_black_bg",
         help="use pure black background, ignoring detected background color",
     )
+    telix.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
+    telix.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
+    telix.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
+    telix.add_argument("--use-graphics-font", action="store_true", default=False, dest="use_graphics_font")
+    telix.add_argument("--metafont", action="store_true", default=False, dest="metafont")
+    telix.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
+    telix.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
+    telix.add_argument("--font-id", type=int, default=None, dest="font_id",
+                       help="font id for graphics/metafont rendering (default: 0)")
     return parser
 
 
@@ -260,7 +289,28 @@ def main() -> None:
         background_color=args.background_color,
         no_ice_colors=args.no_ice_colors,
         force_black_bg=args.force_black_bg,
+        ansi_keys=args.ansi_keys,
+        clear_homes_cursor=args.clear_homes_cursor,
+        ff_clears_screen=args.ff_clears_screen,
+        use_graphics_font=args.use_graphics_font,
+        metafont=args.metafont,
+        metafont_columns=args.metafont_columns,
+        metafont_rows=args.metafont_rows,
+        font_id=args.font_id,
     )
+
+    if args.logfile:
+        logging.basicConfig(
+            level=logging.getLevelName(args.loglevel.upper()),
+            filename=args.logfile,
+            filemode="w",
+            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.getLevelName(args.loglevel.upper()),
+            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
+        )
 
     asyncio.run(
         run_ssh_client(
@@ -271,6 +321,9 @@ def main() -> None:
             term_type=term_type,
             shell=ssh_client_shell,
             color_args=color_args,
+            encoding=args.encoding,
+            encoding_errors=args.encoding_errors,
+            typescript=args.typescript,
         )
     )
     sys.exit(0)

@@ -614,6 +614,10 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
         if val != default:
             cmd.extend([flag, str(val)])
 
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
+
     if config.mode == "raw":
         cmd.append("--raw-mode")
     elif config.mode == "line":
@@ -722,6 +726,9 @@ def build_ws_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
     append_metafont_flags(cmd, config)
@@ -742,6 +749,13 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--username", config.ssh_username]
     if config.ssh_key_file:
         cmd += ["--key-file", config.ssh_key_file]
+    if config.encoding != "utf8":
+        cmd += ["--encoding", resolve_wire_encoding(config)]
+    if config.encoding_errors != "replace":
+        cmd += ["--encoding-errors", config.encoding_errors]
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
     if config.colormatch != "vga":
         cmd += ["--colormatch", config.colormatch]
     if not config.ice_colors:
@@ -752,12 +766,19 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--color-brightness", str(config.color_brightness)]
     if config.color_contrast != 1.0:
         cmd += ["--color-contrast", str(config.color_contrast)]
+    if config.force_black_bg:
+        cmd.append("--force-black-bg")
+    if config.ansi_keys:
+        cmd.append("--ansi-keys")
     if config.loglevel != "warn":
         cmd += ["--loglevel", config.loglevel]
     if config.logfile:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+    append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
+    append_metafont_flags(cmd, config)
     return cmd
 
 

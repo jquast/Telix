@@ -253,7 +253,7 @@ def encode_kitty(
         if data is None:
             data = _make_png(colors)
         fmt_code = 100
-        params = f"a=T,f={fmt_code}"
+        params = f"a=T,C=1,f={fmt_code}"
     else:
         rgb = (colors * 255).astype(np.uint8)
         if fmt == "rgba":
@@ -265,7 +265,7 @@ def encode_kitty(
             data = rgb.tobytes()
             fmt_code = 24
         data = zlib.compress(data, level=6)
-        params = f"a=T,f={fmt_code},o=z,s={w},v={h}"
+        params = f"a=T,C=1,f={fmt_code},o=z,s={w},v={h}"
 
     if columns > 0:
         params += f",c={columns}"

@@ -94,6 +94,8 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metafont", action="store_true", default=False, dest="metafont")
     parser.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
     parser.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
+    parser.add_argument("--font-id", type=int, default=None, dest="font_id",
+                        help="font id for graphics/metafont rendering")
     return parser
 
 
@@ -330,6 +332,7 @@ def main() -> None:
             metafont=False,
             metafont_columns=None,
             metafont_rows=None,
+            font_id=None,
         )
         compression: bool | None = True if args.compression else (False if args.no_compression else None)
         always_do = parse_option_list(args.always_do)
@@ -411,6 +414,7 @@ def main() -> None:
             metafont=False,
             metafont_columns=None,
             metafont_rows=None,
+            font_id=None,
         )
         try:
             asyncio.run(

@@ -461,6 +461,22 @@ def setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
     ctx.repl.metafont_rows = args.metafont_rows
 
 
+def setup_font_id(ctx: "session_context.TelixSessionContext") -> None:
+    """
+    Configure initial font id for graphics/metafont rendering from CLI args.
+
+    When ``--font-id`` is specified, overrides the default font (0, IBM VGA)
+    for :class:`~telix.graphics_writer.GraphicsWriter` and
+    :class:`~telix.metaterminal.MetaTerminalWriter`.
+
+    :param ctx: Session context to update.
+    """
+    args = ctx.color_args
+    if args is None:
+        return
+    ctx.repl.font_id = args.font_id
+
+
 def make_raw_stdout(
     stdout: asyncio.StreamWriter,
     ctx: "session_context.TelixSessionContext",
@@ -503,6 +519,7 @@ def make_raw_stdout(
             log.debug("cell px: %dx%d (from XTWINOPS 14t/16t)", cell_px_w, cell_px_h)
             gtw = graphics_writer.GraphicsWriter(
                 stdout, ctx, protocol, cell_px_w=cell_px_w, cell_px_h=cell_px_h,
+                font_id=ctx.repl.font_id,
             )
 
             if writer is not None and hasattr(writer, "handle_send_naws"):
@@ -533,14 +550,10 @@ def make_raw_stdout(
     if ctx.repl.metafont:
         from . import metaterminal
 
-        real_rows, real_cols = terminal.get_terminal_size()
-        columns = ctx.repl.metafont_columns
-        rows = ctx.repl.metafont_rows
-        if columns is None:
-            columns = real_cols // 4 if real_cols else 80
-        if rows is None:
-            rows = real_rows // 4 if real_rows else 25
-        mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows)
+        columns = ctx.repl.metafont_columns or 80
+        rows = ctx.repl.metafont_rows or 25
+        mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows,
+                                               font_id=ctx.repl.font_id)
 
         if writer is not None and hasattr(writer, "handle_send_naws"):
             def _metafont_naws() -> tuple[int, int]:
@@ -614,6 +627,7 @@ async def telix_client_shell(
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
     setup_metafont(ctx)
+    setup_font_id(ctx)
 
     # 3. Setup GMCP callbacks
     base_on_gmcp = telnet_writer._ext_callback.get(telnetlib3.telopt.GMCP)
@@ -806,6 +820,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
     setup_metafont(ctx)
+    setup_font_id(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
 
@@ -840,6 +855,27 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             )
             raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ssh_writer)
             raw_stdout_ref[0] = raw_stdout
+
+            ts_path = getattr(ssh_writer, "typescript", "")
+            if ts_path:
+                ts_file = open(ts_path, "wb")
+                _inner_write = raw_stdout.write
+
+                def _tee_write(data: bytes) -> None:
+                    _inner_write(data)
+                    ts_file.write(data)
+                    ts_file.flush()
+
+                raw_stdout.write = _tee_write  # type: ignore[method-assign]
+                _orig_cleanup = getattr(raw_stdout, "cleanup", None)
+
+                def _tee_cleanup() -> None:
+                    if _orig_cleanup is not None:
+                        _orig_cleanup()
+                    ts_file.close()
+
+                raw_stdout.cleanup = _tee_cleanup  # type: ignore[attr-defined]
+
             await telnetlib3.client_shell._raw_event_loop(
                 ssh_reader,  # type: ignore[arg-type]
                 ssh_writer,  # type: ignore[arg-type]
@@ -888,6 +924,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
     setup_metafont(ctx)
+    setup_font_id(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).
     def on_gmcp(package: str, data: typing.Any) -> None:

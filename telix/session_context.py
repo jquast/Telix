@@ -156,6 +156,7 @@ class ReplState:
     metafont: bool = False
     metafont_columns: int | None = None
     metafont_rows: int | None = None
+    font_id: int | None = None
 
 
 @dataclasses.dataclass

@@ -47,6 +47,7 @@ class GraphicsWriter:
     :param encoding: Wire encoding override.
     :param columns: Virtual terminal columns (default 80).
     :param rows: Virtual terminal rows (default 25).
+    :param font_id: Initial font id for bitmap rendering (default 0, IBM VGA).
     """
 
     def __init__(
@@ -59,6 +60,7 @@ class GraphicsWriter:
         rows: int = 25,
         cell_px_w: int = 0,
         cell_px_h: int = 0,
+        font_id: int | None = None,
     ) -> None:
         self.inner = inner
         self.ctx = ctx
@@ -69,7 +71,7 @@ class GraphicsWriter:
         self.screen = BBSScreen(columns, rows)
         self.stream = pyte.Stream(self.screen)
         self.palette = PALETTES.get("vga", PALETTES["vga"])
-        self.font = metafont.load_font(font_registry.DEFAULT_FONT_ID)
+        self.font = metafont.load_font(font_id if font_id is not None else font_registry.DEFAULT_FONT_ID)
         self._needs_full_redraw = True
         self._render_scheduled = False
         self._render_timer: asyncio.TimerHandle | None = None
@@ -296,14 +298,12 @@ class GraphicsWriter:
 
         bitmap, colors = self._build_pixel_buffers()
 
-        scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
-        scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
-        scale = min(scale_w, scale_h)
-        if scale > 1:
-            colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
-
-        scaled_w = self._image_w * scale
-        scaled_h = self._image_h * scale
+        if self.protocol == "sixel":
+            scale_w = max(1, (self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W) // FONT_CELL_W)
+            scale_h = max(1, (self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H) // FONT_CELL_H)
+            scale = min(scale_w, scale_h)
+            if scale > 1:
+                colors = np.repeat(np.repeat(colors, scale, axis=0), scale, axis=1)
 
         buf = io.StringIO()
         buf.write(SYNC_START)
@@ -311,19 +311,10 @@ class GraphicsWriter:
             buf.write("\033[H\033[2J")
             self._did_initial_clear = True
 
-        if self.protocol == "kitty":
-            cw = self._cell_px_w if self._cell_px_w > 0 else FONT_CELL_W
-            ch = self._cell_px_h if self._cell_px_h > 0 else FONT_CELL_H
-            cols_needed = max(1, (scaled_w + cw - 1) // cw)
-            rows_needed = max(1, (scaled_h + ch - 1) // ch)
-            offset_row = max(1, (self._real_rows - rows_needed) // 2 + 1)
-            offset_col = max(1, (self._real_cols - cols_needed) // 2 + 1)
-            buf.write(f"\033[{offset_row};{offset_col}H")
-        else:
-            buf.write("\033[H")
+        buf.write("\033[H")
 
         if self.protocol == "kitty":
-            graphics_renderer.encode_kitty(colors, buf)
+            graphics_renderer.encode_kitty(colors, buf, columns=self.columns, rows=self.rows)
         else:
             graphics_renderer.encode_sixel(colors, buf)
         buf.write(SYNC_END)

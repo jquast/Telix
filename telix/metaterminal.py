@@ -134,6 +134,7 @@ class MetaTerminalWriter:
     :param encoding: Wire encoding override.
     :param columns: Virtual terminal columns (default 80).
     :param rows: Virtual terminal rows (default 25).
+    :param font_id: Initial font id for bitmap rendering (default 0, IBM VGA).
     """
 
     def __init__(
@@ -143,6 +144,7 @@ class MetaTerminalWriter:
         encoding: str | None = None,
         columns: int = 80,
         rows: int = 25,
+        font_id: int | None = None,
     ) -> None:
         self.inner = inner
         self.ctx = ctx
@@ -152,7 +154,7 @@ class MetaTerminalWriter:
         self.screen = BBSScreen(columns, rows)
         self.stream = pyte.Stream(self.screen)
         self.palette = PALETTES.get("vga", PALETTES["vga"])
-        self.font = metafont.load_font(font_registry.DEFAULT_FONT_ID)
+        self.font = metafont.load_font(font_id if font_id is not None else font_registry.DEFAULT_FONT_ID)
         self._prev_buffer: dict[tuple[int, int], tuple[str, str, str, bool, bool]] = {}
         self._needs_full_redraw = True
         self._pending_resize: tuple[int, int] | None = None
@@ -216,7 +218,7 @@ class MetaTerminalWriter:
         col = self.screen.cursor.x + 1
         writer = self.ctx.writer
         if writer is not None:
-            cpr = f"\x1b[{row};{col}R".encode("ascii")
+            cpr = f"\x1b[{row};{col}R"
             writer.write(cpr)
         return DSR_RE.sub("", text)
 

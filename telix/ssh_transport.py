@@ -127,6 +127,7 @@ class SSHWriter:
         self._iac_callback: dict[bytes, Callable[..., object]] = {}
         self.log = logging.getLogger("telix.ssh_transport")
         self.encoding: str = "utf-8"
+        self.encoding_errors: str = "replace"
         self.ctx: TelixSessionContext = None  # type: ignore[assignment]
         self.will_echo: bool = False
         self.mode: str = "local"
@@ -159,7 +160,7 @@ class SSHWriter:
         if self._process is None:
             return
         if isinstance(text, bytes):
-            text = text.decode(self.encoding, errors="replace")
+            text = text.decode(self.encoding, errors=self.encoding_errors)
         self._process.stdin.write(text)
 
     def _write(self, buf: bytes, escape_iac: bool = True) -> None:
@@ -172,7 +173,19 @@ class SSHWriter:
         self.write(buf)
 
     def _send_naws(self) -> None:
-        """No-op stub for telnetlib3 NAWS negotiation."""
+        """Notify the SSH server of current terminal size.
+
+        Uses ``handle_send_naws`` when patched by the graphics/metafont writer
+        to report the virtual terminal size instead of the real one.
+        """
+        if self._process is None:
+            return
+        if self.handle_send_naws is not None:
+            rows, cols = self.handle_send_naws()
+        else:
+            import shutil
+            cols, rows = shutil.get_terminal_size()
+        self._process.change_terminal_size(cols, rows)
 
     def close(self) -> None:
         """Close the SSH process stdin."""
