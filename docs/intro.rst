@@ -26,10 +26,9 @@ Features
 - **BBS/Scene Art** support for `CP437`_, `PETSCII`_, `ATASCII`_, `iCE colors`_, by translation of
   ANSI color codes and legacy encodings to modern 24-bit color codes and terminal encoding (usually
   utf-8).
-- **Octant Metafonts** render BBS bitmap fonts (CP437, Topaz, MicroKnight, P0T NOoDLE, and all 45
-  `SyncTERM`_ fonts) using Unicode octant block characters.  Each 8x16 glyph is displayed as a 4x4
-  block of real terminal cells with 24-bit color, giving pixel-accurate BBS art rendering in any
-  modern terminal.
+- **Graphic Fonts** render BBS bitmap fonts (CP437, Topaz, MicroKnight, P0T NOoDLE, and all 45
+  `SyncTERM`_ fonts) using kitty/sixel graphics or Unicode 16 "Octants", providing perfect
+  retrocomputing bitmap font display on modern terminals.
 
 Built using Python libraries telnetlib3_, blessed_, textual_, wcwidth_, asyncssh_, websockets_, and numpy_.
 
