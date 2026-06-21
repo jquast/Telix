@@ -46,7 +46,6 @@ def test_color_config_defaults() -> None:
     assert cfg.background_color == (0, 0, 0)
     assert cfg.ice_colors is True
     assert cfg.foreground_color is None
-    assert cfg.force_black_bg is False
 
 
 @pytest.mark.parametrize(
@@ -494,13 +493,6 @@ def test_foreground_color_bold_still_promotes_to_bright() -> None:
     assert f"38;2;{bright_white[0]};{bright_white[1]};{bright_white[2]}" in result
 
 
-def test_force_black_bg_flag() -> None:
-    cfg = ColorConfig(force_black_bg=True, background_color=(0, 0, 0))
-    f = ColorFilter(cfg)
-    result = f.filter("hello")
-    assert "48;2;0;0;0" in result
-
-
 def test_erase_eol_injection() -> None:
     out = "line1\r\nline2\r\n"
     result = out.replace("\r\n", "\x1b[K\r\n\x1b[K")
@@ -667,6 +659,11 @@ def test_atascii_backspace_erases() -> None:
     assert f.filter("DINGO\u25c0\u25c0\u25c0\u25c0\u25c0") == ("DINGO" + "\x08\x1b[P" * 5)
 
 
+def test_atascii_bs_glyph_erases() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter("DINGO\u25e2\u25e2") == ("DINGO" + "\x08\x1b[P" * 2)
+
+
 def test_atascii_plain_text_unchanged() -> None:
     f = AtasciiControlFilter()
     assert f.filter("hello world") == "hello world"
@@ -680,3 +677,82 @@ def test_atascii_flush_returns_empty() -> None:
 def test_atascii_multiple_controls_in_one_string() -> None:
     f = AtasciiControlFilter()
     assert f.filter("\u2191\u2193\u2190\u2192") == "\x1b[A\x1b[B\x1b[D\x1b[C"
+
+
+def test_atascii_filter_bytes_destructive_backspace() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"hello\x7eworld") == b"hello\x08\x1b[Pworld"
+    assert f.filter_bytes(b"hello\x08world") == b"hello\x08\x1b[Pworld"
+    assert f.filter_bytes(b"hello\xfeworld") == b"hello\x08\x1b[Pworld"
+    assert f.filter_bytes(b"hello\x88world") == b"hello\x08\x1b[Pworld"
+
+
+def test_atascii_filter_bytes_cursor_movement() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"\x1c\x1d\x1e\x1f") == b"\x1b[A\x1b[B\x1b[D\x1b[C"
+    assert f.filter_bytes(b"\x9c\x9d\x9e\x9f") == b"\x1b[A\x1b[B\x1b[D\x1b[C"
+
+
+def test_atascii_filter_bytes_clear_screen() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"\x7d") == b"\x1b[2J\x1b[H"
+    assert f.filter_bytes(b"\xfd") == b"\x1b[2J\x1b[H"
+
+
+def test_atascii_filter_bytes_tab() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"\x09") == b"\t"
+    assert f.filter_bytes(b"\x7f") == b"\t"
+    assert f.filter_bytes(b"\x89") == b"\t"
+    assert f.filter_bytes(b"\xff") == b"\t"
+
+
+def test_atascii_filter_bytes_plain_text_passthrough() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"hello world 123") == b"hello world 123"
+
+
+def test_atascii_filter_bytes_empty() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"") == b""
+
+
+def test_petscii_filter_bytes_destructive_backspace() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"hello\x14world") == b"hello\x08\x1b[Pworld"
+
+
+def test_petscii_filter_bytes_cursor_movement() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"\x11") == b"\x1b[B"
+    assert f.filter_bytes(b"\x91") == b"\x1b[A"
+    assert f.filter_bytes(b"\x1d") == b"\x1b[C"
+    assert f.filter_bytes(b"\x9d") == b"\x1b[D"
+
+
+def test_petscii_filter_bytes_home_and_clear() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"\x13") == b"\x1b[H"
+    assert f.filter_bytes(b"\x93") == b"\x1b[2J"
+
+
+def test_petscii_filter_bytes_reverse_video() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"\x12") == b"\x1b[7m"
+    assert f.filter_bytes(b"\x92") == b"\x1b[27m"
+
+
+def test_petscii_filter_bytes_color_sgr() -> None:
+    f = PetsciiColorFilter(brightness=1.0, contrast=1.0)
+    assert b"\x1b[38;2;255;255;255m" in f.filter_bytes(b"\x05")
+    assert b"\x1b[38;2;0;0;0m" in f.filter_bytes(b"\x90")
+
+
+def test_petscii_filter_bytes_plain_text_passthrough() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"hello world 123") == b"hello world 123"
+
+
+def test_petscii_filter_bytes_empty() -> None:
+    f = PetsciiColorFilter()
+    assert f.filter_bytes(b"") == b""

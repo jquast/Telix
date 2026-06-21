@@ -9,8 +9,6 @@ Features beyond the original telnetlib3 implementation:
 
 - **Terminal color detection**: ``foreground_color`` field lets the client use
   the actual terminal foreground instead of palette white.
-- **Force black background**: ``force_black_bg`` mode with Erase-to-End-of-Line
-  injection ensures VGA black extends to line edges.
 """
 
 from __future__ import annotations
@@ -102,10 +100,6 @@ class ColorConfig(typing.NamedTuple):
     :param foreground_color: Detected terminal foreground RGB.  When set,
         used for default fg (SGR 0/39) instead of palette white.  No
         brightness/contrast adjustment is applied to detected colors.
-    :param force_black_bg: When True, use (0,0,0) background and enable
-        Erase-to-End-of-Line injection to extend black to line edges.
-    :param force_black_bg: When True, use (0,0,0) background and enable
-        Erase-to-End-of-Line injection to extend black to line edges.
     """
 
     palette_name: str = "vga"
@@ -114,7 +108,6 @@ class ColorConfig(typing.NamedTuple):
     background_color: tuple[int, int, int] = (0, 0, 0)
     ice_colors: bool = True
     foreground_color: tuple[int, int, int] | None = None
-    force_black_bg: bool = False
 
 
 def sgr_code_to_palette_index(code: int) -> int | None:
@@ -440,6 +433,38 @@ PETSCII_FILTER_CHARS = frozenset(_PETSCII_COLOR_CODES) | frozenset(_PETSCII_CURS
 
 PETSCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(PETSCII_FILTER_CHARS))) + "]")
 
+# Byte-level equivalents for filter_bytes():
+# PETSCII control byte -> palette index (0-15).
+_PETSCII_COLOR_BYTES: dict[int, int] = {
+    0x05: 1,  # WHT
+    0x1C: 2,  # RED
+    0x1E: 5,  # GRN
+    0x1F: 6,  # BLU
+    0x81: 8,  # ORN
+    0x90: 0,  # BLK
+    0x95: 9,  # BRN
+    0x96: 10,  # LRD
+    0x97: 11,  # GR1
+    0x98: 12,  # GR2
+    0x99: 13,  # LGR
+    0x9A: 14,  # LBL
+    0x9B: 15,  # GR3
+    0x9C: 4,  # PUR
+    0x9E: 7,  # YEL
+    0x9F: 3,  # CYN
+}
+
+# PETSCII control byte -> ANSI escape sequence string.
+_PETSCII_CURSOR_BYTES: dict[int, str] = {
+    0x11: "\x1b[B",  # cursor down
+    0x91: "\x1b[A",  # cursor up
+    0x1D: "\x1b[C",  # cursor right
+    0x9D: "\x1b[D",  # cursor left
+    0x13: "\x1b[H",  # HOME
+    0x93: "\x1b[2J",  # CLR
+    0x14: "\x08\x1b[P",  # DEL
+}
+
 
 class PetsciiColorFilter:
     r"""
@@ -464,11 +489,26 @@ class PetsciiColorFilter:
         self._adjusted: list[tuple[int, int, int]] = [
             adjust_color(r, g, b, brightness, contrast) for r, g, b in PALETTES["c64"]
         ]
+        self._byte_map: dict[int, bytes] = self._build_byte_map()
 
     def _sgr_for_index(self, idx: int) -> str:
         """Return a 24-bit foreground SGR sequence for palette *idx*."""
         r, g, b = self._adjusted[idx]
         return f"\x1b[38;2;{r};{g};{b}m"
+
+    def _build_byte_map(self) -> dict[int, bytes]:
+        """Build byte-level translation map for filter_bytes."""
+        mapping: dict[int, bytes] = {}
+        # Color codes: PETSCII byte -> SGR byte sequence
+        for byte_ch, idx in _PETSCII_COLOR_BYTES.items():
+            mapping[byte_ch] = self._sgr_for_index(idx).encode()
+        # Cursor/screen codes
+        for byte_ch, ansi_str in _PETSCII_CURSOR_BYTES.items():
+            mapping[byte_ch] = ansi_str.encode()
+        # Reverse video
+        mapping[0x12] = b"\x1b[7m"
+        mapping[0x92] = b"\x1b[27m"
+        return mapping
 
     def filter(self, text: str) -> str:
         """
@@ -496,6 +536,26 @@ class PetsciiColorFilter:
             return "\x1b[27m"
         return ""
 
+    def filter_bytes(self, data: bytes) -> bytes:
+        """
+        Replace PETSCII control bytes with ANSI byte sequences.
+
+        This bypasses the decode-filter-encode roundtrip to avoid
+        corruption from the PETSCII codec (which encodes ASCII
+        letters to different byte values).
+
+        :param data: Raw PETSCII-encoded bytes.
+        :returns: Bytes with control codes replaced by ANSI escapes.
+        """
+        result = bytearray()
+        for b in data:
+            replacement = self._byte_map.get(b)
+            if replacement is not None:
+                result.extend(replacement)
+            else:
+                result.append(b)
+        return bytes(result)
+
     def flush(self) -> str:
         """
         Flush buffered state.
@@ -507,6 +567,7 @@ class PetsciiColorFilter:
 
 # ATASCII decoded control character glyphs -> ANSI terminal sequences.
 _ATASCII_CONTROL_CODES: dict[str, str] = {
+    "\u25e2": "\x08\x1b[P",  # ◢  backspace (0x08/0x88) -- ASCII BS decoded by atascii codec
     "\u25c0": "\x08\x1b[P",  # ◀  backspace/delete (0x7E / 0xFE)
     "\u25b6": "\t",  # ▶  tab (0x7F / 0xFF)
     "\u21b0": "\x1b[2J\x1b[H",  # ↰  clear screen (0x7D / 0xFD)
@@ -517,6 +578,31 @@ _ATASCII_CONTROL_CODES: dict[str, str] = {
 }
 
 ATASCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_ATASCII_CONTROL_CODES))) + "]")
+
+# ATASCII control bytes -> ANSI terminal byte sequences.
+# Used by filter_bytes() to avoid the decode-filter-encode roundtrip
+# that corrupts ANSI escape sequences during re-encoding.
+_ATASCII_CONTROL_BYTES: dict[int, bytes] = {
+    0x08: b"\x08\x1b[P",  # BS (decodes to U+25E2 ◢)
+    0x09: b"\t",  # TAB (decodes to U+2597 ▗)
+    0x1C: b"\x1b[A",  # cursor up (decodes to U+2191 ↑)
+    0x1D: b"\x1b[B",  # cursor down (decodes to U+2193 ↓)
+    0x1E: b"\x1b[D",  # cursor left (decodes to U+2190 ←)
+    0x1F: b"\x1b[C",  # cursor right (decodes to U+2192 →)
+    0x7D: b"\x1b[2J\x1b[H",  # clear screen (decodes to U+21B0 ↰)
+    0x7E: b"\x08\x1b[P",  # DEL (decodes to U+25C0 ◀)
+    0x7F: b"\t",  # TAB (decodes to U+25B6 ▶)
+    # Inverse video variants (bit 7 set)
+    0x88: b"\x08\x1b[P",  # BS inverse (decodes to U+25E4 ◤)
+    0x89: b"\t",  # TAB inverse (decodes to U+259B ▛)
+    0x9C: b"\x1b[A",  # cursor up inverse (decodes to U+2191 ↑)
+    0x9D: b"\x1b[B",  # cursor down inverse (decodes to U+2193 ↓)
+    0x9E: b"\x1b[D",  # cursor left inverse (decodes to U+2190 ←)
+    0x9F: b"\x1b[C",  # cursor right inverse (decodes to U+2192 →)
+    0xFD: b"\x1b[2J\x1b[H",  # clear screen inverse (decodes to U+21B0 ↰)
+    0xFE: b"\x08\x1b[P",  # DEL inverse (decodes to U+25C0 ◀)
+    0xFF: b"\t",  # TAB inverse (decodes to U+25B6 ▶)
+}
 
 
 class AtasciiControlFilter:
@@ -548,6 +634,27 @@ class AtasciiControlFilter:
     def _replace(match: re.Match[str]) -> str:
         """Regex callback for a single ATASCII control glyph."""
         return _ATASCII_CONTROL_CODES.get(match.group(), "")
+
+    @staticmethod
+    def filter_bytes(data: bytes) -> bytes:
+        """
+        Replace ATASCII control bytes with ANSI byte sequences.
+
+        This bypasses the decode-filter-encode roundtrip to avoid
+        corruption from the ATASCII codec (which cannot encode
+        ASCII control characters like ``\\x08`` and ``\\x1b``).
+
+        :param data: Raw ATASCII-encoded bytes.
+        :returns: Bytes with control codes replaced by ANSI escapes.
+        """
+        result = bytearray()
+        for b in data:
+            replacement = _ATASCII_CONTROL_BYTES.get(b)
+            if replacement is not None:
+                result.extend(replacement)
+            else:
+                result.append(b)
+        return bytes(result)
 
     @staticmethod
     def flush() -> str:

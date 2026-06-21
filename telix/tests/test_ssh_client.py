@@ -69,14 +69,12 @@ class TestBuildParser:
             "color_contrast",
             "background_color",
             "no_ice_colors",
-            "force_black_bg",
             "ansi_keys",
             "clear_homes_cursor",
             "ff_clears_screen",
-            "use_graphics_font",
-            "metafont",
-            "metafont_columns",
-            "metafont_rows",
+            "graphics_font",
+            "graphics_columns",
+            "graphics_rows",
             "font_id",
         ]
         missing = [a for a in required if not hasattr(args, a)]

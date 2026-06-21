@@ -151,11 +151,9 @@ class ReplState:
     erase_eol: bool = False
     clear_homes_cursor: bool = False
     ff_clears_screen: bool = False
-    graphics_font: bool = False
-    graphics_font: bool = False
-    metafont: bool = False
-    metafont_columns: int | None = None
-    metafont_rows: int | None = None
+    graphics_font: str = ""
+    graphics_columns: int | None = None
+    graphics_rows: int | None = None
     font_id: int | None = None
 
 

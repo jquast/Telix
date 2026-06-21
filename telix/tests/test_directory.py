@@ -209,6 +209,17 @@ class TestParseLine:
         assert entry["columns"] == 100
         assert "encoding" not in entry  # utf-8 is default, omitted
 
+    def test_ascii_encoding_omitted(self) -> None:
+        entry = _parse_line("example.org 4000 ascii", "mud")
+        assert entry is not None
+        assert "encoding" not in entry  # ascii is a utf-8 subset, omitted
+
+    def test_ascii_encoding_omitted_with_columns(self) -> None:
+        entry = _parse_line("example.org 4000 ascii 132", "mud")
+        assert entry is not None
+        assert "encoding" not in entry
+        assert entry["columns"] == 132
+
     def test_ssl_flag(self) -> None:
         entry = _parse_line("example.org 2000 ssl", "mud")
         assert entry is not None
@@ -224,8 +235,8 @@ class TestParseLine:
     def test_tall_flag(self) -> None:
         entry = _parse_line("example.org 23 cp437 80 tall", "bbs")
         assert entry is not None
-        assert entry["rows"] == 1
-        assert entry["columns"] == 80
+        assert "rows" not in entry
+        assert "columns" not in entry
         assert entry["encoding"] == "cp437"
 
     @pytest.mark.parametrize("encoding", ["gbk", "big5", "cp437", "latin-1", "atascii", "petscii"])

@@ -1,4 +1,4 @@
-"""Tests for telix.metaterminal -- pyte-based octant meta terminal."""
+"""Tests for telix.graphics_writer_octant -- pyte-based octant meta terminal."""
 
 import types
 import asyncio
@@ -7,9 +7,9 @@ import pyte
 import pytest
 
 from telix.fonts import font_registry
-from telix.metafont import OCTANT, CELLS_PER_CHAR_X, CELLS_PER_CHAR_Y
+from telix.graphics_bmpfont import OCTANT, CELLS_PER_CHAR_X, CELLS_PER_CHAR_Y
 from telix.color_filter import PALETTES
-from telix.metaterminal import PYTE_COLOR_NAMES, MetaTerminalWriter, pyte_color_to_rgb
+from telix.graphics_writer_octant import PYTE_COLOR_NAMES, OctantWriter, pyte_color_to_rgb
 
 
 class FakeWriter:
@@ -36,14 +36,14 @@ class FakeWriter:
 
 
 class FakeRepl:
-    metafont_columns = None
-    metafont_rows = None
+    graphics_columns = None
+    graphics_rows = None
     ff_clears_screen = False
     clear_homes_cursor = False
 
 
 class FakeCtx:
-    """Minimal session context stub for MetaTerminalWriter."""
+    """Minimal session context stub for OctantWriter."""
 
     def __init__(self, encoding="cp437"):
         self.encoding = encoding
@@ -55,9 +55,9 @@ VGA = PALETTES["vga"]
 
 
 class TestBBSScreen:
-
     def test_ed2_homes_cursor(self):
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("\033[5;10Htext\033[2J")
@@ -65,7 +65,8 @@ class TestBBSScreen:
         assert s.cursor.y == 0
 
     def test_ed0_preserves_cursor(self):
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("\033[5;10H\033[0J")
@@ -73,19 +74,22 @@ class TestBBSScreen:
         assert s.cursor.y == 4
 
     def test_decawm_disabled_by_default(self):
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         assert pyte.modes.DECAWM not in s.mode
 
     def test_decawm_not_re_enabled_by_set_mode(self):
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("\033[?7h")
         assert pyte.modes.DECAWM not in s.mode
 
     def test_decawm_not_re_enabled_by_ris(self):
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("\033c")
@@ -97,7 +101,8 @@ class TestBBSScreen:
         With DECAWM disabled, all 80 chars stay on the same line.
         With DECAWM enabled, the 80th char wraps to line 2.
         """
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("X" * 80)
@@ -112,7 +117,8 @@ class TestBBSScreen:
         With DECAWM, the 80th char wraps first (creating line 2), then
         CR+LF pushes to line 3, creating a blank line.
         """
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("X" * 80 + "\r\nABCD")
@@ -125,7 +131,8 @@ class TestBBSScreen:
 
     def test_80th_column_character_remains_last_on_line(self):
         """79 then a character: both on line 0, no wrap to line 1."""
-        from telix.metaterminal import BBSScreen
+        from telix.graphics_writer_octant import BBSScreen
+
         s = BBSScreen(80, 25)
         st = pyte.Stream(s)
         st.feed("A" * 79 + "B")
@@ -135,7 +142,6 @@ class TestBBSScreen:
 
 
 class TestPyteColorToRgb:
-
     def test_default_fg(self):
         assert pyte_color_to_rgb("default", False, True, VGA) == VGA[7]
 
@@ -163,12 +169,11 @@ class TestPyteColorToRgb:
         assert pyte_color_to_rgb("nonsense", False, True, VGA) == VGA[7]
 
 
-class TestMetaTerminalWriter:
-
+class TestOctantWriter:
     def _make_writer(self, columns=80, rows=25, encoding="cp437"):
         inner = FakeWriter()
         ctx = FakeCtx(encoding)
-        return MetaTerminalWriter(inner, ctx, columns=columns, rows=rows), inner
+        return OctantWriter(inner, ctx, columns=columns, rows=rows), inner
 
     def test_init_switches_to_altscreen(self):
         mtw, inner = self._make_writer()
@@ -215,14 +220,32 @@ class TestMetaTerminalWriter:
         mtw, _ = self._make_writer(columns=80, rows=25)
         assert mtw.virtual_size() == (25, 80)
 
+    def test_virtual_size_custom_columns(self):
+        mtw, _ = self._make_writer(columns=40, rows=25)
+        assert mtw.virtual_size() == (25, 40)
+
     def test_resize(self, monkeypatch):
-        monkeypatch.setattr("telix.metaterminal.terminal.get_terminal_size", lambda: (50, 160))
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
         mtw, _ = self._make_writer(columns=80, rows=25)
         mtw.resize(160, 50)
         assert mtw.columns == 40
         assert mtw.rows == 12
         assert mtw._real_cols == 160
         assert mtw._real_rows == 50
+
+    def test_resize_with_graphics_columns_set(self, monkeypatch):
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+        mtw, _ = self._make_writer(columns=40, rows=25)
+        mtw.ctx.repl.graphics_columns = 40
+        mtw.resize(160, 50)
+        assert mtw.columns == 40
+
+    def test_resize_with_graphics_columns_none(self, monkeypatch):
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+        mtw, _ = self._make_writer(columns=80, rows=25)
+        mtw.ctx.repl.graphics_columns = None
+        mtw.resize(160, 50)
+        assert mtw.columns == 40
 
     def test_resize_too_small_ignored(self):
         mtw, _ = self._make_writer(columns=80, rows=25)
@@ -255,7 +278,7 @@ class TestMetaTerminalWriter:
         assert output.endswith("\033[?2026l")
 
     def test_schedule_resize_applied_on_write(self, monkeypatch):
-        monkeypatch.setattr("telix.metaterminal.terminal.get_terminal_size", lambda: (48, 160))
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (48, 160))
         mtw, inner = self._make_writer(columns=80, rows=25)
         mtw.schedule_resize(160, 48)
         assert mtw._pending_resize == (160, 48)
@@ -297,7 +320,7 @@ class TestMetaTerminalWriter:
         ctx = FakeCtx()
         fake_writer = FakeWriter()
         ctx.writer = fake_writer
-        mtw = MetaTerminalWriter(inner, ctx, columns=80, rows=25)
+        mtw = OctantWriter(inner, ctx, columns=80, rows=25)
         mtw.write(b"\x1b[6n")
         cpr = fake_writer.output
         assert cpr == "\x1b[1;1R"
@@ -316,11 +339,11 @@ class TestMetaTerminalWriter:
         assert "\033[" in output
 
     def test_utf8_decode_reverses_raw_event_loop_encoding(self):
-        """MetaTerminalWriter decodes stdin as UTF-8, not the connection encoding.
+        """OctantWriter decodes stdin as UTF-8, not the connection encoding.
 
         telnetlib3's _raw_event_loop decodes wire bytes as the connection
         encoding (e.g. iso-8859-1) and re-encodes the str as UTF-8 via
-        out.encode() before writing to stdout.  MetaTerminalWriter decodes
+        out.encode() before writing to stdout.  OctantWriter decodes
         as UTF-8 to recover the original Unicode string, preventing
         double-encoding that would split a single glyph into two.
         """

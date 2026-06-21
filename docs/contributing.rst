@@ -16,26 +16,95 @@ necessary, the major version is incremented.
 
 This project does *not* follow semantic versioning for Python functions, classes, modules, or their
 signatures -- **any name can change at any time**.  It is not recommended to ``import telix`` for
-use in other projects.
+use in serious projects.
 
 Architecture
 ------------
 
-Telix is primarily a TUI interface for MUD scripting over Telnet. It also includes support for
-BBS, and the WebSocket and SSH protocol. Telix is mainly a TUI and automation/scripting layer
-above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_, numpy_.
+Telix is primarily a TUI interface for MUDs and BBSs over Telnet, WebSocket and SSH.  For MUDs,
+Telix provides a nice TUI for automations and GMCP data, and "line mode" appropriate for those.  For
+BBSs, it provides color correction, automatic encoding translations, and era-accurate retrocomputing
+colors and fonts using modern terminal graphics protocols like kitty or sixel, or modern unicode 16
+fonts supporting octants.
 
-wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.  wcwidth_ is used to
-measure the width of strings containing sequences and complex unicode. blessed_ is depended on for
-general terminal support for access to terminal sequence, feature detection, and keyboard handling,
-and to provide the REPL for MUD connections. telnetlib3_ also requires blessed, and, textual_ is
-used for all complex TUIs, which depends on its core library rich_.  For Windows systems, jinxed_ is
-used by both Telix and telnetlib3_ for msvcrt keyboard routines.
-numpy_ provides vectorized image processing for the sixel and kitty
-graphics renderers.
+Dependencies
+------------
 
-Run ``head -n 2 telix/*.py telix/fonts/*.py`` for a quick file overview.
-Each module also carries a one-line docstring describing its purpose.
+textual_, blessed_, and wcwidth_ is used for the User Interface.  telnetlib3_, asyncssh_,
+websockets_ for networking.  numpy_ is used for graphics rendering of retrocomputing fonts.
+
+wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_ for string operations
+related to measuring the width of strings containing sequences and complex unicode like emojis.
+
+blessed_ is depended on for general terminal support for access to terminal sequence, feature
+detection, and keyboard handling, and to provide the REPL for MUD connections. telnetlib3_ also
+requires blessed on windows for keyboard support in its win32 client shell, the same client shell
+integrated with by Telix.
+
+textual_ is used for all complex TUIs, which depends on its core library rich_.  For Windows
+systems, jinxed_ is used by both Telix and telnetlib3_ for msvcrt keyboard routines.  numpy_
+provides vectorized image processing for the sixel and kitty graphics renderers.
+
+File overview
+-------------
+
+The following is auto-generated as a convenience, of the first line of python docstring of each file.
+
+.. begin-file-overview
+.. code-block:: text
+
+    __init__.py                    telix: a TUI telnet and MUD client.
+    chat.py                        Chat message persistence for GMCP ``Comm.Channel.Text``.
+    client_repl.py                 REPL and TUI components for linemode telnet client sessions.
+    client_repl_color.py           HSV/RGB colour math and vital-bar flash animation helpers.
+    client_repl_commands.py        Command expansion, queuing, chained command sending, and macro execution.
+    client_repl_dialogs.py         TUI thread-based management: confirmation dialogs, help screen, editor launchers.
+    client_repl_render.py          Vital-bar rendering, toolbar layout, and display helpers.
+    client_repl_sextant.py         Sextant block character table and password scrambling.
+    client_repl_travel.py          Movement and pathfinding: travel, autodiscover, randomwalk.
+    client_shell.py                Telix client shell -- wraps telnetlib3's terminal handling with REPL support.
+    client_tui.py                  Textual TUI session manager for telix -- re-export hub.
+    client_tui_app.py              Main Textual application and entry point for the telix TUI.
+    client_tui_bars.py             Progress bar and theme editor panes and screens for the telix TUI.
+    client_tui_base.py             Foundation layer for the Textual TUI editor infrastructure.
+    client_tui_captures.py         Highlight captures and chat viewer screens for the telix TUI.
+    client_tui_dialogs.py          Confirmation dialogs, walk dialogs, and the tabbed editor screen.
+    client_tui_editors.py          Standalone entry points for the Textual TUI editor panes.
+    client_tui_highlights.py       Highlight editor pane and screen for the telix TUI.
+    client_tui_macros.py           Macro editor pane and screen for the telix TUI.
+    client_tui_rooms.py            Room browser, picker, and graph editor screens for the telix TUI.
+    client_tui_session_manager.py  Session management layer for the Textual TUI.
+    client_tui_triggers.py         Trigger editor pane and screen for the telix TUI.
+    color_filter.py                ANSI color palette translation for MUD/BBS client output.
+    directory.py                   Load the bundled MUD/BBS directory and convert to session configs.
+    fonts/font_registry.py         SyncTERM font registry.
+    gmcp_snapshot.py               Rolling GMCP data snapshot persistence.
+    graphics_renderer.py           Sixel and Kitty graphics protocol encoders.
+    graphics_writer.py             Graphics writer: pyte virtual terminal rendered via sixel/kitty graphics.
+    highlighter.py                 Output text highlighting engine for MUD client sessions.
+    macros.py                      Macro key binding support for the REPL client.
+    main.py                        Entry point for the telix CLI.
+    graphics_bmpfont.py              Bitmap font rendering via Unicode octant block characters.
+    graphics_writer_octant.py         Octant writer: pyte virtual terminal with octant bitmap font rendering.
+    mslp.py                        MSLP (Mud Server Link Protocol) keyboard navigation.
+    mtts.py                        MTTS and MNES protocol support.
+    paths.py                       Consolidated XDG Base Directory paths for telix.
+    progressbars.py                Progress bar configuration model for the GMCP vitals toolbar.
+    repl_theme.py                  Resolve the user's Textual theme into concrete hex colors for the blessed REPL.
+    rooms.py                       Room graph tracking, BFS pathfinding, and SQLite persistence for GMCP Room.Info data.
+    scripts.py                     Async Python scripting engine for telix.
+    session_context.py             Per-connection session state for MUD client sessions.
+    ssh_client.py                  SSH client for telix.
+    ssh_transport.py               SSH reader/writer adapters for telix sessions.
+    terminal.py                    Platform dispatcher for terminal operations.
+    terminal_unix.py               Unix-specific terminal operations for the telix REPL.
+    terminal_win32.py              Windows terminal operations for the telix REPL (stubs).
+    trigger.py                     Server output pattern matching and automatic reply engine.
+    util.py                        Small shared utility functions.
+    ws_client.py                   WebSocket client for telix.
+    ws_transport.py                WebSocket reader/writer adapters for MUD client sessions.
+
+.. end-file-overview
 
 Developing
 ----------
@@ -308,11 +377,11 @@ Data arriving **before** the REPL event loop starts is buffered in
 the telnet reader's internal buffer and consumed by the first
 ``read()`` call in ``read_server``.
 
-Octant metafont pipeline
+Octant rendering pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-When ``--metafont`` is enabled, the raw-mode output path uses
-``MetaTerminalWriter`` (``metaterminal.py``) instead of
+When ``--graphics-font octants`` is enabled, the raw-mode output path uses
+``graphics_writer_octant.OctantWriter`` (``graphics_writer_octant.py``) instead of
 ``ColorFilteredWriter``.  The pipeline:
 
 1. **Decode** -- raw bytes are decoded using the font's wire encoding
@@ -333,7 +402,7 @@ When ``--metafont`` is enabled, the raw-mode output path uses
 
 5. **Render** -- each changed cell's character is mapped back to a byte
    index via the font's encoding, then looked up in the 8x16 bitmap
-   font (``metafont.py``).  The 16-row bitmap is divided into a 4x4
+   font (``graphics_bmpfont.py``).  The 16-row bitmap is divided into a 4x4
    grid of 2x4 pixel blocks, each encoded as a Unicode octant character
    (U+1CD00 range) with 24-bit foreground/background SGR colors.
 

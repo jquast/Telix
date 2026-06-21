@@ -78,10 +78,7 @@ def detect_graphics_protocol(term) -> str | None:
     return None
 
 
-def _quantize_colors(
-    colors: np.ndarray,
-    n_colors: int,
-) -> tuple[np.ndarray, np.ndarray]:
+def _quantize_colors(colors: np.ndarray, n_colors: int) -> tuple[np.ndarray, np.ndarray]:
     """Quantize RGB colors to a uniform cube palette.
 
     Picks the largest ``levels`` such that ``levels ** 3 <= n_colors`` and
@@ -101,7 +98,7 @@ def _quantize_colors(
     b = (colors[:, :, 2] * (levels - 0.001)).astype(np.uint8)
     indices = r * levels * levels + g * levels + b
 
-    n_actual = levels ** 3
+    n_actual = levels**3
     palette = np.zeros((n_actual, 3), dtype=np.float32)
     for i in range(n_actual):
         ri = i // (levels * levels)
@@ -112,12 +109,7 @@ def _quantize_colors(
     return indices.astype(np.uint8), palette
 
 
-def encode_sixel(
-    colors: np.ndarray,
-    dest: io.TextIOBase,
-    max_colors: int = 256,
-    scale: int = 1,
-) -> None:
+def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256, scale: int = 1) -> None:
     """Encode an RGB image as a sixel escape sequence and write to *dest*.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
@@ -160,7 +152,7 @@ def encode_sixel(
             changes = np.diff(patterns, prepend=np.uint8(~patterns[0]))
             run_starts = np.where(changes != 0)[0]
             run_lengths = np.diff(np.append(run_starts, w))
-            for start, length in zip(run_starts, run_lengths):
+            for start, length in zip(run_starts, run_lengths, strict=False):
                 pat = int(patterns[start])
                 char = chr(0x3F + pat)
                 if length > 3:
@@ -221,13 +213,7 @@ def _try_pil_png(colors: np.ndarray) -> bytes | None:
     return buf.getvalue()
 
 
-def encode_kitty(
-    colors: np.ndarray,
-    dest: io.TextIOBase,
-    fmt: str = "png",
-    columns: int = 0,
-    rows: int = 0,
-) -> None:
+def encode_kitty(colors: np.ndarray, dest: io.TextIOBase, fmt: str = "png", columns: int = 0, rows: int = 0) -> None:
     """Encode an RGB image as a Kitty graphics escape sequence and write to *dest*.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.

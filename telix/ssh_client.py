@@ -164,12 +164,9 @@ async def run_ssh_client(
     cols, rows = shutil.get_terminal_size()
 
     if color_args is not None:
-        if color_args.metafont:
-            cols = color_args.metafont_columns or 80
-            rows = color_args.metafont_rows or 25
-        elif color_args.use_graphics_font:
-            cols = 80
-            rows = 25
+        if color_args.graphics_font:
+            cols = color_args.graphics_columns or 80
+            rows = color_args.graphics_rows or 25
 
     async with asyncssh.connect(
         host,
@@ -251,22 +248,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="color contrast multiplier (default: 1.0)",
     )
-    telix.add_argument(
-        "--force-black-bg",
-        action="store_true",
-        default=False,
-        dest="force_black_bg",
-        help="use pure black background, ignoring detected background color",
-    )
     telix.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
     telix.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
     telix.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
-    telix.add_argument("--use-graphics-font", action="store_true", default=False, dest="use_graphics_font")
-    telix.add_argument("--metafont", action="store_true", default=False, dest="metafont")
-    telix.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
-    telix.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
-    telix.add_argument("--font-id", type=int, default=None, dest="font_id",
-                       help="font id for graphics/metafont rendering (default: 0)")
+    telix.add_argument("--graphics-font", nargs="?", const="auto", default="", dest="graphics_font")
+    telix.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
+    telix.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
+    telix.add_argument(
+        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics/octant rendering (default: 0)"
+    )
     return parser
 
 
@@ -288,14 +278,12 @@ def main() -> None:
         color_contrast=args.color_contrast,
         background_color=args.background_color,
         no_ice_colors=args.no_ice_colors,
-        force_black_bg=args.force_black_bg,
         ansi_keys=args.ansi_keys,
         clear_homes_cursor=args.clear_homes_cursor,
         ff_clears_screen=args.ff_clears_screen,
-        use_graphics_font=args.use_graphics_font,
-        metafont=args.metafont,
-        metafont_columns=args.metafont_columns,
-        metafont_rows=args.metafont_rows,
+        graphics_font=args.graphics_font,
+        graphics_columns=args.graphics_columns,
+        graphics_rows=args.graphics_rows,
         font_id=args.font_id,
     )
 

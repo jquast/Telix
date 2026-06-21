@@ -18,7 +18,7 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from telix.metafont import OCTANT, glyph_to_octants, load_font  # noqa: E402
+from telix.graphics_bmpfont import OCTANT, glyph_to_octants, load_font  # noqa: E402
 from telix.fonts.font_registry import FONT_BY_SHORT_NAME  # noqa: E402
 
 GLYPH_COLS = 4  # octant cells per glyph (horizontal)

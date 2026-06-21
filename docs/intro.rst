@@ -92,13 +92,14 @@ For a full list of CLI options:
 .. begin-cli-help
 .. code-block:: text
 
-    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
-                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N] [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
-                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE] [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL] [--no-repl]
-                 [--raw-mode] [--send-environ VARS] [--shell SHELL] [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM]
-                 [--typescript FILE] [--typescript-mode {append,rewrite}] [--key-file FILE] [--username USER] [--background-color COLOR]
-                 [--bbs] [--color-brightness N] [--color-contrast N] [--colormatch PALETTE] [--mud] [--clear-homes-cursor] [--ff-clears-screen]
-                 [--use-graphics-font] [--metafont] [--metafont-columns N] [--metafont-rows N] [--no-ice-colors]
+    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT] [--ansi-keys] [--ascii-eol]
+                 [--compression] [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N] [--encoding ENCODING]
+                 [--encoding-errors ENCODING_ERRORS] [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
+                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL] [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
+                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM] [--typescript FILE]
+                 [--typescript-mode {append,rewrite}] [--key-file FILE] [--username USER] [--background-color COLOR] [--bbs]
+                 [--color-brightness N] [--color-contrast N] [--colormatch PALETTE] [--mud] [--clear-homes-cursor] [--ff-clears-screen]
+                 [--graphics-font MODE] [--graphics-columns N] [--graphics-rows N] [--no-ice-colors]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -160,10 +161,9 @@ For a full list of CLI options:
       --mud                 apply MUD connection presets
       --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm compatibility)
       --ff-clears-screen    treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)
-      --use-graphics-font   render using kitty/sixel terminal graphics
-      --metafont            render using octant bitmap metafonts
-      --metafont-columns N  force virtual terminal columns for metafont (e.g. 40)
-      --metafont-rows N     force virtual terminal rows for metafont (default: 25)
+      --graphics-font MODE  font graphics mode: auto, octants, or empty
+      --graphics-columns N  force virtual terminal columns for graphics font (e.g. 40)
+      --graphics-rows N     force virtual terminal rows for graphics font (default: 25)
       --no-ice-colors       disable iCE color (blink as bright background) support
 
 .. end-cli-help

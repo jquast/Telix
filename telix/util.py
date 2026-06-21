@@ -129,3 +129,34 @@ def relative_time(iso_str: str) -> str:
         return f"{days}d ago"
     except (ValueError, TypeError):
         return iso_str[:10]
+
+
+def select_radio_button(radio_set: typing.Any, target_button: typing.Any) -> None:
+    """Programmatically select a RadioButton without triggering RadioSet fight conditions.
+
+    RadioSet's ``_on_radio_button_changed`` handler sets any deselected button
+    back to ``True``, which causes a cascade of opposing value changes when buttons
+    are set programmatically.  This function works around that by disabling
+    ``RadioButton.Changed`` message posting on every button in the set before
+    changing values, then re-enabling it in a ``finally`` block.
+
+    ``radio_set._pressed_button`` and ``_selected`` are updated directly to keep
+    internal state consistent.
+
+    :param radio_set: The ``RadioSet`` widget containing the buttons.
+    :param target_button: The ``RadioButton`` widget to select.
+    """
+    # Import here to avoid top-level dependency on textual in util.py.
+    import textual.widgets
+
+    buttons = list(radio_set.query(textual.widgets.RadioButton))
+    for btn in buttons:
+        btn.disable_messages(textual.widgets.RadioButton.Changed)
+    try:
+        for btn in buttons:
+            btn.value = btn is target_button
+        radio_set._pressed_button = target_button
+        radio_set._selected = radio_set._nodes.index(target_button)
+    finally:
+        for btn in buttons:
+            btn.enable_messages(textual.widgets.RadioButton.Changed)

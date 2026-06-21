@@ -205,10 +205,7 @@ class ClearHomesWriter:
     """
 
     def __init__(
-        self,
-        inner: asyncio.StreamWriter,
-        clear_homes_cursor: bool = True,
-        ff_clears_screen: bool = False,
+        self, inner: asyncio.StreamWriter, clear_homes_cursor: bool = True, ff_clears_screen: bool = False
     ) -> None:
         self.inner = inner
         self.clear_homes_cursor = clear_homes_cursor
@@ -242,26 +239,31 @@ class ColorFilteredWriter:
     ) -> None:
         self.inner = inner
         self.ctx = ctx
-        self.encoding = encoding or ctx.encoding or "utf-8"
+        self.encoding = encoding or "utf-8"
         self._decoder: codecs.IncrementalDecoder | None = None
 
     def write(self, data: bytes) -> None:
-        """Filter *data* through the color filter if one is active, then write."""
+        """Filter *data* through the color filter if one is active, then write.
+
+        *data* arrives as UTF-8 encoded bytes from telnetlib3's
+        ``_raw_event_loop``, which decodes wire bytes using the connection
+        encoding (e.g. atascii) and re-encodes as UTF-8 with ``out.encode()``.
+        We decode as UTF-8 to recover the original Unicode string, filter,
+        and re-encode as UTF-8.
+        """
         if self.ctx.repl.ff_clears_screen:
             data = replace_ff_with_clear(data)
         if self.ctx.repl.clear_homes_cursor:
             data = inject_home_before_clear(data)
         cf = self.ctx.repl.color_filter
         if cf is not None:
-            cur_encoding = self.ctx.encoding or self.encoding
-            if self._decoder is None or cur_encoding != getattr(self._decoder, "_encoding", ""):
-                self._decoder = codecs.getincrementaldecoder(cur_encoding)(errors="replace")
-                self._decoder._encoding = cur_encoding  # type: ignore[attr-defined]
+            if self._decoder is None:
+                self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
             text = self._decoder.decode(data)
             text = cf.filter(text)
             if self.ctx.repl.erase_eol:
                 text = util.erase_eol(text)
-            data = text.encode(cur_encoding, errors="replace")
+            data = text.encode("utf-8", errors="replace")
         self.inner.write(data)
 
     def __getattr__(self, name: str) -> typing.Any:
@@ -400,11 +402,6 @@ def setup_color_filter(
         r, g, b = (int(x) for x in fg_env.split(","))
         fg_color = (r, g, b)
 
-    force_black_bg = args.force_black_bg
-    if force_black_bg:
-        bg_color = (0, 0, 0)
-        fg_color = None
-
     color_config = color_filter.ColorConfig(
         palette_name=colormatch,
         brightness=args.color_brightness,
@@ -412,7 +409,6 @@ def setup_color_filter(
         background_color=bg_color,
         ice_colors=not args.no_ice_colors,
         foreground_color=fg_color,
-        force_black_bg=force_black_bg,
     )
     ctx.repl.color_filter = color_filter.ColorFilter(color_config)
     ctx.repl.erase_eol = True
@@ -448,40 +444,28 @@ def setup_clear_homes(ctx: "session_context.TelixSessionContext") -> None:
 
 def setup_graphics_font(ctx: "session_context.TelixSessionContext") -> None:
     """
-    Configure kitty/sixel graphics rendering from telix CLI args.
+    Configure graphics font rendering from telix CLI args.
+
+    Reads ``ctx.color_args`` for ``--graphics-font``,
+    ``--graphics-columns``, and ``--graphics-rows`` flags.
 
     :param ctx: Session context to update.
     """
     args = ctx.color_args
     if args is None:
         return
-    ctx.repl.graphics_font = args.use_graphics_font
-
-
-def setup_metafont(ctx: "session_context.TelixSessionContext") -> None:
-    """
-    Configure metafont rendering from telix CLI args.
-
-    Reads ``ctx.color_args`` for ``--metafont``, ``--metafont-font-id``,
-    and ``--metafont-columns`` flags.
-
-    :param ctx: Session context to update.
-    """
-    args = ctx.color_args
-    if args is None:
-        return
-    ctx.repl.metafont = args.metafont
-    ctx.repl.metafont_columns = args.metafont_columns
-    ctx.repl.metafont_rows = args.metafont_rows
+    ctx.repl.graphics_font = args.graphics_font
+    ctx.repl.graphics_columns = args.graphics_columns
+    ctx.repl.graphics_rows = args.graphics_rows
 
 
 def setup_font_id(ctx: "session_context.TelixSessionContext") -> None:
     """
-    Configure initial font id for graphics/metafont rendering from CLI args.
+    Configure initial font id for graphics/octant rendering from CLI args.
 
     When ``--font-id`` is specified, overrides the default font (0, IBM VGA)
     for :class:`~telix.graphics_writer.GraphicsWriter` and
-    :class:`~telix.metaterminal.MetaTerminalWriter`.
+    :class:`~telix.graphics_writer_octant.OctantWriter`.
 
     :param ctx: Session context to update.
     """
@@ -494,12 +478,16 @@ def setup_font_id(ctx: "session_context.TelixSessionContext") -> None:
 def _setup_resize_and_naws(raw_stdout: typing.Any, writer: typing.Any, tty_shell: typing.Any) -> None:
     """Wire SIGWINCH handler and NAWS reporting for a meta/graphics writer."""
     if writer is not None and hasattr(writer, "handle_send_naws"):
+
         def _naws() -> tuple[int, int]:
             return raw_stdout.virtual_size()
+
         writer.handle_send_naws = _naws  # type: ignore[method-assign]
     if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
         import signal
+
         import telnetlib3.telopt
+
         try:
             loop = asyncio.get_event_loop()
 
@@ -524,12 +512,13 @@ def make_raw_stdout(
     """
     Build the raw-mode stdout wrapper appropriate for the session config.
 
-    Returns a :class:`MetaTerminalWriter` when metafont is enabled,
+    Returns a :class:`GraphicsWriter` when ``graphics_font`` is ``"auto"``,
+    a :class:`OctantWriter` when ``graphics_font`` is ``"octants"``,
     a :class:`ColorFilteredWriter` when a color filter is active,
     or the raw *stdout* otherwise.
 
-    When metafont is enabled, also patches NAWS reporting on *writer* to
-    return the virtual terminal size, and sets *tty_shell.on_resize* to
+    When a graphics font is enabled, also patches NAWS reporting on *writer*
+    to return the virtual terminal size, and sets *tty_shell.on_resize* to
     schedule a resize on the next write (no I/O from the signal handler).
 
     :param stdout: The underlying asyncio stream to real stdout.
@@ -538,7 +527,7 @@ def make_raw_stdout(
     :param writer: Telnet/WS/SSH writer (for NAWS patching).
     :returns: Wrapped or raw stdout writer.
     """
-    if ctx.repl.graphics_font:
+    if ctx.repl.graphics_font == "auto":
         import blessed
 
         from . import graphics_writer, graphics_renderer
@@ -555,29 +544,34 @@ def make_raw_stdout(
             cell_px_w = px_w // real_cols if px_w and real_cols else 0
             cell_px_h = px_h // real_rows if px_h and real_rows else 0
             log.debug("cell px: %dx%d (from XTWINOPS 14t/16t)", cell_px_w, cell_px_h)
+            columns = ctx.repl.graphics_columns or 80
+            rows = ctx.repl.graphics_rows or 25
             gtw = graphics_writer.GraphicsWriter(
-                stdout, ctx, protocol, cell_px_w=cell_px_w, cell_px_h=cell_px_h,
+                stdout,
+                ctx,
+                protocol,
+                columns=columns,
+                rows=rows,
+                cell_px_w=cell_px_w,
+                cell_px_h=cell_px_h,
                 font_id=ctx.repl.font_id,
             )
             _setup_resize_and_naws(gtw, writer, tty_shell)
             return gtw
 
-    if ctx.repl.metafont:
-        from . import metaterminal
+    if ctx.repl.graphics_font == "octants":
+        from . import graphics_writer_octant
 
-        columns = ctx.repl.metafont_columns or 80
-        rows = ctx.repl.metafont_rows or 25
-        mtw = metaterminal.MetaTerminalWriter(stdout, ctx, columns=columns, rows=rows,
-                                               font_id=ctx.repl.font_id)
+        columns = ctx.repl.graphics_columns or 80
+        rows = ctx.repl.graphics_rows or 25
+        mtw = graphics_writer_octant.OctantWriter(stdout, ctx, columns=columns, rows=rows, font_id=ctx.repl.font_id)
         _setup_resize_and_naws(mtw, writer, tty_shell)
         return mtw
     if ctx.repl.color_filter is not None:
         return ColorFilteredWriter(stdout, ctx)
     if ctx.repl.clear_homes_cursor or ctx.repl.ff_clears_screen:
         return ClearHomesWriter(
-            stdout,
-            clear_homes_cursor=ctx.repl.clear_homes_cursor,
-            ff_clears_screen=ctx.repl.ff_clears_screen,
+            stdout, clear_homes_cursor=ctx.repl.clear_homes_cursor, ff_clears_screen=ctx.repl.ff_clears_screen
         )
     return stdout
 
@@ -618,7 +612,6 @@ async def telix_client_shell(
     setup_ansi_keys(ctx)
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
-    setup_metafont(ctx)
     setup_font_id(ctx)
 
     # 3. Setup GMCP callbacks
@@ -813,7 +806,6 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
     setup_color_filter(ctx, ssh_writer)  # type: ignore[arg-type]
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
-    setup_metafont(ctx)
     setup_font_id(ctx)
 
     keyboard_escape = ctx.repl.keyboard_escape
@@ -919,11 +911,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     # 2. Load per-session configs.
     load_configs(ctx)
 
-    # 2b. Set up color filter and metafont from CLI args.
+    # 2b. Set up color filter and graphics font from CLI args.
     setup_color_filter(ctx, ws_writer)
     setup_clear_homes(ctx)
     setup_graphics_font(ctx)
-    setup_metafont(ctx)
     setup_font_id(ctx)
 
     # 3. Wire GMCP dispatch (no base callback -- WebSocket has none).

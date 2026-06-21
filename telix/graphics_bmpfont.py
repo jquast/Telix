@@ -1,4 +1,4 @@
-"""Bitmap font rendering via Unicode octant block characters.
+"""Bitmap font rendering for graphics font mode.
 
 Each 8x16 bitmap glyph becomes a 4x4 block of real terminal cells,
 using Unicode octant characters (U+1CD00-U+1CDE5 plus legacy block elements).
@@ -19,32 +19,32 @@ FONT_BIN_PATH = pathlib.Path(__file__).parent / "fonts" / "syncterm_fonts.bin"
 #     bit4  bit5
 #     bit6  bit7
 _OCTANT_SPECIALS: dict[int, int] = {
-    0x00: 0x00A0,   # NO-BREAK SPACE
+    0x00: 0x00A0,  # NO-BREAK SPACE
     0x01: 0x1CEA8,  # LEFT HALF UPPER ONE QUARTER BLOCK
     0x02: 0x1CEAB,  # RIGHT HALF UPPER ONE QUARTER BLOCK
     0x03: 0x1FB82,  # UPPER ONE QUARTER BLOCK
-    0x05: 0x2598,   # QUADRANT UPPER LEFT
-    0x0A: 0x259D,   # QUADRANT UPPER RIGHT
-    0x0F: 0x2580,   # UPPER HALF BLOCK
+    0x05: 0x2598,  # QUADRANT UPPER LEFT
+    0x0A: 0x259D,  # QUADRANT UPPER RIGHT
+    0x0F: 0x2580,  # UPPER HALF BLOCK
     0x14: 0x1FBE6,  # MIDDLE LEFT ONE QUARTER BLOCK
     0x28: 0x1FBE7,  # MIDDLE RIGHT ONE QUARTER BLOCK
     0x3F: 0x1FB85,  # UPPER THREE QUARTERS BLOCK
     0x40: 0x1CEA3,  # LEFT HALF LOWER ONE QUARTER BLOCK
-    0x50: 0x2596,   # QUADRANT LOWER LEFT
-    0x55: 0x258C,   # LEFT HALF BLOCK
-    0x5A: 0x259E,   # QUADRANT UPPER RIGHT AND LOWER LEFT
-    0x5F: 0x259B,   # QUADRANT UPPER LEFT AND UPPER RIGHT AND LOWER LEFT
+    0x50: 0x2596,  # QUADRANT LOWER LEFT
+    0x55: 0x258C,  # LEFT HALF BLOCK
+    0x5A: 0x259E,  # QUADRANT UPPER RIGHT AND LOWER LEFT
+    0x5F: 0x259B,  # QUADRANT UPPER LEFT AND UPPER RIGHT AND LOWER LEFT
     0x80: 0x1CEA0,  # RIGHT HALF LOWER ONE QUARTER BLOCK
-    0xA0: 0x2597,   # QUADRANT LOWER RIGHT
-    0xA5: 0x259A,   # QUADRANT UPPER LEFT AND LOWER RIGHT
-    0xAA: 0x2590,   # RIGHT HALF BLOCK
-    0xAF: 0x259C,   # QUADRANT UPPER LEFT AND UPPER RIGHT AND LOWER RIGHT
-    0xC0: 0x2582,   # LOWER ONE QUARTER BLOCK
-    0xF0: 0x2584,   # LOWER HALF BLOCK
-    0xF5: 0x2599,   # QUADRANT UPPER LEFT AND LOWER LEFT AND LOWER RIGHT
-    0xFA: 0x259F,   # QUADRANT UPPER RIGHT AND LOWER LEFT AND LOWER RIGHT
-    0xFC: 0x2586,   # LOWER THREE QUARTERS BLOCK
-    0xFF: 0x2588,   # FULL BLOCK
+    0xA0: 0x2597,  # QUADRANT LOWER RIGHT
+    0xA5: 0x259A,  # QUADRANT UPPER LEFT AND LOWER RIGHT
+    0xAA: 0x2590,  # RIGHT HALF BLOCK
+    0xAF: 0x259C,  # QUADRANT UPPER LEFT AND UPPER RIGHT AND LOWER RIGHT
+    0xC0: 0x2582,  # LOWER ONE QUARTER BLOCK
+    0xF0: 0x2584,  # LOWER HALF BLOCK
+    0xF5: 0x2599,  # QUADRANT UPPER LEFT AND LOWER LEFT AND LOWER RIGHT
+    0xFA: 0x259F,  # QUADRANT UPPER RIGHT AND LOWER LEFT AND LOWER RIGHT
+    0xFC: 0x2586,  # LOWER THREE QUARTERS BLOCK
+    0xFF: 0x2588,  # FULL BLOCK
 }
 
 _SPECIAL_KEYS_SORTED: list[int] = sorted(_OCTANT_SPECIALS)
@@ -97,7 +97,7 @@ class BitmapFont:
         Each int is an 8-bit mask, MSB = leftmost pixel.
         """
         offset = char_code * font_registry.GLYPH_HEIGHT
-        return list(self.data[offset:offset + font_registry.GLYPH_HEIGHT])
+        return list(self.data[offset : offset + font_registry.GLYPH_HEIGHT])
 
 
 _font_cache: dict[int, BitmapFont] = {}
@@ -123,7 +123,7 @@ def load_font(font_id: int) -> BitmapFont:
 
     entry = font_registry.FONT_BY_ID[font_id]
     bin_data = load_font_bin()
-    font_data = bin_data[entry.bin_offset:entry.bin_offset + font_registry.FONT_BYTES]
+    font_data = bin_data[entry.bin_offset : entry.bin_offset + font_registry.FONT_BYTES]
     font = BitmapFont(font_id, font_data, entry.name, entry.encoding)
     _font_cache[font_id] = font
     return font
@@ -169,12 +169,7 @@ def glyph_to_octants(bitmap: list[int]) -> list[list[int]]:
     return result
 
 
-def render_cell(
-    char_code: int,
-    fg: tuple[int, int, int],
-    bg: tuple[int, int, int],
-    font: BitmapFont,
-) -> list[str]:
+def render_cell(char_code: int, fg: tuple[int, int, int], bg: tuple[int, int, int], font: BitmapFont) -> list[str]:
     """Render a single BBS character as 4 lines of 4 octant characters each.
 
     :param char_code: Character code (0--255) in the font's codepage.

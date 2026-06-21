@@ -1,28 +1,20 @@
-"""Tests for telix.metafont -- octant bitmap font rendering."""
+"""Tests for telix.graphics_bmpfont -- octant bitmap font rendering."""
 
 import pytest
 
-from telix.metafont import (
+from telix.graphics_bmpfont import (
     OCTANT,
     CELLS_PER_CHAR_X,
     CELLS_PER_CHAR_Y,
     BitmapFont,
-    glyph_to_octants,
     load_font,
     render_cell,
+    glyph_to_octants,
 )
-from telix.fonts.font_registry import (
-    FONT_TABLE,
-    FONT_BY_ID,
-    FONT_BY_SHORT_NAME,
-    FONT_BYTES,
-    GLYPH_HEIGHT,
-    FontEntry,
-)
+from telix.fonts.font_registry import FONT_BY_ID, FONT_BYTES, FONT_TABLE, GLYPH_HEIGHT, FONT_BY_SHORT_NAME, FontEntry
 
 
 class TestOctantTable:
-
     def test_table_length(self):
         assert len(OCTANT) == 256
 
@@ -53,7 +45,6 @@ class TestOctantTable:
 
 
 class TestFontRegistry:
-
     def test_45_fonts(self):
         assert len(FONT_TABLE) == 45
 
@@ -88,7 +79,6 @@ class TestFontRegistry:
 
 
 class TestBitmapFont:
-
     @pytest.fixture()
     def cp437(self):
         return load_font(0)
@@ -126,7 +116,6 @@ class TestBitmapFont:
 
 
 class TestGlyphToOctants:
-
     def test_empty_glyph(self):
         bitmap = [0] * 16
         grid = glyph_to_octants(bitmap)
@@ -172,7 +161,6 @@ class TestGlyphToOctants:
 
 
 class TestRenderCell:
-
     def test_returns_4_lines(self):
         font = load_font(0)
         lines = render_cell(0x41, (255, 255, 255), (0, 0, 0), font)

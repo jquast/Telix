@@ -85,17 +85,16 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--color-contrast", type=float, default=1.0, dest="color_contrast")
     parser.add_argument("--background-color", default="#000000", dest="background_color")
     parser.add_argument("--no-ice-colors", action="store_true", default=False, dest="no_ice_colors")
-    parser.add_argument("--force-black-bg", action="store_true", default=False, dest="force_black_bg")
     parser.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
     parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
     parser.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
     parser.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
-    parser.add_argument("--use-graphics-font", action="store_true", default=False, dest="use_graphics_font")
-    parser.add_argument("--metafont", action="store_true", default=False, dest="metafont")
-    parser.add_argument("--metafont-columns", type=int, default=None, dest="metafont_columns")
-    parser.add_argument("--metafont-rows", type=int, default=None, dest="metafont_rows")
-    parser.add_argument("--font-id", type=int, default=None, dest="font_id",
-                        help="font id for graphics/metafont rendering")
+    parser.add_argument("--graphics-font", nargs="?", const="auto", default="", dest="graphics_font")
+    parser.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
+    parser.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
+    parser.add_argument(
+        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics/octant rendering"
+    )
     return parser
 
 
@@ -195,20 +194,21 @@ def build_help_parser() -> argparse.ArgumentParser:
     )
     telix.add_argument("--mud", action="store_true", help="apply MUD connection presets")
     telix.add_argument(
-        "--clear-homes-cursor", action="store_true",
+        "--clear-homes-cursor",
+        action="store_true",
         help="inject cursor home before clear screen (BBS/CTerm compatibility)",
     )
     telix.add_argument(
-        "--ff-clears-screen", action="store_true",
+        "--ff-clears-screen",
+        action="store_true",
         help="treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)",
     )
-    telix.add_argument("--use-graphics-font", action="store_true", help="render using kitty/sixel terminal graphics")
-    telix.add_argument("--metafont", action="store_true", help="render using octant bitmap metafonts")
+    telix.add_argument("--graphics-font", nargs="?", const="auto", default="", metavar="MODE", help="font graphics mode: auto (default), octants")
     telix.add_argument(
-        "--metafont-columns", metavar="N", type=int, help="force virtual terminal columns for metafont (e.g. 40)"
+        "--graphics-columns", metavar="N", type=int, help="force virtual terminal columns for graphics font (e.g. 40)"
     )
     telix.add_argument(
-        "--metafont-rows", metavar="N", type=int, help="force virtual terminal rows for metafont (default: 25)"
+        "--graphics-rows", metavar="N", type=int, help="force virtual terminal rows for graphics font (default: 25)"
     )
     telix.add_argument(
         "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
@@ -323,15 +323,13 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
-            force_black_bg=False,
             ansi_keys=False,
             no_repl=no_repl,
             clear_homes_cursor=False,
             ff_clears_screen=False,
-            use_graphics_font=False,
-            metafont=False,
-            metafont_columns=None,
-            metafont_rows=None,
+            graphics_font="",
+            graphics_columns=None,
+            graphics_rows=None,
             font_id=None,
         )
         compression: bool | None = True if args.compression else (False if args.no_compression else None)
@@ -405,15 +403,13 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
-            force_black_bg=False,
             ansi_keys=False,
             no_repl=False,
             clear_homes_cursor=False,
             ff_clears_screen=False,
-            use_graphics_font=False,
-            metafont=False,
-            metafont_columns=None,
-            metafont_rows=None,
+            graphics_font="",
+            graphics_columns=None,
+            graphics_rows=None,
             font_id=None,
         )
         try:

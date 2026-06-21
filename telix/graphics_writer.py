@@ -1,28 +1,14 @@
 """Graphics writer: pyte virtual terminal rendered via sixel/kitty graphics."""
 
 import io
-import re
+import time
 import asyncio
 import logging
-import time
 
-import pyte
 import numpy as np
 
-from . import metafont, terminal, session_context, graphics_renderer
-from .fonts import font_registry
-from .color_filter import PALETTES
-from .metaterminal import (
-    SYNC_END,
-    SYNC_START,
-    SYNCTERM_FONT_RE,
-    CSI_WITH_INTERMEDIATE,
-    XTGETTCAP_DCS_RE,
-    BBSScreen,
-    handle_cursor_shape,
-    intercept_device_queries,
-    pyte_color_to_rgb,
-)
+from . import graphics_renderer
+from .graphics_writer_octant import SYNC_END, SYNC_START, BaseScreenWriter, pyte_color_to_rgb
 
 log = logging.getLogger(__name__)
 
@@ -32,10 +18,11 @@ FONT_CELL_W = 8
 FONT_CELL_H = 16
 
 
-class GraphicsWriter:
-    """Wraps stdout to render BBS output as sixel or kitty graphics.
+class GraphicsWriter(BaseScreenWriter):
+    """Renders BBS output as sixel or kitty terminal graphics.
 
-    Drop-in replacement for :class:`~telix.metaterminal.MetaTerminalWriter`.
+    Each virtual character cell is rasterized as an 8x16 pixel glyph
+    and transmitted as a terminal graphics frame.
 
     :param inner: The underlying ``asyncio.StreamWriter`` (real stdout).
     :param ctx: Session context with graphics configuration.
@@ -43,6 +30,8 @@ class GraphicsWriter:
     :param encoding: Wire encoding override.
     :param columns: Virtual terminal columns (default 80).
     :param rows: Virtual terminal rows (default 25).
+    :param cell_px_w: Width of a single character cell in pixels, or 0 for default.
+    :param cell_px_h: Height of a single character cell in pixels, or 0 for default.
     :param font_id: Initial font id for bitmap rendering (default 0, IBM VGA).
     """
 
@@ -58,99 +47,58 @@ class GraphicsWriter:
         cell_px_h: int = 0,
         font_id: int | None = None,
     ) -> None:
-        self.inner = inner
-        self.ctx = ctx
+        super().__init__(inner, ctx, encoding=encoding, columns=columns, rows=rows, font_id=font_id)
         self.protocol = protocol
-        self.encoding = encoding or ctx.encoding or "utf-8"
-        self.columns = columns
-        self.rows = rows
-        self.screen = BBSScreen(columns, rows)
-        self.stream = pyte.Stream(self.screen)
-        self.palette = PALETTES.get("vga", PALETTES["vga"])
-        self.font = metafont.load_font(font_id if font_id is not None else font_registry.DEFAULT_FONT_ID)
-        self._needs_full_redraw = True
         self._render_timer: asyncio.TimerHandle | None = None
         self._last_render_time = 0.0
         self._rendering = False
         self._did_initial_clear = False
-        self._cursor_shape: int = 2
-        self._cursor_blink: bool = False
-        self._prev_cursor_x: int = 0
-        self._prev_cursor_y: int = 0
         self._blink_timer: asyncio.TimerHandle | None = None
-        self._pending_resize: tuple[int, int] | None = None
-        real_rows, real_cols = terminal.get_terminal_size()
-        self._real_rows = real_rows
-        self._real_cols = real_cols
         self._cell_px_w = cell_px_w
         self._cell_px_h = cell_px_h
         self._glyph_cache: np.ndarray | None = None
-        # Pre-allocated pixel buffers reused across frames.
         self._px_buf: np.ndarray | None = None
-        self._init_screen()
 
-    def _output(self, data: str) -> None:
-        """Write short control sequences via the asyncio transport."""
-        self.inner.write(data.encode("utf-8"))
+    # ------------------------------------------------------------------
+    # hooks
+    # ------------------------------------------------------------------
 
-    def _init_screen(self) -> None:
-        """Switch to alternate screen, hide cursor, clear, home."""
-        self._output("\033[?1049h\033[?25l\033[2J\033[H")
+    def on_font_changed(self) -> None:
+        self._glyph_cache = None
+
+    def on_size_changed(self) -> None:
+        self._px_buf = None
+        self._glyph_cache = None
+        self._did_initial_clear = False
+
+    def on_resize(self) -> None:
+        self._px_buf = None
+        self._glyph_cache = None
+
+    def on_write_complete(self, cursor_moved: bool, shape_changed: bool) -> None:
+        self._manage_blink()
+        if self.screen.dirty or self._needs_full_redraw or cursor_moved or shape_changed:
+            self._schedule_render()
+
+    def trigger_render(self) -> None:
+        self._schedule_render()
+
+    # ------------------------------------------------------------------
+    # cleanup
+    # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
-        """Restore main screen, cancel pending render, show cursor."""
         if self._render_timer is not None:
             self._render_timer.cancel()
             self._render_timer = None
         self._cancel_blink()
-        self._output("\033[?25h\033[?1049l")
+        super().cleanup()
 
-    def _handle_font_switch(self, text: str) -> str:
-        """Strip and process SyncTERM font switching sequences."""
-
-        def _on_match(m: re.Match) -> str:
-            slot = int(m.group(1))
-            font_id = int(m.group(2))
-            if font_id in font_registry.FONT_BY_ID:
-                new_font = metafont.load_font(font_id)
-                old_encoding = self.font.encoding
-                self.font = new_font
-                self._glyph_cache = None
-                self._needs_full_redraw = True
-                if new_font.encoding != old_encoding:
-                    self.encoding = new_font.encoding
-                    log.debug(
-                        "font switch: slot=%d font_id=%d (%s), encoding %s -> %s",
-                        slot, font_id, new_font.name, old_encoding, new_font.encoding,
-                    )
-                else:
-                    log.debug("font switch: slot=%d font_id=%d (%s)", slot, font_id, new_font.name)
-            else:
-                log.warning("unknown font id %d in slot %d", font_id, slot)
-            return ""
-
-        return SYNCTERM_FONT_RE.sub(_on_match, text)
-
-    def _char_to_code(self, char_data: str) -> int:
-        """Convert a pyte character to a font codepage byte value."""
-        if not char_data or char_data == " ":
-            return 0x20
-        cp = ord(char_data)
-        if cp < 0x80:
-            return cp
-        enc = self.font.encoding or "cp437"
-        try:
-            encoded = char_data.encode(enc, errors="replace")
-            return encoded[0] if encoded else 0x3F
-        except (LookupError, ValueError, TypeError):
-            return 0x3F
+    # ------------------------------------------------------------------
+    # glyph cache and pixel buffer building
+    # ------------------------------------------------------------------
 
     def _ensure_glyph_cache(self) -> None:
-        """Precompute glyph pixel masks for all 256 codepoints.
-
-        Builds a ``(256, GLYPH_H, GLYPH_W)`` bool array.  Rebuilt lazily
-        when the font changes (``_glyph_cache`` is set to ``None``).
-        """
         if self._glyph_cache is not None:
             return
         cache = np.zeros((256, FONT_CELL_H, FONT_CELL_W), dtype=bool)
@@ -204,7 +152,7 @@ class GraphicsWriter:
                     bg_buf[2] = bg[2] / 255.0
 
                     cp = self._char_to_code(char.data)
-                    cp = max(0, min(255, cp))  # clamp to valid glyph index
+                    cp = max(0, min(255, cp))
                     glyph = cache[cp]
                     py = vrow * FONT_CELL_H
                     px = vcol * FONT_CELL_W
@@ -218,10 +166,6 @@ class GraphicsWriter:
         return bitmap, colors
 
     def _draw_cursor(self, colors: np.ndarray) -> None:
-        """Draw cursor on pixel buffer using inverse video.
-
-        Blinking cursors toggle visibility every 500 ms (2 Hz phase).
-        """
         if self._cursor_blink:
             phase = int(time.monotonic() * 1000) % 1000
             if phase >= 500:
@@ -233,23 +177,28 @@ class GraphicsWriter:
         py = cy * FONT_CELL_H
         px = cx * FONT_CELL_W
         shape = self._cursor_shape
-        if shape in (0, 1, 2):  # block
+        if shape in (0, 1, 2):
             y0, y1 = py, py + FONT_CELL_H
             x0, x1 = px, px + FONT_CELL_W
-        elif shape in (3, 4):  # underline (bottom 2 pixel rows)
+        elif shape in (3, 4):
             y0, y1 = py + FONT_CELL_H - 2, py + FONT_CELL_H
             x0, x1 = px, px + FONT_CELL_W
-        else:  # bar (left 2 pixel columns)
+        else:
             y0, y1 = py, py + FONT_CELL_H
             x0, x1 = px, px + 2
         h, w = colors.shape[:2]
-        y0 = max(0, y0); y1 = min(h, y1)
-        x0 = max(0, x0); x1 = min(w, x1)
+        y0 = max(0, y0)
+        y1 = min(h, y1)
+        x0 = max(0, x0)
+        x1 = min(w, x1)
         if y1 > y0 and x1 > x0:
             colors[y0:y1, x0:x1] = 1.0 - colors[y0:y1, x0:x1]
 
+    # ------------------------------------------------------------------
+    # render dispatch
+    # ------------------------------------------------------------------
+
     def _render_full(self) -> None:
-        """Render the full pyte screen (sync wrapper, dispatches to async)."""
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -258,7 +207,6 @@ class GraphicsWriter:
         loop.create_task(self._render_frame())
 
     def _render_frame_sync(self) -> None:
-        """Synchronous fallback when no event loop is available."""
         self._rendering = True
         try:
             self._do_render()
@@ -266,7 +214,6 @@ class GraphicsWriter:
             self._rendering = False
 
     async def _render_frame(self) -> None:
-        """Render a frame asynchronously, awaiting transport drain."""
         self._rendering = True
         try:
             self._do_render()
@@ -275,11 +222,9 @@ class GraphicsWriter:
             self._rendering = False
 
     def _do_render(self) -> None:
-        """Build and write a single frame to the transport."""
         self._last_render_time = time.monotonic()
         self._render_timer = None
 
-    
         if self._update_real_size():
             self._needs_full_redraw = True
 
@@ -307,45 +252,7 @@ class GraphicsWriter:
 
         self._output(buf.getvalue())
 
-    def _update_real_size(self) -> bool:
-        """Re-query the real terminal size.
-
-        :returns: ``True`` if the size changed.
-        """
-        real_rows, real_cols = terminal.get_terminal_size()
-        changed = real_rows != self._real_rows or real_cols != self._real_cols
-        if not changed:
-            return False
-        self._real_rows = real_rows
-        self._real_cols = real_cols
-        self._did_initial_clear = False
-        self._needs_full_redraw = True
-        return True
-
-    def schedule_resize(self, real_cols: int, real_rows: int) -> None:
-        """Record a pending resize to be applied on the next write.
-
-        Safe to call from a signal handler.
-
-        :param real_cols: New real terminal width.
-        :param real_rows: New real terminal height.
-        """
-        self._pending_resize = (real_cols, real_rows)
-
-    def _apply_pending_resize(self) -> None:
-        """Apply a pending resize if one was scheduled."""
-        pending = self._pending_resize
-        if pending is None:
-            return
-        self._pending_resize = None
-        self.resize(*pending)
-
     def _schedule_render(self) -> None:
-        """Schedule a render respecting the minimum frame interval.
-
-        Skips if a render is already in progress, preventing concurrent
-        writes that could corrupt sixel escape sequences.
-        """
         if self._rendering:
             return
         try:
@@ -365,7 +272,6 @@ class GraphicsWriter:
             self._render_timer = loop.call_later(delay, self._render_full)
 
     def _manage_blink(self) -> None:
-        """Start or cancel the blink timer based on cursor blink state."""
         should_blink = self._cursor_blink
         if should_blink and self._blink_timer is None:
             loop = asyncio.get_event_loop()
@@ -380,75 +286,6 @@ class GraphicsWriter:
         self._manage_blink()
 
     def _cancel_blink(self) -> None:
-        """Cancel the blink timer unconditionally."""
         if self._blink_timer is not None:
             self._blink_timer.cancel()
             self._blink_timer = None
-
-    def write(self, data: bytes) -> None:
-        """Decode, feed to pyte, and schedule a render.
-
-        Called synchronously by telnetlib3's ``_raw_event_loop``.
-        Rendering is dispatched via ``create_task`` so ``drain()``
-        can be awaited without blocking the event loop.
-        """
-        from . import client_shell
-
-        if self.ctx.repl.ff_clears_screen:
-            data = client_shell.replace_ff_with_clear(data)
-        if self.ctx.repl.clear_homes_cursor:
-            data = client_shell.inject_home_before_clear(data)
-
-        self._apply_pending_resize()
-
-        text = data.decode("utf-8", errors="replace")
-        text = self._handle_font_switch(text)
-        prev_shape = self._cursor_shape
-        prev_blink = self._cursor_blink
-        text, shape, blink = handle_cursor_shape(text)
-        if shape is not None:
-            self._cursor_shape = shape
-            self._cursor_blink = blink
-        shape_changed = (self._cursor_shape != prev_shape
-                         or self._cursor_blink != prev_blink)
-        text = CSI_WITH_INTERMEDIATE.sub("", text)
-        text = XTGETTCAP_DCS_RE.sub("", text)
-
-        if text:
-            self.stream.feed(text)
-
-        intercept_device_queries(self.screen, self.ctx.writer, text)
-
-        # Shells toggle DECTCEM constantly; we ignore pyte's cursor.hidden.
-        cursor_moved = (
-            self.screen.cursor.x != self._prev_cursor_x
-            or self.screen.cursor.y != self._prev_cursor_y
-        )
-        if cursor_moved and 0 <= self._prev_cursor_y < self.rows:
-            self.screen.dirty.add(self._prev_cursor_y)
-        self._prev_cursor_x = self.screen.cursor.x
-        self._prev_cursor_y = self.screen.cursor.y
-
-        self._manage_blink()
-
-        if (self.screen.dirty or self._needs_full_redraw
-                or cursor_moved or shape_changed):
-            self._schedule_render()
-
-    def resize(self, real_cols: int, real_rows: int) -> None:
-        """Update real terminal bounds and force a full redraw.
-
-        :param real_cols: Real terminal width in columns.
-        :param real_rows: Real terminal height in rows.
-        """
-        self._real_cols = real_cols
-        self._real_rows = real_rows
-        self._needs_full_redraw = True
-        self._schedule_render()
-
-    def virtual_size(self) -> tuple[int, int]:
-        """Return the virtual terminal size (rows, columns) for NAWS reporting."""
-        return (self.rows, self.columns)
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(self.inner, name)

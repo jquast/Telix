@@ -151,6 +151,7 @@ def init_font_encodings() -> None:
     if _FONT_ENCODINGS:
         return
     from .fonts import font_registry
+
     for entry in font_registry.FONT_TABLE:
         if entry.short_name in ENCODINGS:
             _FONT_ENCODINGS[entry.short_name] = (entry.encoding, entry.font_id)
@@ -190,6 +191,7 @@ def detect_graphics_caps() -> tuple[bool, bool]:
     if _GRAPHICS_CAPS is not None:
         return _GRAPHICS_CAPS
     import os as _os
+
     env_kitty = _os.environ.get("TELIX_HAS_KITTY")
     env_sixel = _os.environ.get("TELIX_HAS_SIXEL")
     if env_kitty is not None and env_sixel is not None:
@@ -199,6 +201,7 @@ def detect_graphics_caps() -> tuple[bool, bool]:
         import sys
 
         import blessed
+
         if not sys.stdout.isatty():
             _GRAPHICS_CAPS = (False, False)
             return _GRAPHICS_CAPS
@@ -429,7 +432,6 @@ class SessionConfig:
     color_contrast: float = 1.0
     background_color: str = "#000000"
     ice_colors: bool = True
-    force_black_bg: bool = False
 
     # Input
     ansi_keys: bool = False
@@ -463,13 +465,12 @@ class SessionConfig:
     clear_homes_cursor: bool = False
     ff_clears_screen: bool = False
 
-    # Graphics: kitty/sixel terminal graphics rendering
-    graphics_font: bool = False
+    # Graphics: kitty/sixel terminal graphics or octant Unicode rendering
+    graphics_font: str = ""
 
-    # Metafont: octant bitmap font rendering
-    metafont: bool = False
-    metafont_columns: int | None = None
-    metafont_rows: int | None = None
+    # Virtual terminal size override for graphics font rendering
+    graphics_columns: int | None = None
+    graphics_rows: int | None = None
 
     # Server type: "bbs", "mud", or "" (unset)
     server_type: str = ""
@@ -551,20 +552,13 @@ def append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
 
 
 def append_graphics_flags(cmd: list[str], config: SessionConfig) -> None:
-    """Append ``--use-graphics-font`` to *cmd* when graphics font is enabled."""
+    """Append ``--graphics-font`` related flags to *cmd* when a graphics font is selected."""
     if config.graphics_font:
-        cmd.append("--use-graphics-font")
-
-
-def append_metafont_flags(cmd: list[str], config: SessionConfig) -> None:
-    """Append ``--metafont`` related flags to *cmd* when metafont is enabled."""
-    if not config.metafont:
-        return
-    cmd.append("--metafont")
-    if config.metafont_columns is not None:
-        cmd.extend(["--metafont-columns", str(config.metafont_columns)])
-    if config.metafont_rows is not None:
-        cmd.extend(["--metafont-rows", str(config.metafont_rows)])
+        cmd.extend(["--graphics-font", config.graphics_font])
+    if config.graphics_columns is not None:
+        cmd.extend(["--graphics-columns", str(config.graphics_columns)])
+    if config.graphics_rows is not None:
+        cmd.extend(["--graphics-rows", str(config.graphics_rows)])
 
 
 def resolve_wire_encoding(config: SessionConfig) -> str:
@@ -646,7 +640,6 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
 
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
-    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -731,7 +724,6 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         cmd += ["--font-id", str(font_id)]
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
-    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -766,8 +758,6 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--color-brightness", str(config.color_brightness)]
     if config.color_contrast != 1.0:
         cmd += ["--color-contrast", str(config.color_contrast)]
-    if config.force_black_bg:
-        cmd.append("--force-black-bg")
     if config.ansi_keys:
         cmd.append("--ansi-keys")
     if config.loglevel != "warn":
@@ -778,7 +768,6 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--typescript", config.typescript]
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
-    append_metafont_flags(cmd, config)
     return cmd
 
 
@@ -988,9 +977,9 @@ class SessionListScreen(textual.screen.Screen[None]):
             parts.append("!repl")
         if cfg.typescript:
             parts.append("ts")
-        if cfg.graphics_font:
+        if cfg.graphics_font == "auto":
             parts.append("gfx")
-        if cfg.metafont:
+        elif cfg.graphics_font == "octants":
             parts.append("oct")
         return " ".join(parts)
 
@@ -1483,6 +1472,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         width: auto;
         height: auto;
         padding-right: 2;
+
+        & .conn-label {
+            width: 8;
+        }
     }
     #conn-details-col {
         width: 1fr;
@@ -1511,6 +1504,15 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     #compression-row {
         height: auto;
     }
+    #mccp-label {
+        width: 16;
+        text-align: right;
+        padding-top: 1;
+    }
+    #compression-radio {
+        width: auto;
+        height: auto;
+    }
     #server-type-col {
         width: 2fr;
         height: auto;
@@ -1519,10 +1521,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         width: 12;
         text-align: right;
         padding-top: 1;
-    }
-    #compression-col {
-        width: 22;
-        height: auto;
     }
     #connect-timeout {
         max-width: 13;
@@ -1585,10 +1583,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         padding-top: 1;
     }
     #detected-bg-color {
-        padding-top: 1;
-    }
-    #metafont-label {
-        width: 34;
         padding-top: 1;
     }
     #bottom-bar {
@@ -1720,12 +1714,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     yield textual.widgets.RadioButton("BBS", value=cfg.server_type == "bbs", id="type-bbs")
                     yield textual.widgets.RadioButton("Mud", value=cfg.server_type == "mud", id="type-mud")
         with textual.containers.Horizontal(id="compression-row"):
-            with textual.containers.Vertical(id="compression-col"):
-                yield textual.widgets.Label("MCCP Compression")
-                with textual.widgets.RadioSet(id="compression-radio"):
-                    yield textual.widgets.RadioButton("Passive", value=cfg.compression is None, id="compress-passive")
-                    yield textual.widgets.RadioButton("Yes", value=cfg.compression is True, id="compress-yes")
-                    yield textual.widgets.RadioButton("No", value=cfg.compression is False, id="compress-no")
+            yield textual.widgets.Label("MCCP Compression", id="mccp-label", classes="conn-label")
+            with textual.widgets.RadioSet(id="compression-radio"):
+                yield textual.widgets.RadioButton("Passive", value=cfg.compression is None, id="compress-passive")
+                yield textual.widgets.RadioButton("Yes", value=cfg.compression is True, id="compress-yes")
+                yield textual.widgets.RadioButton("No", value=cfg.compression is False, id="compress-no")
 
     def compose_terminal_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Terminal tab pane."""
@@ -1777,7 +1770,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             textual.widgets.Static("", id="palette-preview"),
             classes="field-row",
         )
-        has_detected = self.detected_bg is not None
         if self.detected_bg is not None:
             r, g, b = self.detected_bg
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
@@ -1803,24 +1795,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             ),
             classes="field-row",
         )
-        force_val = True if not has_detected else cfg.force_black_bg
         with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("iCE Colors", classes="field-label")
                 ice_switch = textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
-                ice_switch.tooltip = (
-                    "Interpret bright background colors in place of the rarely used blink attribute"
-                )
+                ice_switch.tooltip = "Interpret bright background colors in place of the rarely used blink attribute"
                 yield ice_switch
-            with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}")
-                switch = textual.widgets.Switch(value=force_val, id="force-black-bg", disabled=not has_detected)
-                if has_detected:
-                    switch.tooltip = "Experimental, try and force background color to #000000"
-                else:
-                    switch.tooltip = "Could not detect background color of your terminal"
-                yield switch
-        with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("Clear Homes Cursor", classes="field-label")
                 chc_switch = textual.widgets.Switch(value=cfg.clear_homes_cursor, id="clear-homes-cursor")
@@ -1835,7 +1815,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     " required by many BBS systems"
                 )
                 yield ff_switch
-        # Font Graphics radio group (mutually exclusive: none / kitty+sixel / metafont)
+        # Font Graphics radio group (mutually exclusive: none / kitty+sixel / octants)
         has_kitty, has_sixel = detect_graphics_caps()
         if has_kitty:
             gfx_radio_label = "Kitty Graphics"
@@ -1847,12 +1827,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             gfx_radio_label = "Kitty/Sixel Graphics (unsupported)"
             gfx_supported = False
         # If graphics was previously selected but is now unsupported, fall back to None.
-        if cfg.graphics_font and not gfx_supported:
+        if cfg.graphics_font == "auto" and not gfx_supported:
             active = "none"
-        elif cfg.graphics_font:
+        elif cfg.graphics_font == "auto":
             active = "gfx"
-        elif cfg.metafont:
-            active = "metafont"
+        elif cfg.graphics_font == "octants":
+            active = "octants"
         else:
             active = "none"
         cols_rows_enabled = active != "none"
@@ -1861,45 +1841,34 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             gfx_radio = textual.widgets.RadioSet(
                 textual.widgets.RadioButton("None", value=active == "none", id="gfx-none"),
                 textual.widgets.RadioButton(
-                    gfx_radio_label,
-                    value=active == "gfx",
-                    disabled=not gfx_supported,
-                    id="gfx-graphics",
+                    gfx_radio_label, value=active == "gfx", disabled=not gfx_supported, id="gfx-graphics"
                 ),
-                textual.widgets.RadioButton(
-                    "Octants (Unicode 17)",
-                    value=active == "metafont",
-                    id="gfx-metafont",
-                ),
+                textual.widgets.RadioButton("Octants (Unicode 17)", value=active == "octants", id="gfx-octants"),
                 id="font-graphics",
             )
             gfx_radio.tooltip = (
                 "Kitty/Sixel: render using terminal inline graphics."
-                " Metafonts: render using Unicode octant block characters."
+                " Octants: render using Unicode octant block characters."
                 " Only one may be active."
             )
             yield textual.widgets.Label("Font Graphics", classes="field-label")
             yield gfx_radio
         with textual.containers.Horizontal(classes="switch-row"):
-            yield textual.widgets.Label(
-                "Columns", id="metafont-cols-label", classes=f"field-label-short{mf_dim}"
-            )
+            yield textual.widgets.Label("Columns", id="graphics-cols-label", classes=f"field-label-short{mf_dim}")
             cols_input = textual.widgets.Input(
-                value=str(cfg.metafont_columns or ""),
+                value=str(cfg.graphics_columns or ""),
                 placeholder="80",
-                id="metafont-columns",
+                id="graphics-columns",
                 classes="field-input-short",
                 disabled=not cols_rows_enabled,
             )
             cols_input.tooltip = "Virtual terminal columns (default 80)"
             yield cols_input
-            yield textual.widgets.Label(
-                "Rows", id="metafont-rows-label", classes=f"field-label-short{mf_dim}"
-            )
+            yield textual.widgets.Label("Rows", id="graphics-rows-label", classes=f"field-label-short{mf_dim}")
             rows_input = textual.widgets.Input(
-                value=str(cfg.metafont_rows or ""),
+                value=str(cfg.graphics_rows or ""),
                 placeholder="25",
-                id="metafont-rows",
+                id="graphics-rows",
                 classes="field-input-short",
                 disabled=not cols_rows_enabled,
             )
@@ -2027,26 +1996,30 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         elif event.radio_set.id == "font-graphics":
             pressed = event.pressed
             enabled = pressed is not None and pressed.id != "gfx-none"
-            for widget_id in ("#metafont-columns", "#metafont-rows"):
+            for widget_id in ("#graphics-columns", "#graphics-rows"):
                 self.query_one(widget_id, textual.widgets.Input).disabled = not enabled
-            for label_id in ("#metafont-cols-label", "#metafont-rows-label"):
+            for label_id in ("#graphics-cols-label", "#graphics-rows-label"):
                 self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
-        """
-        Select a radio button by setting only the target button's value to ``True``.
+        """Select a radio button programmatically.
 
-        RadioSet's ``_on_radio_button_changed`` uses ``prevent(RadioButton.Changed)`` when it deselects the
-        previously-pressed button, so only the target must be set to ``True`` -- setting other buttons to ``False``
-        directly causes RadioSet to fight the change and leaves multiple buttons appearing selected.
+        Delegates to :func:`telix.util.select_radio_button` which disables
+        ``RadioButton.Changed`` message posting during the change to prevent
+        the RadioSet from fighting the selection.
 
-        If the RadioSet was disabled, it is re-enabled for the value change and re-disabled after the next refresh so
-        that the ``RadioButton.Changed`` event can be processed before the widget is locked again.
+        If the RadioSet was disabled, it is re-enabled for the value change and
+        re-disabled after the next refresh so that the ``RadioButton.Changed`` event
+        can be processed before the widget is locked again.
         """
         radio_set = self.query_one(f"#{radio_set_id}", textual.widgets.RadioSet)
         was_disabled = radio_set.disabled
-        radio_set.disabled = False
-        self.query_one(f"#{button_id}", textual.widgets.RadioButton).value = True
+        if was_disabled:
+            radio_set.disabled = False
+        target = self.query_one(f"#{button_id}", textual.widgets.RadioButton)
+        import telix.util
+
+        telix.util.select_radio_button(radio_set, target)
         if was_disabled:
             self.call_after_refresh(lambda rs=radio_set: setattr(rs, "disabled", True))
 
@@ -2069,9 +2042,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 self.select_radio("compression-radio", "compress-no")
             else:
                 self.select_radio("compression-radio", "compress-passive")
-            force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
-            if not force_bg.disabled:
-                force_bg.value = True
             self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = True
             self.query_one("#ff-clears-screen", textual.widgets.Switch).value = True
             self.update_palette_preview()
@@ -2091,9 +2061,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             term_input = self.query_one("#term", textual.widgets.Input)
             if not term_input.value.strip():
                 term_input.value = "XTERM-TRUECOLOR"
-            force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
-            if not force_bg.disabled:
-                force_bg.value = False
             self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = False
             self.query_one("#ff-clears-screen", textual.widgets.Switch).value = False
             self.update_palette_preview()
@@ -2153,6 +2120,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """React to Select widget changes."""
         if event.select.id == "colormatch":
             self.update_palette_preview()
+
     def on_input_changed(self, event: textual.widgets.Input.Changed) -> None:
         """Update palette preview when brightness/contrast changes."""
         if event.input.id in ("color-brightness", "color-contrast"):
@@ -2160,7 +2128,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
         """Handle switch changes for palette and other toggles."""
-        if event.switch.id in ("ice-colors", "force-black-bg"):
+        if event.switch.id in ("ice-colors",):
             self.update_palette_preview()
 
     def update_palette_preview(self) -> None:
@@ -2178,8 +2146,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             adjust_color(r, g, b, brightness, contrast)
             for r, g, b in PALETTES[palette_name]  # type: ignore[index]
         ]
-        force_black = self.query_one("#force-black-bg", textual.widgets.Switch).value
-        if not force_black and self.detected_bg is not None:
+        if self.detected_bg is not None:
             palette[0] = self.detected_bg  # type: ignore[assignment]
         ice = self.query_one("#ice-colors", textual.widgets.Switch).value
         block = "\u2588"
@@ -2342,25 +2309,21 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.color_brightness = self._parse_pct("#color-brightness", 100) / 100.0
         cfg.color_contrast = self._parse_pct("#color-contrast", 100) / 100.0
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
-        cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
         cfg.clear_homes_cursor = self.query_one("#clear-homes-cursor", textual.widgets.Switch).value
         cfg.ff_clears_screen = self.query_one("#ff-clears-screen", textual.widgets.Switch).value
         font_gfx = self.query_one("#font-graphics", textual.widgets.RadioSet).pressed_button
         if font_gfx is not None and font_gfx.id == "gfx-graphics":
-            cfg.graphics_font = True
-            cfg.metafont = False
-        elif font_gfx is not None and font_gfx.id == "gfx-metafont":
-            cfg.graphics_font = False
-            cfg.metafont = True
+            cfg.graphics_font = "auto"
+        elif font_gfx is not None and font_gfx.id == "gfx-octants":
+            cfg.graphics_font = "octants"
         else:
-            cfg.graphics_font = False
-            cfg.metafont = False
-        mf_cols = self.query_one("#metafont-columns", textual.widgets.Input).value.strip()
-        cfg.metafont_columns = int(mf_cols) if mf_cols.isdigit() and int(mf_cols) > 0 else None
-        mf_rows = self.query_one("#metafont-rows", textual.widgets.Input).value.strip()
-        cfg.metafont_rows = int(mf_rows) if mf_rows.isdigit() and int(mf_rows) > 0 else None
+            cfg.graphics_font = ""
+        gf_cols = self.query_one("#graphics-columns", textual.widgets.Input).value.strip()
+        cfg.graphics_columns = int(gf_cols) if gf_cols.isdigit() and int(gf_cols) > 0 else None
+        gf_rows = self.query_one("#graphics-rows", textual.widgets.Input).value.strip()
+        cfg.graphics_rows = int(gf_rows) if gf_rows.isdigit() and int(gf_rows) > 0 else None
 
-        if not cfg.force_black_bg and self.detected_bg is not None:
+        if self.detected_bg is not None:
             r, g, b = self.detected_bg
             cfg.background_color = f"#{r:02x}{g:02x}{b:02x}"
         else:

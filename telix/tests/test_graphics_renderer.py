@@ -3,23 +3,23 @@
 import io
 import types
 
-import numpy
+import numpy as np
 import pytest
 
 from telix.graphics_renderer import (
     APC_END,
-    APC_START,
     DCS_END,
+    APC_START,
     DCS_START,
     _make_png,
-    _quantize_colors,
     encode_kitty,
     encode_sixel,
+    _quantize_colors,
 )
 
 
 def _solid_rgb(w, h, r, g, b):
-    colors = numpy.zeros((h, w, 3), dtype=numpy.float32)
+    colors = np.zeros((h, w, 3), dtype=np.float32)
     colors[:, :, 0] = r
     colors[:, :, 1] = g
     colors[:, :, 2] = b
@@ -27,22 +27,20 @@ def _solid_rgb(w, h, r, g, b):
 
 
 class TestQuantizeColors:
-
     def test_uniform_red_block(self):
-        colors = numpy.full((6, 10, 3), (1.0, 0.0, 0.0), dtype=numpy.float32)
+        colors = np.full((6, 10, 3), (1.0, 0.0, 0.0), dtype=np.float32)
         indices, palette = _quantize_colors(colors, 256)
         assert indices.shape == (6, 10)
         assert palette.shape[0] >= 8
-        assert numpy.all(indices == indices[0, 0])
+        assert np.all(indices == indices[0, 0])
 
     def test_max_colors_clamped_to_216(self):
-        colors = numpy.random.rand(12, 10, 3).astype(numpy.float32)
+        colors = np.random.rand(12, 10, 3).astype(np.float32)
         indices, palette = _quantize_colors(colors, 500)
         assert palette.shape[0] <= 216
 
 
 class TestEncodeSixel:
-
     def test_output_starts_with_dcs(self):
         colors = _solid_rgb(8, 6, 0.0, 1.0, 0.0)
         buf = io.StringIO()
@@ -67,7 +65,7 @@ class TestEncodeSixel:
         buf = io.StringIO()
         encode_sixel(colors, buf, max_colors=64)
         output = buf.getvalue()
-        data_section = output[len(DCS_START):-len(DCS_END)]
+        data_section = output[len(DCS_START) : -len(DCS_END)]
         for ch in data_section:
             if ch in ("$", "-", "!", "\n"):
                 continue
@@ -96,7 +94,6 @@ class TestEncodeSixel:
 
 
 class TestEncodeKitty:
-
     def test_png_output(self):
         colors = _solid_rgb(8, 6, 0.0, 1.0, 0.0)
         buf = io.StringIO()
@@ -134,7 +131,6 @@ class TestEncodeKitty:
 
 
 class TestMakePng:
-
     def test_produces_valid_png_signature(self):
         colors = _solid_rgb(8, 6, 0.5, 0.5, 0.5)
         png = _make_png(colors)

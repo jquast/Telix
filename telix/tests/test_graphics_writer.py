@@ -4,12 +4,12 @@ import types
 import asyncio
 
 import pyte
-import pytest
 import numpy as np
+import pytest
 
 from telix.fonts import font_registry
 from telix.color_filter import PALETTES
-from telix.graphics_renderer import DCS_END, DCS_START, APC_END, APC_START
+from telix.graphics_renderer import APC_END, DCS_END, APC_START, DCS_START
 
 
 class FakeWriter:
@@ -36,8 +36,8 @@ class FakeWriter:
 
 
 class FakeRepl:
-    metafont_columns = None
-    metafont_rows = None
+    graphics_columns = None
+    graphics_rows = None
     ff_clears_screen = False
     clear_homes_cursor = False
 
@@ -52,7 +52,6 @@ class FakeCtx:
 
 
 class TestGraphicsWriter:
-
     @pytest.fixture(autouse=True)
     def _event_loop(self):
         loop = asyncio.new_event_loop()
@@ -62,6 +61,7 @@ class TestGraphicsWriter:
 
     def _make_writer(self, columns=80, rows=25, encoding="cp437", protocol="sixel"):
         from telix.graphics_writer import GraphicsWriter
+
         inner = FakeWriter()
         ctx = FakeCtx(encoding)
         return GraphicsWriter(inner, ctx, protocol, columns=columns, rows=rows), inner
@@ -113,12 +113,31 @@ class TestGraphicsWriter:
         gtw, _ = self._make_writer(columns=80, rows=25)
         assert gtw.virtual_size() == (25, 80)
 
+    def test_virtual_size_custom_columns(self):
+        gtw, _ = self._make_writer(columns=40, rows=25)
+        assert gtw.virtual_size() == (25, 40)
+
+    def test_resize_preserves_graphics_columns(self, monkeypatch):
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+        gtw, _ = self._make_writer(columns=40, rows=25)
+        gtw.ctx.repl.graphics_columns = 40
+        gtw.resize(160, 50)
+        assert gtw.columns == 40
+
+    def test_resize_computes_from_real_when_none(self, monkeypatch):
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+        gtw, _ = self._make_writer(columns=80, rows=25)
+        gtw.ctx.repl.graphics_columns = None
+        gtw.resize(160, 50)
+        assert gtw.columns == 40
+
     def test_dsr_sends_cpr_response(self):
         inner = FakeWriter()
         ctx = FakeCtx()
         fake_writer = FakeWriter()
         ctx.writer = fake_writer
         from telix.graphics_writer import GraphicsWriter
+
         gtw = GraphicsWriter(inner, ctx, "sixel", columns=80, rows=25)
         gtw.write(b"\x1b[6n")
         cpr = fake_writer.output
@@ -140,9 +159,7 @@ class TestGraphicsWriter:
         assert gtw.custom_attr == "test"
 
     def test_schedule_resize_applied_on_write(self, monkeypatch):
-        monkeypatch.setattr(
-            "telix.graphics_writer.terminal.get_terminal_size", lambda: (48, 160)
-        )
+        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (48, 160))
         gtw, inner = self._make_writer(columns=80, rows=25)
         gtw.schedule_resize(160, 48)
         assert gtw._pending_resize == (160, 48)
@@ -293,5 +310,3 @@ class TestGraphicsWriter:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.sleep(0.1))
         assert len(inner.chunks) > 0
-
-

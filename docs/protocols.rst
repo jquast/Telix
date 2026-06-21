@@ -109,11 +109,11 @@ Telix recognises all 45 SyncTERM fonts:
 * **37** P0T NOoDLE, **38** mO'sOul, **39/41** MicroKnight, **40/42** Topaz (Amiga)
 * **43** Prestel
 
-When the ``--metafont`` option is enabled, the font switch also selects
+When the ``--graphics-font octants`` option is enabled, the font switch also selects
 the corresponding 8x16 bitmap font for octant rendering.  The wire
 encoding is updated to match the font's character set (e.g. switching
 from CP437 to Topaz changes the encoding to ISO-8859-1).
 
-Without ``--metafont``, telnetlib3 handles the encoding switch
+Without ``--graphics-font``, telnetlib3 handles the encoding switch
 transparently.
 

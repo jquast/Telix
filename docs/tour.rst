@@ -4,11 +4,12 @@ Tour
 Session Manager
 ---------------
 
-Search and filter sessions, choose a theme.
+Search, add, bookmark, and edit BBS or MUD sessions
 
 .. raw:: html
 
    <!-- TODO: video -->
+   _static/telix-session-manager.mp4
 
 MUDs
 ----
@@ -16,11 +17,11 @@ MUDs
 Connecting and line mode
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Connect to a MUD server, line-mode editing, and the REPL toolbar.
+Connect to a MUD using line-mode editing.
 
 .. raw:: html
 
-   <!-- TODO: video -->
+   <!-- TODO: video /_static/telix-session-manager.mp4 -->
 
 GMCP features
 ~~~~~~~~~~~~~
@@ -29,7 +30,7 @@ Room browser, fast travel, and autodiscover.
 
 .. raw:: html
 
-   <!-- TODO: video -->
+   <!-- TODO: video /_static/telix-repl-mud.mp4 -->
 
 Status bars
 ~~~~~~~~~~~
@@ -38,7 +39,7 @@ Customize the progress bars displayed in the status area.
 
 .. raw:: html
 
-   <!-- TODO: video -->
+   <!-- TODO: video /_static/telix-custom-status.mp4 -->
 
 Macros and triggers
 ~~~~~~~~~~~~~~~~~~~
@@ -47,7 +48,7 @@ Customize macros and triggers for automated responses.
 
 .. raw:: html
 
-   <!-- TODO: video -->
+   <!-- TODO: video /_static/ -->
 
 Scripting
 ~~~~~~~~~

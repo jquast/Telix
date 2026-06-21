@@ -175,7 +175,7 @@ class SSHWriter:
     def _send_naws(self) -> None:
         """Notify the SSH server of current terminal size.
 
-        Uses ``handle_send_naws`` when patched by the graphics/metafont writer
+        Uses ``handle_send_naws`` when patched by the graphics/octant writer
         to report the virtual terminal size instead of the real one.
         """
         if self._process is None:
@@ -184,6 +184,7 @@ class SSHWriter:
             rows, cols = self.handle_send_naws()
         else:
             import shutil
+
             cols, rows = shutil.get_terminal_size()
         self._process.change_terminal_size(cols, rows)
 

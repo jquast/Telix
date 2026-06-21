@@ -109,13 +109,13 @@ def test_persistence_load_empty(tui_tmp_paths, monkeypatch) -> None:
     assert not load_sessions()
 
 
-def test_metafont_false_survives_roundtrip_with_font_encoding(tui_tmp_paths) -> None:
-    cfg = SessionConfig(host="example.com", port=23, encoding="topaz", metafont=False)
+def test_graphics_font_empty_survives_roundtrip_with_font_encoding(tui_tmp_paths) -> None:
+    cfg = SessionConfig(host="example.com", port=23, encoding="topaz", graphics_font="")
     save_sessions({"srv": cfg})
     loaded = load_sessions()
-    assert loaded["srv"].metafont is False
-    assert loaded["srv"].metafont_columns is None
-    assert loaded["srv"].metafont_rows is None
+    assert loaded["srv"].graphics_font == ""
+    assert loaded["srv"].graphics_columns is None
+    assert loaded["srv"].graphics_rows is None
 
 
 def test_build_command_minimal() -> None:
@@ -938,8 +938,7 @@ class TestActionConnectScreenRefresh:
         with (
             patch("telix.client_tui_session_manager.subprocess.Popen", return_value=mock_proc),
             patch(
-                "telix.client_tui_session_manager.os.get_terminal_size",
-                return_value=MagicMock(lines=24, columns=80),
+                "telix.client_tui_session_manager.os.get_terminal_size", return_value=MagicMock(lines=24, columns=80)
             ),
             patch("telix.client_tui_session_manager.os.set_blocking", create=True),
             patch("telix.client_tui_session_manager.sys.stdout", mock_stdout),
