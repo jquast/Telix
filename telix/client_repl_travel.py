@@ -41,9 +41,8 @@ async def settle_triggers(
     """
     Wait for exclusive triggers to finish before moving.
 
-    When *noreply* is ``True`` or *engine* has nothing pending, returns
-    immediately.  Otherwise loops until both ``exclusive_active`` and
-    ``reply_pending`` clear, waiting for a fresh prompt between iterations.
+    When *noreply* is ``True`` or *engine* has nothing pending, returns immediately.  Otherwise loops until both
+    ``exclusive_active`` and ``reply_pending`` clear, waiting for a fresh prompt between iterations.
 
     :param engine: The trigger engine (may be ``None``).
     :param wait_fn: Coroutine to wait for a server prompt (may be ``None``).
@@ -75,9 +74,8 @@ def correct_room_edge(
     """
     Rewrite a graph exit so *direction* from *prev_num* points at *new_target*.
 
-    Called when a same-name room is reached under a different ID than expected.
-    Only updates the exit if it currently points at *old_target*.  Updates
-    the in-memory adjacency cache so subsequent pathfinding sees the change.
+    Called when a same-name room is reached under a different ID than expected. Only updates the exit if it currently
+    points at *old_target*.  Updates the in-memory adjacency cache so subsequent pathfinding sees the change.
 
     :param graph: The room graph (``RoomStore``).
     :param prev_num: Room from which the exit originates.
@@ -124,26 +122,21 @@ async def fast_travel(
     """
     Execute travel by sending movement commands with GA/EOR pacing.
 
-    Uses the same ``wait_for_prompt`` / ``echo_command`` functions that
-    the trigger engine and manual input use, so commands are paced by
-    the server's GA/EOR prompt signal and echoed visibly.
+    Uses the same ``wait_for_prompt`` / ``echo_command`` functions that the trigger engine and manual input use, so
+    commands are paced by the server's GA/EOR prompt signal and echoed visibly.
 
-    By default all triggers fire.  Travel waits for exclusive rules
-    (e.g. combat triggers) to finish in each room before moving.
-    With ``noreply=True`` the engine is disabled entirely and the settle
-    loop naturally does nothing.
+    By default all triggers fire.  Travel waits for exclusive rules (e.g. combat triggers) to finish in each room before
+    moving. With ``noreply=True`` the engine is disabled entirely and the settle loop naturally does nothing.
 
-    When the player arrives at an unexpected room, instead of aborting
-    the function re-pathfinds from the actual position to *destination*
-    and continues with the new route (up to 3 re-routes).
+    When the player arrives at an unexpected room, instead of aborting the function re-pathfinds from the actual
+    position to *destination* and continues with the new route (up to 3 re-routes).
 
     :param steps: List of (direction, expected_room_num) pairs.
     :param ctx: Session context for sending commands.
     :param log: Logger.
     :param destination: Final target room ID for re-pathfinding on detour.
-    :param correct_names: If ``True`` (default), rewrite graph edges when
-        arriving at a same-name room with a different ID.  Set to ``False``
-        when distinct room IDs must be preserved.
+    :param correct_names: If ``True`` (default), rewrite graph edges when arriving at a same-name room with a different
+        ID. Set to ``False`` when distinct room IDs must be preserved.
     :param noreply: Completely disable the trigger engine during travel.
     """
     wait_fn = ctx.prompt.wait_fn
@@ -433,17 +426,14 @@ async def autodiscover(
     """
     Explore unvisited exits reachable from the current room.
 
-    BFS-discovers frontier exits (leading to unvisited or unknown rooms),
-    travels to each, then returns to the starting room before trying the
-    next.  Maintains an in-memory ``tried`` set to avoid retrying exits
-    that failed or led to unexpected rooms.  Stops after *limit* exits
-    or when no more branches remain.
+    BFS-discovers frontier exits (leading to unvisited or unknown rooms), travels to each, then returns to the starting
+    room before trying the next.  Maintains an in-memory ``tried`` set to avoid retrying exits that failed or led to
+    unexpected rooms.  Stops after *limit* exits or when no more branches remain.
 
     :param ctx: Session context with room graph and session attributes.
     :param log: Logger.
     :param limit: Maximum number of exits to explore.
-    :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
-        deepest-first ordering.
+    :param strategy:``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
     :param noreply: Completely disable the trigger engine during the walk.
     :param room_change_cmd: Semicolon-separated commands to send in each newly discovered room.
     """

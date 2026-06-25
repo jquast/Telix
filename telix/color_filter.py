@@ -95,11 +95,10 @@ class ColorConfig(typing.NamedTuple):
     :param brightness: Brightness scale factor [0.0..1.0], where 1.0 is original.
     :param contrast: Contrast scale factor [0.0..1.0], where 1.0 is original.
     :param background_color: Forced background RGB as (R, G, B) tuple.
-    :param ice_colors: When True, treat SGR 5 (blink) as bright background
-        (iCE colors), promoting background 40-47 to palette 8-15.
-    :param foreground_color: Detected terminal foreground RGB.  When set,
-        used for default fg (SGR 0/39) instead of palette white.  No
-        brightness/contrast adjustment is applied to detected colors.
+    :param ice_colors: When True, treat SGR 5 (blink) as bright background (iCE colors), promoting background 40-47 to
+        palette 8-15.
+    :param foreground_color: Detected terminal foreground RGB. When set, used for default fg (SGR 0/39) instead of
+        palette white. No brightness/contrast adjustment is applied to detected colors.
     """
 
     palette_name: str = "vga"
@@ -540,8 +539,7 @@ class PetsciiColorFilter:
         """
         Replace PETSCII control bytes with ANSI byte sequences.
 
-        This bypasses the decode-filter-encode roundtrip to avoid
-        corruption from the PETSCII codec (which encodes ASCII
+        This bypasses the decode-filter-encode roundtrip to avoid corruption from the PETSCII codec (which encodes ASCII
         letters to different byte values).
 
         :param data: Raw PETSCII-encoded bytes.
@@ -637,12 +635,11 @@ class AtasciiControlFilter:
 
     @staticmethod
     def filter_bytes(data: bytes) -> bytes:
-        """
+        r"""
         Replace ATASCII control bytes with ANSI byte sequences.
 
-        This bypasses the decode-filter-encode roundtrip to avoid
-        corruption from the ATASCII codec (which cannot encode
-        ASCII control characters like ``\\x08`` and ``\\x1b``).
+        This bypasses the decode-filter-encode roundtrip to avoid corruption from the ATASCII codec (which cannot encode
+        ASCII control characters like ``\x08`` and ``\x1b``).
 
         :param data: Raw ATASCII-encoded bytes.
         :returns: Bytes with control codes replaced by ANSI escapes.

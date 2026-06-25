@@ -56,9 +56,8 @@ class SSHTelix(asyncssh.SSHClient):
         """
         Collect a password from the REPL with masked input.
 
-        Activates ``will_echo`` so the REPL scrambles the typed password, feeds
-        a ``"Password: "`` prompt into the output stream, sets ``pending_auth``
-        to route the next Enter-key submission to the auth queue, then waits.
+        Activates ``will_echo`` so the REPL scrambles the typed password, feeds a ``"Password: "`` prompt into the
+        output stream, sets ``pending_auth`` to route the next Enter-key submission to the auth queue, then waits.
 
         :returns: The password entered by the user.
         """
@@ -84,9 +83,8 @@ class SSHTelix(asyncssh.SSHClient):
         """
         Collect responses to keyboard-interactive challenge prompts.
 
-        For each prompt, feeds the prompt text into the output stream and
-        awaits a response from the REPL.  Echoing is suppressed for prompts
-        where *echo* is ``False`` (passwords, PINs, etc.).
+        For each prompt, feeds the prompt text into the output stream and awaits a response from the REPL.  Echoing is
+        suppressed for prompts where *echo* is ``False`` (passwords, PINs, etc.).
 
         :param name: Challenge name (displayed for context).
         :param instructions: Instructions from the server.
@@ -135,11 +133,9 @@ async def run_ssh_client(
     """
     Connect to an SSH server and run the telix shell.
 
-    Creates :class:`~telix.ssh_transport.SSHReader` and
-    :class:`~telix.ssh_transport.SSHWriter` adapters, starts the shell as a
-    background task, then opens an SSH connection and process.  Data received
-    from the server is fed directly into the reader queue; EOF is signalled on
-    disconnect.
+    Creates :class:`~telix.ssh_transport.SSHReader` and :class:`~telix.ssh_transport.SSHWriter` adapters, starts the
+    shell as a background task, then opens an SSH connection and process.  Data received from the server is fed directly
+    into the reader queue; EOF is signalled on disconnect.
 
     :param host: SSH server hostname or address.
     :param port: SSH port (default 22).
@@ -255,7 +251,7 @@ def build_parser() -> argparse.ArgumentParser:
     telix.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
     telix.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
     telix.add_argument(
-        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics/octant rendering (default: 0)"
+        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering (default: 0)"
     )
     return parser
 

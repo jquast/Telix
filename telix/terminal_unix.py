@@ -14,8 +14,8 @@ def get_terminal_size() -> tuple[int, int]:
     """
     Return ``(rows, cols)`` of the controlling terminal.
 
-    Falls back to the ``LINES`` / ``COLUMNS`` environment variables when
-    the ioctl is not available (e.g. no controlling tty).
+    Falls back to the ``LINES`` / ``COLUMNS`` environment variables when the ioctl is not available (e.g. no controlling
+    tty).
     """
     try:
         fmt = "hhhh"
@@ -32,10 +32,9 @@ def blocking_fds() -> Generator[None, None, None]:
     """
     Context manager to ensure FDs 0/1/2 are blocking for a subprocess.
 
-    asyncio's ``connect_write_pipe`` sets ``O_NONBLOCK`` on the PTY file
-    description.  A Textual subprocess inherits non-blocking FDs, which can
-    cause its ``WriterThread`` to silently fail.  This saves and restores
-    the blocking state around subprocess calls.
+    asyncio's ``connect_write_pipe`` sets ``O_NONBLOCK`` on the PTY file description.  A Textual subprocess inherits
+    non-blocking FDs, which can cause its ``WriterThread`` to silently fail.  This saves and restores the blocking state
+    around subprocess calls.
     """
     saved = {}
     for fd in (0, 1, 2):
@@ -110,12 +109,10 @@ def restore_blocking_fds(logfile: str = "") -> None:
     """
     Restore blocking mode on stdin/stdout/stderr.
 
-    The parent process may set ``O_NONBLOCK`` on the shared PTY file
-    description (via asyncio ``connect_read_pipe``).
-    Since stdin, stdout, and stderr all reference the same kernel file
-    description, the child subprocess inherits non-blocking mode.
-    Textual's ``WriterThread`` does not handle ``BlockingIOError``,
-    so a non-blocking stderr causes the thread to die silently.
+    The parent process may set ``O_NONBLOCK`` on the shared PTY file description (via asyncio ``connect_read_pipe``).
+    Since stdin, stdout, and stderr all reference the same kernel file description, the child subprocess inherits non-
+    blocking mode. Textual's ``WriterThread`` does not handle ``BlockingIOError``, so a non-blocking stderr causes the
+    thread to die silently.
 
     :param logfile: Optional path to the parent's logfile for child logging.
     """

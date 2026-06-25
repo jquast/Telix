@@ -1,10 +1,9 @@
 """
 Session management layer for the Textual TUI.
 
-Provides session configuration, persistence, command building, the session
-list/edit/theme screens, and related helper functions.  No imports from other
-``client_tui_*`` files except ``client_tui_base`` (for base editor classes
-and help screen).
+Provides session configuration, persistence, command building, the session list/edit/theme screens, and related helper
+functions.  No imports from other ``client_tui_*`` files except ``client_tui_base`` (for base editor classes and help
+screen).
 """
 
 # std imports
@@ -44,10 +43,9 @@ class VerticalOnlyDataTable(textual.widgets.DataTable):
     """
     DataTable subclass that never scrolls horizontally.
 
-    Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region``
-    with ``force=True``, bypassing ``overflow-x: hidden``.  The built-in
-    ``action_scroll_end`` also sets ``scroll_x`` directly.  This subclass
-    clamps ``scroll_x`` to zero in all relevant code paths.
+    Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region`` with ``force=True``, bypassing ``overflow-x:
+    hidden``.  The built-in ``action_scroll_end`` also sets ``scroll_x`` directly.  This subclass clamps ``scroll_x`` to
+    zero in all relevant code paths.
     """
 
     def _scroll_cursor_into_view(self, animate: bool = False) -> None:
@@ -153,15 +151,17 @@ def init_font_encodings() -> None:
     from .fonts import font_registry
 
     for entry in font_registry.FONT_TABLE:
-        if entry.short_name in ENCODINGS:
-            _FONT_ENCODINGS[entry.short_name] = (entry.encoding, entry.font_id)
+        short = entry.name.lower()
+        if short in ENCODINGS:
+            _FONT_ENCODINGS[short] = (entry.encoding, entry.font_id)
 
 
 def resolve_encoding_font(enc: str) -> tuple[str, int | None]:
-    """Resolve an encoding/font name to (wire_encoding, font_id_or_None).
+    """
+    Resolve an encoding/font name to (wire_encoding, font_id_or_None).
 
-    Font names like "topaz" resolve to their wire encoding (e.g. "iso-8859-1")
-    and SyncTERM font ID.  Regular encodings return themselves and ``None``.
+    Font names like "topaz" resolve to their wire encoding (e.g. "iso-8859-1") and SyncTERM font ID.  Regular encodings
+    return themselves and ``None``.
 
     :param enc: Encoding or font name from the session config.
     :returns: Tuple of (wire_encoding, font_id).
@@ -176,16 +176,16 @@ _GRAPHICS_CAPS: tuple[bool, bool] | None = None
 
 
 def detect_graphics_caps() -> tuple[bool, bool]:
-    """Detect terminal graphics capabilities (kitty, sixel).
+    """
+    Detect terminal graphics capabilities (kitty, sixel).
 
-    Prefers the pre-detected values from :envvar:`TELIX_HAS_KITTY` and
-    :envvar:`TELIX_HAS_SIXEL` (set by :func:`~telix.main._detect_terminal_colors`
-    before Textual takes over the terminal).  Falls back to querying
+    Prefers the pre-detected values from :envvar:`TELIX_HAS_KITTY` and :envvar:`TELIX_HAS_SIXEL` (set by
+    :func:`~telix.main._detect_terminal_colors` before Textual takes over the terminal).  Falls back to querying
     :mod:`blessed` directly.
 
     Results are cached in the module-level ``_GRAPHICS_CAPS`` tuple.
 
-    :returns: ``(has_kitty, has_sixel)`` tuple.
+    :returns:``(has_kitty, has_sixel)`` tuple.
     """
     global _GRAPHICS_CAPS
     if _GRAPHICS_CAPS is not None:
@@ -218,9 +218,8 @@ def normalize_encoding(enc: str) -> str:
     """
     Return the ENCODINGS entry that best matches *enc*, or ``ENCODINGS[0]``.
 
-    Strips whitespace then resolves Python codec aliases so that e.g.
-    ``"utf-8"``, ``"latin1"``, or ``" cp437 "`` each map to the canonical
-    ENCODINGS label.
+    Strips whitespace then resolves Python codec aliases so that e.g. ``"utf-8"``, ``"latin1"``, or ``" cp437 "`` each
+    map to the canonical ENCODINGS label.
     """
     enc = enc.strip()
     if enc in ENCODINGS:
@@ -465,7 +464,7 @@ class SessionConfig:
     clear_homes_cursor: bool = False
     ff_clears_screen: bool = False
 
-    # Graphics: kitty/sixel terminal graphics or octant Unicode rendering
+    # Graphics: kitty/sixel terminal graphics
     graphics_font: str = ""
 
     # Virtual terminal size override for graphics font rendering
@@ -731,8 +730,8 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
     """
     Build ``telix-ssh`` CLI arguments from *config*.
 
-    SSH connections always use BBS mode (raw, VGA palette, iCE colors);
-    those flags are applied automatically by :func:`~telix.ssh_client.main`.
+    SSH connections always use BBS mode (raw, VGA palette, iCE colors); those flags are applied automatically by
+    :func:`~telix.ssh_client.main`.
     """
     cmd = [sys.executable, "-c", "from telix.ssh_client import main; main()", config.host]
     if config.port != 22:
@@ -786,9 +785,8 @@ def terminal_cleanup(clear_screen: bool = True) -> str:
     """
     Return the terminal cleanup sequence.
 
-    :param clear_screen: When ``True``, append cursor-home and clear-screen
-        sequences.  Set to ``False`` when the caller wants the previous
-        output (e.g. a disconnect message) to remain visible.
+    :param clear_screen: When ``True``, append cursor-home and clear-screen sequences. Set to ``False`` when the caller
+        wants the previous output (e.g. a disconnect message) to remain visible.
     """
     if clear_screen:
         return TERMINAL_CLEANUP + "\x1b[H\x1b[2J"
@@ -979,8 +977,6 @@ class SessionListScreen(textual.screen.Screen[None]):
             parts.append("ts")
         if cfg.graphics_font == "auto":
             parts.append("gfx")
-        elif cfg.graphics_font == "octants":
-            parts.append("oct")
         return " ".join(parts)
 
     def add_rows(self, table: "textual.widgets.DataTable[object]", items: list[tuple[str, SessionConfig]]) -> None:
@@ -1776,7 +1772,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             is_black = (r, g, b) == (0, 0, 0)
             indicator = "[green]\u2714[/]" if is_black else "[red]\u2718[/]"
             maybe_not = "" if is_black else "NOT "
-            tt = f"Your background is {maybe_not}detected as black, which is required for correct artwork display on most BBS and MUDs."
+            tt = (
+                f"Your background is {maybe_not}detected as black, "
+                f"which is required for correct artwork display on most BBS and MUDs."
+            )
             bg_label = textual.widgets.Label("Detected Background", classes="field-label-wide")
             bg_label.tooltip = tt
             bg_display = textual.widgets.Static(
@@ -1815,7 +1814,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     " required by many BBS systems"
                 )
                 yield ff_switch
-        # Font Graphics radio group (mutually exclusive: none / kitty+sixel / octants)
+        # Font Graphics radio group (mutually exclusive: none / kitty+sixel)
         has_kitty, has_sixel = detect_graphics_caps()
         if has_kitty:
             gfx_radio_label = "Kitty Graphics"
@@ -1831,8 +1830,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             active = "none"
         elif cfg.graphics_font == "auto":
             active = "gfx"
-        elif cfg.graphics_font == "octants":
-            active = "octants"
         else:
             active = "none"
         cols_rows_enabled = active != "none"
@@ -1843,14 +1840,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 textual.widgets.RadioButton(
                     gfx_radio_label, value=active == "gfx", disabled=not gfx_supported, id="gfx-graphics"
                 ),
-                textual.widgets.RadioButton("Octants (Unicode 17)", value=active == "octants", id="gfx-octants"),
                 id="font-graphics",
             )
-            gfx_radio.tooltip = (
-                "Kitty/Sixel: render using terminal inline graphics."
-                " Octants: render using Unicode octant block characters."
-                " Only one may be active."
-            )
+            gfx_radio.tooltip = "Kitty/Sixel: render using terminal inline graphics. Only one may be active."
             yield textual.widgets.Label("Font Graphics", classes="field-label")
             yield gfx_radio
         with textual.containers.Horizontal(classes="switch-row"):
@@ -2002,15 +1994,14 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
-        """Select a radio button programmatically.
+        """
+        Select a radio button programmatically.
 
-        Delegates to :func:`telix.util.select_radio_button` which disables
-        ``RadioButton.Changed`` message posting during the change to prevent
-        the RadioSet from fighting the selection.
+        Delegates to :func:`telix.util.select_radio_button` which disables ``RadioButton.Changed`` message posting
+        during the change to prevent the RadioSet from fighting the selection.
 
-        If the RadioSet was disabled, it is re-enabled for the value change and
-        re-disabled after the next refresh so that the ``RadioButton.Changed`` event
-        can be processed before the widget is locked again.
+        If the RadioSet was disabled, it is re-enabled for the value change and re-disabled after the next refresh so
+        that the ``RadioButton.Changed`` event can be processed before the widget is locked again.
         """
         radio_set = self.query_one(f"#{radio_set_id}", textual.widgets.RadioSet)
         was_disabled = radio_set.disabled
@@ -2314,8 +2305,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         font_gfx = self.query_one("#font-graphics", textual.widgets.RadioSet).pressed_button
         if font_gfx is not None and font_gfx.id == "gfx-graphics":
             cfg.graphics_font = "auto"
-        elif font_gfx is not None and font_gfx.id == "gfx-octants":
-            cfg.graphics_font = "octants"
         else:
             cfg.graphics_font = ""
         gf_cols = self.query_one("#graphics-columns", textual.widgets.Input).value.strip()

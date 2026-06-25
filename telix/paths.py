@@ -31,8 +31,8 @@ def safe_session_slug(session_key: str) -> str:
     """
     Return a filesystem-safe slug for *session_key*.
 
-    Uses a SHA-256 hash (first 12 hex chars) to avoid path traversal
-    and special-character issues with arbitrary hostnames.
+    Uses a SHA-256 hash (first 12 hex chars) to avoid path traversal and special-character issues with arbitrary
+    hostnames.
 
     :param session_key: Session identifier, typically ``host:port``.
     :returns: 12-character hex string.

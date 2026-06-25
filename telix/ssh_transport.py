@@ -1,13 +1,12 @@
 """
 SSH reader/writer adapters for telix sessions.
 
-Provides :class:`SSHReader` and :class:`SSHWriter`, which present a compatible
-interface to telnetlib3's reader/writer so that the REPL can operate over an
-SSH transport without modification.
+Provides :class:`SSHReader` and :class:`SSHWriter`, which present a compatible interface to telnetlib3's reader/writer
+so that the REPL can operate over an SSH transport without modification.
 
-:class:`SSHReader` is a queue-based reader fed by the asyncssh receive loop.
-:class:`SSHWriter` wraps an :class:`asyncssh.SSHClientProcess[str]` for writing and
-carries the auth coordination state used by :class:`~telix.ssh_client.SSHTelix`.
+:class:`SSHReader` is a queue-based reader fed by the asyncssh receive loop. :class:`SSHWriter` wraps an
+:class:`asyncssh.SSHClientProcess[str]` for writing and carries the auth coordination state used by
+:class:`~telix.ssh_client.SSHTelix`.
 """
 
 import typing
@@ -29,12 +28,11 @@ class SSHReader:
     """
     Async reader fed by asyncssh process stdout.
 
-    Presents the same ``read()`` / ``at_eof()`` interface as
-    :class:`~telnetlib3.stream_reader.TelnetReader` so the REPL's
-    ``_read_server`` loop works without changes.
+    Presents the same ``read()`` / ``at_eof()`` interface as :class:`~telnetlib3.stream_reader.TelnetReader` so the
+    REPL's ``_read_server`` loop works without changes.
 
-    Unlike :class:`~telix.ws_transport.WebSocketReader`, ``feed_data`` accepts
-    a ``str`` because asyncssh already decodes the stream.
+    Unlike :class:`~telix.ws_transport.WebSocketReader`, ``feed_data`` accepts a ``str`` because asyncssh already
+    decodes the stream.
     """
 
     def __init__(self) -> None:
@@ -116,9 +114,9 @@ class SSHWriter:
         """
         Initialise the writer.
 
-        :param process: The asyncssh process; may be ``None`` initially and set
-            later once the connection is established.
-        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param process: The asyncssh process; may be ``None`` initially and set later once the connection is
+            established.
+        :param peername:``(host, port)`` tuple for ``get_extra_info("peername")``.
         """
         self._process: asyncssh.SSHClientProcess[str] | None = process
         self._peername = peername
@@ -173,10 +171,11 @@ class SSHWriter:
         self.write(buf)
 
     def _send_naws(self) -> None:
-        """Notify the SSH server of current terminal size.
+        """
+        Notify the SSH server of current terminal size.
 
-        Uses ``handle_send_naws`` when patched by the graphics/octant writer
-        to report the virtual terminal size instead of the real one.
+        Uses ``handle_send_naws`` when patched by the graphics writer to report the virtual terminal size instead of the
+        real one.
         """
         if self._process is None:
             return

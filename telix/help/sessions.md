@@ -100,7 +100,7 @@ SyncTERM bitmap font names:
 | **p0t-noodle** | iso-8859-1 | 37 |
 | **mosoul** | iso-8859-1 | 38 |
 
-When a font name is selected and Octants rendering is enabled, telix
+When a font name is selected and Kitty/Sixel rendering is enabled, telix
 uses the font's wire encoding for the connection and renders using
 that font's bitmap glyphs.
 
@@ -113,13 +113,9 @@ engine for bitmap fonts:
 |--------|-------------|
 | **None** | Standard terminal text (no bitmap rendering) |
 | **Kitty/Sixel** | Render using terminal inline graphics protocol |
-| **Octants** | Render using Unicode octant block characters |
 
 The Kitty/Sixel option requires a terminal that supports the Kitty
 graphics protocol or sixel.
-
-**Octants** requires Unicode 16.0 font support for the
-Symbols for Legacy Computing block (U+1CD00 - U+1CDE5).
 
 ### Display options
 
@@ -132,7 +128,6 @@ The Display tab includes color and rendering options:
 | **iCE Colors** | Use blink attribute as bright background |
 | **Clear Homes Cursor** | Inject cursor-home before clear-screen (CTerm compatibility) |
 | **FF is Clear+Home** | Treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility) |
-| **Octants** | Render using bitmap fonts as Unicode octant block characters |
 | **Columns / Rows** | Force virtual terminal size for graphics font (blank = auto) |
 
 **Clear Homes Cursor** compensates for BBS software that sends
@@ -145,9 +140,3 @@ terminals.  Enabled by default for BBS server type.
 the cursor.  Standard VT100 terminals scroll the screen on Form Feed;
 SyncTERM treats it as a clear-screen command.  Enabled by default for
 BBS server type.
-
-**Octants** renders each BBS character as a 4x4 block of
-Unicode octant characters, giving pixel-accurate bitmap font rendering.
-The initial font is selected from the Encoding/Font setting; BBS
-software can switch fonts dynamically via SyncTERM font sequences.
-All 45 SyncTERM fonts are supported.

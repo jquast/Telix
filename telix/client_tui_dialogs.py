@@ -1,11 +1,9 @@
 """
 Confirmation dialogs, walk dialogs, and the tabbed editor screen.
 
-Contains ``ConfirmDialogScreen``, ``RandomwalkDialogScreen``,
-``AutodiscoverDialogScreen``, ``TabbedEditorScreen``, and their
-standalone entry points. Room browser, captures viewer, and main app
-live in ``client_tui_rooms``, ``client_tui_captures``, and
-``client_tui_app`` respectively.
+Contains ``ConfirmDialogScreen``, ``RandomwalkDialogScreen``, ``AutodiscoverDialogScreen``, ``TabbedEditorScreen``, and
+their standalone entry points. Room browser, captures viewer, and main app live in ``client_tui_rooms``,
+``client_tui_captures``, and ``client_tui_app`` respectively.
 """
 
 # std imports
@@ -96,8 +94,8 @@ class TabbedEditorScreen(textual.screen.Screen[None]):
         """
         Initialize tabbed editor from a parameters dict.
 
-        :param params: Dict with keys for each pane's constructor args, plus ``initial_tab``,
-            ``initial_channel``, and ``hide_globals``.
+        :param params: Dict with keys for each pane's constructor args, plus ``initial_tab``, ``initial_channel``, and
+            ``hide_globals``.
         """
         super().__init__()
         self.params = params
@@ -292,8 +290,8 @@ def unified_editor_main() -> None:
     """
     Launch the tabbed editor TUI as a standalone process.
 
-    Reads a single JSON blob from ``sys.argv[1]`` containing all parameters for every pane. Called
-    from the REPL via ``launch_unified_editor()``.
+    Reads a single JSON blob from ``sys.argv[1]`` containing all parameters for every pane. Called from the REPL via
+    ``launch_unified_editor()``.
     """
     params = json.loads(sys.argv[1])
     logfile = params.get("logfile", "")

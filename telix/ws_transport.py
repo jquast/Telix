@@ -44,12 +44,11 @@ def parse_gmcp_frame(text: str) -> tuple[str, typing.Any]:
     """
     Parse a GMCP TEXT frame into ``(package_name, payload)``.
 
-    The format is ``"Package.Name optional_json_payload"``.  If no payload
-    is present, *payload* is ``None``.  Malformed JSON is returned as a
-    raw string.
+    The format is ``"Package.Name optional_json_payload"``.  If no payload is present, *payload* is ``None``.  Malformed
+    JSON is returned as a raw string.
 
     :param text: Raw TEXT frame content.
-    :returns: ``(package_name, parsed_payload)``
+    :returns:``(package_name, parsed_payload)``
     :raises ValueError: If *text* is empty.
     """
     if not text:
@@ -171,9 +170,8 @@ class WSTelnetTransport(asyncio.Transport):
     """
     Asyncio Transport that sends bytes as WebSocket binary frames.
 
-    Writes are enqueued for delivery by a drain coroutine.  Inbound data is
-    injected by calling the owning ``asyncio.Protocol``'s
-    ``data_received()`` directly from the receive loop.
+    Writes are enqueued for delivery by a drain coroutine.  Inbound data is injected by calling the owning
+    ``asyncio.Protocol``'s ``data_received()`` directly from the receive loop.
 
     :param send_queue: Queue shared with the drain coroutine.
     :param extra: Mapping for :meth:`get_extra_info` (``"peername"`` etc.).
@@ -225,9 +223,8 @@ class WebSocketReader:
     """
     Async reader fed by WebSocket BINARY frames.
 
-    Presents the same ``read()`` / ``at_eof()`` interface as
-    :class:`~telnetlib3.stream_reader.TelnetReader` so the REPL's
-    ``_read_server`` loop works without changes.
+    Presents the same ``read()`` / ``at_eof()`` interface as :class:`~telnetlib3.stream_reader.TelnetReader` so the
+    REPL's ``_read_server`` loop works without changes.
     """
 
     def __init__(self, encoding: str = "utf-8", encoding_errors: str = "replace") -> None:
@@ -309,7 +306,7 @@ class WebSocketWriter:
         Initialise the writer.
 
         :param ws: A ``websockets`` connection object.
-        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param peername:``(host, port)`` tuple for ``get_extra_info("peername")``.
         :param encoding: Character encoding for outgoing text.
         """
         self._ws = ws
@@ -409,8 +406,7 @@ class WebSocketWriter:
         """
         Enqueue an IAC response (e.g. ``IAC DO ECHO``) as a binary frame.
 
-        Used by the telnet-over-WebSocket receive loop to send negotiation
-        responses back to the server.
+        Used by the telnet-over-WebSocket receive loop to send negotiation responses back to the server.
 
         :param cmd: IAC command byte (e.g. ``WILL``, ``WONT``, ``DO``, ``DONT``).
         :param option: Telnet option byte.
@@ -435,9 +431,8 @@ class WebSocketWriter:
         """
         Send queued messages over the WebSocket until closed.
 
-        Must be run as a background task.  Items are sent in FIFO order.
-        Stops when a ``None`` sentinel is received (placed by :meth:`close`)
-        or when the connection closes unexpectedly.
+        Must be run as a background task.  Items are sent in FIFO order. Stops when a ``None`` sentinel is received
+        (placed by :meth:`close`) or when the connection closes unexpectedly.
         """
         while True:
             item = await self._send_queue.get()

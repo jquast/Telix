@@ -138,13 +138,13 @@ def write_hint(
     """
     Write *hint* at the current cursor position with optional progress bar.
 
-    When *progress* is not ``None``, the hint is split into a reverse-video
-    left portion (elapsed) and a normal dim right portion (remaining).
+    When *progress* is not ``None``, the hint is split into a reverse-video left portion (elapsed) and a normal dim
+    right portion (remaining).
 
     :param hint: Plain hint text.
     :param out: Stream to write SGR-encoded bytes to.
     :param bt: blessed Terminal instance.
-    :param progress: ``0.0..1.0`` fraction, or ``None`` for plain dim text.
+    :param progress:``0.0..1.0`` fraction, or ``None`` for plain dim text.
     :param bg_sgr: Optional background SGR prefix (e.g. trigger bg color).
     :param trigger: Use trigger suggestion color instead of normal.
     """
@@ -308,8 +308,7 @@ def vital_color(fraction: float, kind: str) -> str:
     Return an RGB hex color for a vitals bar.
 
     :param fraction: 0.0 (empty) to 1.0 (full).
-    :param kind: ``"hp"`` for red-to-green, ``"mp"`` for golden-yellow-to-blue,
-        ``"xp"`` for purple-to-violet.
+    :param kind:``"hp"`` for red-to-green, ``"mp"`` for golden-yellow-to-blue, ``"xp"`` for purple-to-violet.
     """
     fraction = max(0.0, min(1.0, fraction))
     if kind == "hp":
@@ -385,13 +384,11 @@ def vital_bar(
     """
     Build a labelled progress-bar with sextant bookends and overlaid text.
 
-    The label (e.g. ``513/514 100% HP``) is rendered *on top of* the bar
-    using segmented digit glyphs.  Sextant block characters bookend the
-    bar for a rounded appearance.
+    The label (e.g. ``513/514 100% HP``) is rendered *on top of* the bar using segmented digit glyphs.  Sextant block
+    characters bookend the bar for a rounded appearance.
 
     :param flash_elapsed: Seconds since flash start; negative means no flash.
-    :param color_override: If set, use this ``#rrggbb`` color instead of
-        computing from *kind*.
+    :param color_override: If set, use this ``#rrggbb`` color instead of computing from *kind*.
     """
     try:
         cur = int(current)
@@ -506,7 +503,7 @@ def layout_toolbar(slots: list["ToolbarSlot"], cols: int) -> tuple[list["Toolbar
     """
     Fit toolbar slots into *cols* columns by priority.
 
-    :returns: ``(left_slots, right_slots)`` ordered by ``display_order``.
+    :returns:``(left_slots, right_slots)`` ordered by ``display_order``.
     """
     left: list[ToolbarSlot] = []
     right: list[ToolbarSlot] = []
@@ -555,8 +552,7 @@ def left_sep_widths(left: list["ToolbarSlot"]) -> list[int]:
     """
     Return per-gap separator widths for left slots.
 
-    Adjacent growable (vital-bar) slots use ``BAR_GAP_WIDTH``; all other
-    gaps use ``DISPLAY.SEPARATOR_WIDTH``.
+    Adjacent growable (vital-bar) slots use ``BAR_GAP_WIDTH``; all other gaps use ``DISPLAY.SEPARATOR_WIDTH``.
     """
     gaps: list[int] = []
     for i in range(1, len(left)):
@@ -573,7 +569,7 @@ def fill_toolbar(
     """
     Distribute extra horizontal space across growable slots and separators.
 
-    :returns: ``(left_slots, right_slots, sep_width)`` with expanded bars.
+    :returns:``(left_slots, right_slots, sep_width)`` with expanded bars.
     """
     left_gaps = left_sep_widths(left)
     n_right_seps = max(0, len(right) - 1)
@@ -736,8 +732,8 @@ class ToolbarRenderer:
     """
     Encapsulates GMCP vitals toolbar state and rendering.
 
-    Replaces the former ``render_toolbar`` function and its ``toolbar_state``
-    dict with typed attributes and small focused methods.
+    Replaces the former ``render_toolbar`` function and its ``toolbar_state`` dict with typed attributes and small
+    focused methods.
     """
 
     def __init__(
@@ -774,8 +770,7 @@ class ToolbarRenderer:
         """
         Render GMCP vitals toolbar at ``scroll.input_row + 1``.
 
-        :returns: ``True`` if a flash is active and the caller should
-            schedule a re-render.
+        :returns:``True`` if a flash is active and the caller should schedule a re-render.
         """
         if not self.ensure_gmcp_ready():
             return False
@@ -1094,8 +1089,8 @@ class ToolbarRenderer:
         """
         Append an ETA slot from cached fragments.
 
-        ETA is recomputed only by the 1-second ``schedule_eta_refresh`` timer
-        to avoid jittery numbers on every line of server output.
+        ETA is recomputed only by the 1-second ``schedule_eta_refresh`` timer to avoid jittery numbers on every line of
+        server output.
         """
         if self.cached_eta_frags is None:
             self.cached_eta_frags = self.xp.eta_fragments(maxxp, now)

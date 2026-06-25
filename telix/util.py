@@ -18,9 +18,8 @@ def strip_decstbm(text: str) -> str:
     r"""
     Remove DECSTBM (Set Scrolling Region) escape sequences from server output.
 
-    Some MUD servers send ``\x1b[Pt;Pbr`` to set their own scroll region,
-    which conflicts with the client's managed scroll region and causes the
-    toolbar to scroll into the text area.
+    Some MUD servers send ``\x1b[Pt;Pbr`` to set their own scroll region, which conflicts with the client's managed
+    scroll region and causes the toolbar to scroll into the text area.
 
     :param text: Decoded server text.
     :returns: Text with DECSTBM sequences removed.
@@ -35,17 +34,15 @@ def erase_eol(text: str) -> str:
     r"""
     Insert ``\x1b[K`` (erase to EOL) before ``\r+\n`` on lines with visible content.
 
-    Inserts an erase-to-EOL sequence immediately before each carriage-return +
-    line-feed group, but only when the segment since the previous line ending
-    contains at least one printable (non-escape-sequence) character.
+    Inserts an erase-to-EOL sequence immediately before each carriage-return + line-feed group, but only when the
+    segment since the previous line ending contains at least one printable (non-escape-sequence) character.
 
-    Lines that contain only cursor-positioning or attribute sequences (e.g.
-    ``\x1b[2H\x1b[...m\r\n``) are left unchanged so that absolute cursor
-    moves do not cause the destination row to be erased.
+    Lines that contain only cursor-positioning or attribute sequences (e.g. ``\x1b[2H\x1b[...m\r\n``) are left unchanged
+    so that absolute cursor moves do not cause the destination row to be erased.
 
     :param text: Decoded server text, possibly containing ANSI escape sequences.
-    :returns: Text with erase-to-EOL sequences inserted before line endings on
-        lines that contain at least one printable character.
+    :returns: Text with erase-to-EOL sequences inserted before line endings on lines that contain at least one printable
+        character.
     """
     parts = re.split(r"(\r+\n)", text)
     result = []
@@ -65,8 +62,8 @@ def load_json_entries(path: str, session_key: str, entry_key: str) -> list[dict[
     """
     Load a list of entries from a session-keyed JSON file.
 
-    The file is structured as ``{session_key: {entry_key: [...]}, ...}``.
-    Returns an empty list when the session or key is absent.
+    The file is structured as ``{session_key: {entry_key: [...]}, ...}``. Returns an empty list when the session or key
+    is absent.
 
     :param path: Path to the JSON file.
     :param session_key: Session identifier (e.g. ``"host:port"``).
@@ -86,8 +83,8 @@ def save_json_entries(path: str, session_key: str, entry_key: str, entries: list
     """
     Atomically save *entries* to *path* under ``session_key[entry_key]``.
 
-    Reads existing data from *path* (if present) so that other sessions'
-    data is preserved.  Writes atomically via :func:`~telix.paths.atomic_write`.
+    Reads existing data from *path* (if present) so that other sessions' data is preserved.  Writes atomically via
+    :func:`~telix.paths.atomic_write`.
 
     :param path: Path to the JSON file.
     :param session_key: Session identifier (e.g. ``"host:port"``).
@@ -132,16 +129,15 @@ def relative_time(iso_str: str) -> str:
 
 
 def select_radio_button(radio_set: typing.Any, target_button: typing.Any) -> None:
-    """Programmatically select a RadioButton without triggering RadioSet fight conditions.
+    """
+    Programmatically select a RadioButton without triggering RadioSet fight conditions.
 
-    RadioSet's ``_on_radio_button_changed`` handler sets any deselected button
-    back to ``True``, which causes a cascade of opposing value changes when buttons
-    are set programmatically.  This function works around that by disabling
-    ``RadioButton.Changed`` message posting on every button in the set before
-    changing values, then re-enabling it in a ``finally`` block.
+    RadioSet's ``_on_radio_button_changed`` handler sets any deselected button back to ``True``, which causes a cascade
+    of opposing value changes when buttons are set programmatically.  This function works around that by disabling
+    ``RadioButton.Changed`` message posting on every button in the set before changing values, then re-enabling it in a
+    ``finally`` block.
 
-    ``radio_set._pressed_button`` and ``_selected`` are updated directly to keep
-    internal state consistent.
+    ``radio_set._pressed_button`` and ``_selected`` are updated directly to keep internal state consistent.
 
     :param radio_set: The ``RadioSet`` widget containing the buttons.
     :param target_button: The ``RadioButton`` widget to select.

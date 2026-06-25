@@ -1,23 +1,17 @@
 """
 WebSocket client for telix.
 
-Provides :func:`run_ws_client` and :func:`build_parser`, called by
-:func:`telix.main.main` when a ``ws://`` or ``wss://`` URL is given on the
-command line.  Connects via ``websockets.connect()`` using the
-``gmcp.mudstandards.org``, ``telnet.mudstandards.org``, or
-``terminal.mudstandards.org`` subprotocol.
+Provides :func:`run_ws_client` and :func:`build_parser`, called by :func:`telix.main.main` when a ``ws://`` or
+``wss://`` URL is given on the command line.  Connects via ``websockets.connect()`` using the ``gmcp.mudstandards.org``,
+``telnet.mudstandards.org``, or ``terminal.mudstandards.org`` subprotocol.
 
-For the ``telnet.mudstandards.org`` subprotocol, a real
-:class:`telnetlib3.client_base.TelnetClient` is run on top of a
-:class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC option
-negotiation and all telnet-specific CLI flags.
+For the ``telnet.mudstandards.org`` subprotocol, a real :class:`telnetlib3.client_base.TelnetClient` is run on top of a
+:class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC option negotiation and all telnet-specific CLI flags.
 
-For the ``gmcp.mudstandards.org`` and ``terminal.mudstandards.org``
-subprotocols, lightweight
-:class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter`
-adapters are used instead.  The ``terminal`` subprotocol carries only binary
-frames (UTF-8 encoded I/O and ANSI control codes); the ``gmcp`` subprotocol
-additionally delivers GMCP commands as text frames.
+For the ``gmcp.mudstandards.org`` and ``terminal.mudstandards.org`` subprotocols, lightweight
+:class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter` adapters are used instead.
+The ``terminal`` subprotocol carries only binary frames (UTF-8 encoded I/O and ANSI control codes); the ``gmcp``
+subprotocol additionally delivers GMCP commands as text frames.
 """
 
 import sys
@@ -226,8 +220,8 @@ async def _run_telnet_over_ws(
     Run a telnet session over the ``telnet.mudstandards.org`` WebSocket subprotocol.
 
     Creates a real :class:`~telnetlib3.client_base.TelnetClient` on top of a
-    :class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC negotiation.
-    Uses :func:`~telix.client_shell.telix_client_shell` as the shell.
+    :class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC negotiation. Uses
+    :func:`~telix.client_shell.telix_client_shell` as the shell.
     """
     shell_fn = telnetlib3.accessories.function_lookup(shell)
     raw_mode_val = True if no_repl else raw_mode
@@ -359,9 +353,8 @@ async def _run_gmcp_ws(
     """
     Run a session over the ``gmcp.mudstandards.org`` WebSocket subprotocol.
 
-    Uses lightweight :class:`~telix.ws_transport.WebSocketReader` /
-    :class:`~telix.ws_transport.WebSocketWriter` adapters and
-    :func:`~telix.client_shell.ws_client_shell`.
+    Uses lightweight :class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter`
+    adapters and :func:`~telix.client_shell.ws_client_shell`.
     """
     reader = ws_transport.WebSocketReader(encoding=encoding, encoding_errors=encoding_errors)
     writer = ws_transport.WebSocketWriter(ws, peername=(host, port), encoding=encoding)

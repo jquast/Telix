@@ -40,11 +40,11 @@ class HighlightEditPane(client_tui_base.EditListPane):
     DEFAULT_CSS = (
         client_tui_base.EditListPane.DEFAULT_CSS
         + """
-    #highlight-form { padding: 0 0 0 4; }
-    #highlight-form .form-label { width: 12; }
-    #highlight-style { width: 30; }
-    #highlight-example { width: 1fr; height: 1; }
-    """
+          #highlight-form { padding: 0 0 0 4; } #highlight-form .form-label { width: 12; } #highlight-style { width:
+
+          30; } #highlight-example { width: 1fr; height: 1; }
+          """
+
     )
 
     def __init__(self, path: str, session_key: str = "") -> None:

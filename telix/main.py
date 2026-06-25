@@ -42,11 +42,9 @@ def _detect_terminal_colors() -> "str | None":
     """
     Query the terminal for background/foreground colors and software name.
 
-    Must be called before Textual or telnetlib3 takes over stdin,
-    otherwise the OSC/XTVERSION responses are consumed by the framework.
-    Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and
-    :envvar:`TELIX_DETECTED_FG` (format ``R,G,B``) so subprocess connections
-    inherit them without re-querying.
+    Must be called before Textual or telnetlib3 takes over stdin, otherwise the OSC/XTVERSION responses are consumed by
+    the framework. Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and :envvar:`TELIX_DETECTED_FG`
+    (format ``R,G,B``) so subprocess connections inherit them without re-querying.
 
     :returns: Detected terminal software name, or ``None`` if not detected.
     """
@@ -76,8 +74,7 @@ def build_telix_parser() -> argparse.ArgumentParser:
     """
     Build argument parser for telix-specific CLI flags.
 
-    These flags are consumed by telix and stripped from ``sys.argv``
-    before telnetlib3 parses its own arguments.
+    These flags are consumed by telix and stripped from ``sys.argv`` before telnetlib3 parses its own arguments.
     """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--colormatch", default="vga")
@@ -92,9 +89,7 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--graphics-font", nargs="?", const="auto", default="", dest="graphics_font")
     parser.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
     parser.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
-    parser.add_argument(
-        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics/octant rendering"
-    )
+    parser.add_argument("--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering")
     return parser
 
 
@@ -203,7 +198,14 @@ def build_help_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)",
     )
-    telix.add_argument("--graphics-font", nargs="?", const="auto", default="", metavar="MODE", help="font graphics mode: auto (default), octants")
+    telix.add_argument(
+        "--graphics-font",
+        nargs="?",
+        const="auto",
+        default="",
+        metavar="MODE",
+        help="font graphics mode: auto (default)",
+    )
     telix.add_argument(
         "--graphics-columns", metavar="N", type=int, help="force virtual terminal columns for graphics font (e.g. 40)"
     )
@@ -233,7 +235,7 @@ def pop_server_type() -> str:
     """
     Remove ``--bbs`` or ``--mud`` from ``sys.argv`` and return the type.
 
-    :returns: ``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
+    :returns:``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
     """
     for flag, value in (("--bbs", "bbs"), ("--mud", "mud")):
         if flag in sys.argv[1:]:
@@ -272,12 +274,11 @@ def main() -> None:
     """
     Entry point for the ``telix`` command.
 
-    Without arguments, launches the TUI session manager.  With a ``ws://`` or
-    ``wss://`` URL, connects directly via WebSocket.  With a host argument,
-    connects directly via telnetlib3's client.
+    Without arguments, launches the TUI session manager.  With a ``ws://`` or ``wss://`` URL, connects directly via
+    WebSocket.  With a host argument, connects directly via telnetlib3's client.
 
-    The ``--bbs`` and ``--mud`` flags apply connection presets matching the TUI
-    session editor defaults for each server type.
+    The ``--bbs`` and ``--mud`` flags apply connection presets matching the TUI session editor defaults for each server
+    type.
     """
     global _color_args
 

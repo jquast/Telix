@@ -1,9 +1,8 @@
 """
 Server output pattern matching and automatic reply engine.
 
-Provides :class:`SearchBuffer` for accumulating ANSI-stripped server output
-and :class:`TriggerEngine` for matching regex patterns and queuing replies
-with delay/chaining support.
+Provides :class:`SearchBuffer` for accumulating ANSI-stripped server output and :class:`TriggerEngine` for matching
+regex patterns and queuing replies with delay/chaining support.
 """
 
 # std imports
@@ -181,16 +180,14 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
     """
     Check conditions against GMCP data and captured variables on *ctx*.
 
-    Keys may be bare names (``"hp%"``, ``"Water"``) which are searched across
-    all GMCP packages, or fully-qualified dotted paths
-    (``"Char.Guild.Stats.Water%"``).
+    Keys may be bare names (``"hp%"``, ``"Water"``) which are searched across all GMCP packages, or fully-qualified
+    dotted paths (``"Char.Guild.Stats.Water%"``).
 
-    :param when: Condition dict, e.g. ``{"hp%": ">50"}`` (percentage),
-        ``{"hp": ">500"}`` (raw value), ``{"Char.Guild.Stats.Water%": ">50"}``
-        (dotted path), or ``{"Adrenaline": ">100"}`` (captured variable).
+    :param when: Condition dict, e.g. ``{"hp%": ">50"}`` (percentage), ``{"hp": ">500"}`` (raw value),
+        ``{"Char.Guild.Stats.Water%": ">50"}`` (dotted path), or ``{"Adrenaline": ">100"}`` (captured variable).
     :param ctx: Session context with ``gmcp_data`` and ``captures`` attributes.
-    :returns: ``(ok, failure_description)`` -- *ok* is ``False`` when a
-        condition is not met; *failure_description* explains which.
+    :returns:``(ok, failure_description)`` -- *ok* is ``False`` when a condition is not met; *failure_description*
+        explains which.
     """
     if not when:
         return True, ""
@@ -245,16 +242,14 @@ class TriggerRule:
     r"""
     A single trigger pattern-action rule.
 
-    All rules are exclusive by default -- when a rule fires, no other
-    non-``always`` rules fire until the reply chain completes.
+    All rules are exclusive by default -- when a rule fires, no other non-``always`` rules fire until the reply chain
+    completes.
 
     :param pattern: Compiled regex pattern.
-    :param reply: Reply template with ``\1``/``\2`` group refs,
-        ``;``/``|`` command separators, repeat prefixes (``3e``),
-        delay segments, ``\`when HP%>=N\```, and ``\`until [T] pat\```.
+    :param reply: Reply template with ``\1``/``\2`` group refs, ``;``/``|`` command separators, repeat prefixes
+        (``3e``), delay segments, ``\`when HP%>=N\```, and ``\`until [T] pat\```.
     :param always: Match even while another rule's reply chain is active.
-    :param when: Vital conditions that must be met for the rule to fire,
-        e.g. ``{"HP%": ">50", "MP%": ">30"}``.
+    :param when: Vital conditions that must be met for the rule to fire, e.g. ``{"HP%": ">50", "MP%": ">30"}``.
     :param immediate: Fire without waiting for prompt/GA/EOR.
     :param case_sensitive: Match the pattern case-sensitively.
     """
@@ -310,8 +305,7 @@ def load_triggers(path: str, session_key: str) -> list[TriggerRule]:
     """
     Load trigger rules for a session from a JSON file.
 
-    The file is keyed by session (``"host:port"``).  Each value is
-    an object with an ``"triggers"`` list.
+    The file is keyed by session (``"host:port"``).  Each value is an object with an ``"triggers"`` list.
 
     :param path: Path to the triggers JSON file.
     :param session_key: Session identifier (``"host:port"``).
@@ -353,10 +347,9 @@ def extract_group_source(pattern_src: str, group_num: int) -> str | None:
     r"""
     Extract the source text of capture group *group_num* from *pattern_src*.
 
-    Walks the pattern string counting only capturing groups (skipping
-    ``(?:...)``, ``(?=...)``, ``(?!...)``, ``(?P<...>...)`` named groups
-    count as capturing).  Returns the substring between the group's
-    parentheses, or ``None`` if *group_num* is out of range.
+    Walks the pattern string counting only capturing groups (skipping ``(?:...)``, ``(?=...)``, ``(?!...)``,
+    ``(?P<...>...)`` named groups count as capturing).  Returns the substring between the group's parentheses, or
+    ``None`` if *group_num* is out of range.
 
     :param pattern_src: Raw regex source string.
     :param group_num: 1-based group number.
@@ -410,14 +403,11 @@ def resolve_group_value(captured: str, pattern_src: str, group_num: int, flags: 
     r"""
     Resolve the substitution value for a captured group.
 
-    When the pattern uses ``re.IGNORECASE`` and the group is a pure
-    alternation of literals (e.g. ``amplifier|enhancer|shield``), returns
-    the pattern literal rather than the input text.  This ensures that
-    ``\1`` in a reply template reflects the pattern author's intended
-    casing, not whatever casing the server happened to use.
+    When the pattern uses ``re.IGNORECASE`` and the group is a pure alternation of literals (e.g.
+    ``amplifier|enhancer|shield``), returns the pattern literal rather than the input text.  This ensures that ``\1`` in
+    a reply template reflects the pattern author's intended casing, not whatever casing the server happened to use.
 
-    Falls back to *captured* when the group contains regex metacharacters
-    or when no literal alternative matches.
+    Falls back to *captured* when the group contains regex metacharacters or when no literal alternative matches.
 
     :param captured: Text captured by the group from input.
     :param pattern_src: Raw regex source string.
@@ -515,17 +505,15 @@ class SearchBuffer:
         """
         Add server output text, stripping ANSI sequences first.
 
-        Splits on newlines and appends complete lines to the buffer.
-        Incomplete trailing text is held in ``_partial`` until the
-        next newline arrives.
+        Splits on newlines and appends complete lines to the buffer. Incomplete trailing text is held in ``_partial``
+        until the next newline arrives.
 
-        Complete lines whose stripped content exactly matches an entry
-        in *echo_filter* are silently dropped (and removed from the
-        set) so that echoed trigger commands are never matched.
+        Complete lines whose stripped content exactly matches an entry in *echo_filter* are silently dropped (and
+        removed from the set) so that echoed trigger commands are never matched.
 
         :param text: Raw server output (may contain ANSI sequences).
         :param echo_filter: Set of sent command strings to suppress.
-        :returns: ``True`` if new complete lines were added.
+        :returns:``True`` if new complete lines were added.
         """
         stripped = wcwidth.strip_sequences(text)
         if not stripped:
@@ -565,9 +553,8 @@ class SearchBuffer:
         """
         Return text from last match position forward.
 
-        Joins lines from ``last_match_line`` onward with newlines,
-        including the current partial (incomplete) line so that
-        prompts without trailing newlines can be matched.
+        Joins lines from ``last_match_line`` onward with newlines, including the current partial (incomplete) line so
+        that prompts without trailing newlines can be matched.
 
         :returns: Searchable text substring.
         """
@@ -585,8 +572,7 @@ class SearchBuffer:
         """
         Update last match position past the given match.
 
-        :param offset_in_searchable: Start offset of match within
-            the text returned by :meth:`get_searchable_text`.
+        :param offset_in_searchable: Start offset of match within the text returned by :meth:`get_searchable_text`.
         :param length: Length of the match.
         """
         # Convert searchable-text offset back to absolute (line, col).
@@ -630,8 +616,7 @@ class SearchBuffer:
         """
         Wait for *pattern* to appear in the buffer within *timeout* seconds.
 
-        Creates a lazy :class:`asyncio.Event` that is signalled by
-        :meth:`add_text` whenever new complete lines arrive.
+        Creates a lazy :class:`asyncio.Event` that is signalled by :meth:`add_text` whenever new complete lines arrive.
 
         :param pattern: Compiled regex to search for.
         :param timeout: Maximum seconds to wait.
@@ -732,8 +717,7 @@ class TriggerEngine:
         """
         Return and clear the last condition failure.
 
-        :returns: ``(rule_index_1based, description)`` if last match failed
-            a condition, otherwise ``None``.
+        :returns:``(rule_index_1based, description)`` if last match failed a condition, otherwise ``None``.
         """
         val = self.condition_failed
         self.condition_failed = None
@@ -947,9 +931,8 @@ class TriggerEngine:
         r"""
         Execute a single reply as a command language sequence.
 
-        Supports ``;`` (wait for GA/EOR), ``|`` (send immediately),
-        ```delay Ns```, ```when HP%>=N```, ```until [T] pat```,
-        ```untils [T] pat```, and repeat prefixes (``3e``).
+        Supports ``;`` (wait for GA/EOR), ``|`` (send immediately), ```delay Ns```, ```when HP%>=N```, ```until [T]
+        pat```, ```untils [T] pat```, and repeat prefixes (``3e``).
 
         :param reply_text: Fully substituted reply string.
         """
@@ -1012,11 +995,10 @@ class TriggerEngine:
         """
         Match accumulated text and clear per-cycle state on EOR/GA.
 
-        In prompt-based mode, :meth:`feed` defers normal rule matching
-        to this method so that replies are never fired mid-output.
+        In prompt-based mode, :meth:`feed` defers normal rule matching to this method so that replies are never fired
+        mid-output.
 
-        Each EOR/GA resets the per-cycle deduplication set so that
-        rules can match again in the next prompt cycle.
+        Each EOR/GA resets the per-cycle deduplication set so that rules can match again in the next prompt cycle.
         """
         self.prompt_based = True
         if not self._enabled:
@@ -1047,11 +1029,10 @@ class TriggerEngine:
         """
         Check and clear exclusive mode if the deadline has passed.
 
-        With the simplified exclusive model (all rules exclusive, cleared
-        by reply-chain completion), this always returns ``False``.  Kept
-        for API compatibility with travel code.
+        With the simplified exclusive model (all rules exclusive, cleared by reply-chain completion), this always
+        returns ``False``.  Kept for API compatibility with travel code.
 
-        :returns: ``True`` if exclusive was cleared by timeout.
+        :returns:``True`` if exclusive was cleared by timeout.
         """
         return False
 

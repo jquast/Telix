@@ -67,8 +67,7 @@ def get_theme_colors() -> dict[str, str]:
     """
     Return all theme color names mapped to ``#rrggbb`` hex values.
 
-    Uses the running Textual app's theme when available, otherwise
-    falls back to ``textual-dark`` defaults.
+    Uses the running Textual app's theme when available, otherwise falls back to ``textual-dark`` defaults.
     """
     app = getattr(textual.app.App, "current", None)
     if app is not None:
@@ -263,9 +262,8 @@ def bar_color_at(fraction: float, bar: BarConfig) -> str:
     """
     Return an ``#rrggbb`` hex color for a bar at *fraction* full.
 
-    Both theme and custom modes use ``color_name_min`` / ``color_name_max``
-    to define the gradient endpoints.  Theme mode resolves names from the
-    active Textual theme; custom mode uses Rich named colors.
+    Both theme and custom modes use ``color_name_min`` / ``color_name_max`` to define the gradient endpoints.  Theme
+    mode resolves names from the active Textual theme; custom mode uses Rich named colors.
 
     :param fraction: 0.0 (empty) to 1.0 (full).
     :param bar: Bar configuration.
@@ -389,9 +387,8 @@ def try_aliases(
     """
     Try known field aliases and add a bar if a matching pair is found.
 
-    :param alt_max_data: Optional secondary package dict to search for max
-        fields when they are absent from *pkg_data* (e.g. Aardwolf keeps max
-        values in ``Char.Maxstats``).
+    :param alt_max_data: Optional secondary package dict to search for max fields when they are absent from *pkg_data*
+        (e.g. Aardwolf keeps max values in ``Char.Maxstats``).
     :param alt_max_pkg: Package name for *alt_max_data*.
     """
     for val_field, max_fields in alias_map.items():

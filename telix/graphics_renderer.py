@@ -1,4 +1,5 @@
-"""Sixel and Kitty graphics protocol encoders.
+"""
+Sixel and Kitty graphics protocol encoders.
 
 Adapted from dapple_ (MIT license, Copyright (c) 2025 Alexander Towell).
 
@@ -23,10 +24,11 @@ MAX_CHUNK_SIZE = 4096
 
 
 def detect_kitty(term) -> bool:
-    """Check whether *term* supports the Kitty graphics protocol.
+    """
+    Check whether *term* supports the Kitty graphics protocol.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``True`` if kitty graphics is supported.
+    :returns:``True`` if kitty graphics is supported.
     """
     try:
         return term.does_kitty_graphics(timeout=0.5)
@@ -35,10 +37,11 @@ def detect_kitty(term) -> bool:
 
 
 def detect_sixel(term) -> bool:
-    """Check whether *term* supports sixel graphics.
+    """
+    Check whether *term* supports sixel graphics.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``True`` if sixel graphics is supported.
+    :returns:``True`` if sixel graphics is supported.
     """
     try:
         return term.does_sixel(timeout=0.5)
@@ -53,14 +56,14 @@ def detect_sixel(term) -> bool:
 
 
 def detect_graphics_protocol(term) -> str | None:
-    """Detect the best available graphics protocol.
+    """
+    Detect the best available graphics protocol.
 
-    Kitty is preferred (better compression via PNG). Sixel is the fallback.
-    Set :envvar:`TELIX_FORCE_SIXEL` to ``"1"`` to test sixel even when
-    kitty is available.
+    Kitty is preferred (better compression via PNG). Sixel is the fallback. Set :envvar:`TELIX_FORCE_SIXEL` to ``"1"``
+    to test sixel even when kitty is available.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``"kitty"``, ``"sixel"``, or ``None`` if neither is supported.
+    :returns:``"kitty"``, ``"sixel"``, or ``None`` if neither is supported.
     """
     if os.environ.get("TELIX_FORCE_SIXEL") == "1":
         if detect_sixel(term):
@@ -79,15 +82,15 @@ def detect_graphics_protocol(term) -> str | None:
 
 
 def _quantize_colors(colors: np.ndarray, n_colors: int) -> tuple[np.ndarray, np.ndarray]:
-    """Quantize RGB colors to a uniform cube palette.
+    """
+    Quantize RGB colors to a uniform cube palette.
 
-    Picks the largest ``levels`` such that ``levels ** 3 <= n_colors`` and
-    ``levels >= 2``. Clamped to 6 (216 colors, the practical DEC sixel ceiling).
+    Picks the largest ``levels`` such that ``levels ** 3 <= n_colors`` and ``levels >= 2``. Clamped to 6 (216 colors,
+    the practical DEC sixel ceiling).
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
     :param n_colors: Maximum palette size.
-    :returns: ``(indexed, palette)`` tuple where *indexed* is ``(H, W)`` uint8
-        and *palette* is ``(N, 3)`` float32.
+    :returns:``(indexed, palette)`` tuple where *indexed* is ``(H, W)`` uint8 and *palette* is ``(N, 3)`` float32.
     """
     levels = 2
     while (levels + 1) ** 3 <= n_colors and levels < 6:
@@ -110,14 +113,14 @@ def _quantize_colors(colors: np.ndarray, n_colors: int) -> tuple[np.ndarray, np.
 
 
 def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256, scale: int = 1) -> None:
-    """Encode an RGB image as a sixel escape sequence and write to *dest*.
+    """
+    Encode an RGB image as a sixel escape sequence and write to *dest*.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
     :param dest: Text stream to write the escape sequence into.
     :param max_colors: Maximum palette size (default 256).
-    :param scale: Integer pixel scale factor.  Each sixel pixel maps to
-        *scale* screen pixels.  Use this to make the image fill the
-        terminal when the font cell size is larger than the glyph pixels.
+    :param scale: Integer pixel scale factor. Each sixel pixel maps to *scale* screen pixels. Use this to make the image
+        fill the terminal when the font cell size is larger than the glyph pixels.
     """
     h, w = colors.shape[:2]
 
@@ -166,7 +169,8 @@ def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256,
 
 
 def _make_png(colors: np.ndarray) -> bytes:
-    """Create a minimal PNG from an RGB image without external dependencies.
+    """
+    Create a minimal PNG from an RGB image without external dependencies.
 
     Uses raw DEFLATE compression via :mod:`zlib`.
 
@@ -197,7 +201,8 @@ def _make_png(colors: np.ndarray) -> bytes:
 
 
 def _try_pil_png(colors: np.ndarray) -> bytes | None:
-    """Try to create a PNG using PIL, which compresses better.
+    """
+    Try to create a PNG using PIL, which compresses better.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
     :returns: PNG bytes, or ``None`` if PIL is not installed.
@@ -214,16 +219,15 @@ def _try_pil_png(colors: np.ndarray) -> bytes | None:
 
 
 def encode_kitty(colors: np.ndarray, dest: io.TextIOBase, fmt: str = "png", columns: int = 0, rows: int = 0) -> None:
-    """Encode an RGB image as a Kitty graphics escape sequence and write to *dest*.
+    """
+    Encode an RGB image as a Kitty graphics escape sequence and write to *dest*.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
     :param dest: Text stream to write the escape sequence into.
     :param fmt: Output format: ``"png"`` (default), ``"rgb"``, or ``"rgba"``.
-    :param columns: Display width in terminal columns.  When > 0, the
-        terminal scales the image to fit *columns* cells, providing
-        font-size-independent sizing.
-    :param rows: Display height in terminal rows.  When > 0, the
-        terminal scales the image to fit *rows* cells.
+    :param columns: Display width in terminal columns. When > 0, the terminal scales the image to fit *columns* cells,
+        providing font-size-independent sizing.
+    :param rows: Display height in terminal rows.  When > 0, the terminal scales the image to fit *rows* cells.
     """
     h, w = colors.shape[:2]
 

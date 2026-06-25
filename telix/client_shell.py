@@ -54,7 +54,8 @@ __all__ = ("ssh_client_shell", "telix_client_shell", "ws_client_shell")
 
 
 def _apply_delete_to_backspace(stdin: typing.Any) -> None:
-    """Patch stdin so Delete (0x7f) is sent as Backspace (0x08).
+    """
+    Patch stdin so Delete (0x7f) is sent as Backspace (0x08).
 
     BBS systems expect Backspace, but modern terminals send Delete in raw mode.
     """
@@ -150,11 +151,11 @@ HOME_ED2 = b"\x1b[H\x1b[2J"
 
 
 def inject_home_before_clear(data: bytes) -> bytes:
-    """Insert ``CSI H`` before any ``CSI 2 J`` not already preceded by ``CSI H``.
+    """
+    Insert ``CSI H`` before any ``CSI 2 J`` not already preceded by ``CSI H``.
 
-    BBS software often sends ``ED 2`` expecting it to also home the cursor
-    (CTerm/SyncTERM behavior), but VT100-spec terminals and pyte do not.
-    This injects the missing ``HOME`` so the real terminal behaves as expected.
+    BBS software often sends ``ED 2`` expecting it to also home the cursor (CTerm/SyncTERM behavior), but VT100-spec
+    terminals and pyte do not. This injects the missing ``HOME`` so the real terminal behaves as expected.
     """
     if ED2 not in data:
         return data
@@ -182,11 +183,11 @@ FF = b"\x0c"
 
 
 def replace_ff_with_clear(data: bytes) -> bytes:
-    """Replace Form Feed (``0x0C``) with ``CSI H CSI 2 J`` (home + erase display).
+    """
+    Replace Form Feed (``0x0C``) with ``CSI H CSI 2 J`` (home + erase display).
 
-    SyncTERM and many BBS terminals treat FF as a clear-screen-and-home
-    operation.  Standard VT100 terminals do not.  This rewrites FF so the
-    real terminal clears as the BBS expects.
+    SyncTERM and many BBS terminals treat FF as a clear-screen-and-home operation.  Standard VT100 terminals do not.
+    This rewrites FF so the real terminal clears as the BBS expects.
     """
     if FF not in data:
         return data
@@ -194,10 +195,10 @@ def replace_ff_with_clear(data: bytes) -> bytes:
 
 
 class ClearHomesWriter:
-    """Wraps a stream writer to apply BBS clear-screen compatibility rewrites.
+    """
+    Wraps a stream writer to apply BBS clear-screen compatibility rewrites.
 
-    Used in raw mode without a color filter when ``clear_homes_cursor`` or
-    ``ff_clears_screen`` is enabled.
+    Used in raw mode without a color filter when ``clear_homes_cursor`` or ``ff_clears_screen`` is enabled.
 
     :param inner: The underlying ``asyncio.StreamWriter``.
     :param clear_homes_cursor: Inject HOME before lone ED 2 sequences.
@@ -226,8 +227,8 @@ class ColorFilteredWriter:
     """
     Wraps an ``asyncio.StreamWriter`` to apply the session color filter to all writes.
 
-    Used in raw-mode paths where :func:`telnetlib3.client_shell._raw_event_loop` writes
-    decoded server text as bytes directly to stdout, bypassing the REPL's filter step.
+    Used in raw-mode paths where :func:`telnetlib3.client_shell._raw_event_loop` writes decoded server text as bytes
+    directly to stdout, bypassing the REPL's filter step.
 
     :param inner: The underlying ``asyncio.StreamWriter``.
     :param ctx: Session context carrying ``color_filter`` and ``erase_eol``.
@@ -243,13 +244,12 @@ class ColorFilteredWriter:
         self._decoder: codecs.IncrementalDecoder | None = None
 
     def write(self, data: bytes) -> None:
-        """Filter *data* through the color filter if one is active, then write.
+        """
+        Filter *data* through the color filter if one is active, then write.
 
-        *data* arrives as UTF-8 encoded bytes from telnetlib3's
-        ``_raw_event_loop``, which decodes wire bytes using the connection
-        encoding (e.g. atascii) and re-encodes as UTF-8 with ``out.encode()``.
-        We decode as UTF-8 to recover the original Unicode string, filter,
-        and re-encode as UTF-8.
+        *data* arrives as UTF-8 encoded bytes from telnetlib3's ``_raw_event_loop``, which decodes wire bytes using the
+        connection encoding (e.g. atascii) and re-encodes as UTF-8 with ``out.encode()``. We decode as UTF-8 to recover
+        the original Unicode string, filter, and re-encode as UTF-8.
         """
         if self.ctx.repl.ff_clears_screen:
             data = replace_ff_with_clear(data)
@@ -281,13 +281,12 @@ def build_session_key(
     """
     Derive ``host:port`` session key from CLI arguments or peername.
 
-    For telnet writers, prefers the original hostname from ``sys.argv``
-    over the resolved IP from :func:`socket.getpeername`, so that
-    session-specific files (history, rooms, macros, etc.) are keyed by
-    the human-readable hostname used to connect.
+    For telnet writers, prefers the original hostname from ``sys.argv`` over the resolved IP from
+    :func:`socket.getpeername`, so that session-specific files (history, rooms, macros, etc.) are keyed by the human-
+    readable hostname used to connect.
 
-    For WebSocket and SSH writers, falls through directly to peername since the
-    hostname is already set by the respective client.
+    For WebSocket and SSH writers, falls through directly to peername since the hostname is already set by the
+    respective client.
     """
     if isinstance(writer, (ws_transport.WebSocketWriter, ssh_transport.SSHWriter)):
         peername = writer.get_extra_info("peername")
@@ -344,10 +343,9 @@ def setup_color_filter(
     """
     Create and attach a color filter from telix CLI args and terminal detection.
 
-    Reads color options from ``ctx.color_args`` (threaded through the call chain
-    from :func:`~telix.main.main`) and encoding from the telnetlib3 writer context.
-    For retro encodings (PETSCII, ATASCII), uses the encoding-specific filter
-    instead of ColorFilter.
+    Reads color options from ``ctx.color_args`` (threaded through the call chain from :func:`~telix.main.main`) and
+    encoding from the telnetlib3 writer context. For retro encodings (PETSCII, ATASCII), uses the encoding-specific
+    filter instead of ColorFilter.
     """
     from . import color_filter
 
@@ -418,8 +416,8 @@ def setup_ansi_keys(ctx: "session_context.TelixSessionContext") -> None:
     """
     Set ``ctx.ansi_keys`` from the telix CLI ``--ansi-keys`` flag.
 
-    Reads ``ctx.color_args`` threaded through the call chain from
-    :func:`~telix.main.main`.  No-op when called outside a main() context.
+    Reads ``ctx.color_args`` threaded through the call chain from :func:`~telix.main.main`.  No-op when called outside a
+    main() context.
 
     :param ctx: Session context to update.
     """
@@ -446,8 +444,7 @@ def setup_graphics_font(ctx: "session_context.TelixSessionContext") -> None:
     """
     Configure graphics font rendering from telix CLI args.
 
-    Reads ``ctx.color_args`` for ``--graphics-font``,
-    ``--graphics-columns``, and ``--graphics-rows`` flags.
+    Reads ``ctx.color_args`` for ``--graphics-font``, ``--graphics-columns``, and ``--graphics-rows`` flags.
 
     :param ctx: Session context to update.
     """
@@ -461,18 +458,23 @@ def setup_graphics_font(ctx: "session_context.TelixSessionContext") -> None:
 
 def setup_font_id(ctx: "session_context.TelixSessionContext") -> None:
     """
-    Configure initial font id for graphics/octant rendering from CLI args.
+    Configure initial font id for graphics rendering from CLI args.
 
-    When ``--font-id`` is specified, overrides the default font (0, IBM VGA)
-    for :class:`~telix.graphics_writer.GraphicsWriter` and
-    :class:`~telix.graphics_writer_octant.OctantWriter`.
+    When ``--font-id`` is specified, overrides the default font (0, IBM VGA).  Otherwise, if the session encoding is a
+    retro encoding (ATASCII, PETSCII), selects the matching font automatically.
 
     :param ctx: Session context to update.
     """
     args = ctx.color_args
-    if args is None:
+    if args is not None and args.font_id is not None:
+        ctx.repl.font_id = args.font_id
         return
-    ctx.repl.font_id = args.font_id
+
+    enc = ctx.encoding or ""
+    if enc.lower() == "atascii":
+        ctx.repl.font_id = 36
+    elif enc.lower() in ("petscii", "cbm", "commodore", "c64", "c128"):
+        ctx.repl.font_id = 32
 
 
 def _setup_resize_and_naws(raw_stdout: typing.Any, writer: typing.Any, tty_shell: typing.Any) -> None:
@@ -513,7 +515,6 @@ def make_raw_stdout(
     Build the raw-mode stdout wrapper appropriate for the session config.
 
     Returns a :class:`GraphicsWriter` when ``graphics_font`` is ``"auto"``,
-    a :class:`OctantWriter` when ``graphics_font`` is ``"octants"``,
     a :class:`ColorFilteredWriter` when a color filter is active,
     or the raw *stdout* otherwise.
 
@@ -559,14 +560,6 @@ def make_raw_stdout(
             _setup_resize_and_naws(gtw, writer, tty_shell)
             return gtw
 
-    if ctx.repl.graphics_font == "octants":
-        from . import graphics_writer_octant
-
-        columns = ctx.repl.graphics_columns or 80
-        rows = ctx.repl.graphics_rows or 25
-        mtw = graphics_writer_octant.OctantWriter(stdout, ctx, columns=columns, rows=rows, font_id=ctx.repl.font_id)
-        _setup_resize_and_naws(mtw, writer, tty_shell)
-        return mtw
     if ctx.repl.color_filter is not None:
         return ColorFilteredWriter(stdout, ctx)
     if ctx.repl.clear_homes_cursor or ctx.repl.ff_clears_screen:
@@ -889,14 +882,12 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
     """
     Telix client shell for WebSocket connections.
 
-    Simpler counterpart to :func:`telix_client_shell` -- WebSocket
-    connections are always line-mode (no raw/kludge switching), so this
-    function creates a :class:`SessionContext`, loads configs, wires GMCP
-    dispatch, and runs a single pass of the REPL event loop.
+    Simpler counterpart to :func:`telix_client_shell` -- WebSocket connections are always line-mode (no raw/kludge
+    switching), so this function creates a :class:`SessionContext`, loads configs, wires GMCP dispatch, and runs a
+    single pass of the REPL event loop.
 
-    The pseudo-prompt signal (GA/EOR) is fired by the receive loop in
-    :mod:`~telix.ws_client` after each BINARY frame delivery, giving the
-    REPL the same prompt boundary as telnet.
+    The pseudo-prompt signal (GA/EOR) is fired by the receive loop in :mod:`~telix.ws_client` after each BINARY frame
+    delivery, giving the REPL the same prompt boundary as telnet.
 
     :param reader: :class:`WebSocketReader` fed by the receive loop.
     :param writer: :class:`WebSocketWriter` wrapping the WebSocket connection.

@@ -1,110 +1,108 @@
 #!/usr/bin/env python3
-"""Diagnostic tool: dump a SyncTERM bitmap font as a visual grid of octant characters.
+"""Dump a bitmap font as rendered via kitty or sixel terminal graphics.
 
-Each glyph (8x16 pixels) is rendered as 4 wide x 4 tall octant cells.  Glyphs
-are arranged 16 per row (16 columns x 16 rows = 256 total), matching the
-canonical Amiga Topaz reference layout.
+Glyphs are arranged 16 per row, scaled for pixel-sharp visibility.
+Uses the same rendering pipeline as GraphicsWriter._do_render.
 
 Usage::
 
-    python tools/dump_font.py [--font topaz] [--scale 1] [--labels]
+    python tools/dump_font.py              # default font (0)
+    python tools/dump_font.py --font 36    # ATASCII
+    python tools/dump_font.py --font topaz
 
-Output is plain UTF-8 to stdout.
+Output is kitty or sixel graphics to stdout.
 """
 
 import argparse
-import sys
 import pathlib
+import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from telix.graphics_bmpfont import OCTANT, glyph_to_octants, load_font  # noqa: E402
-from telix.fonts.font_registry import FONT_BY_SHORT_NAME  # noqa: E402
+from telix.graphics_writer import load_font, SYNC_START, SYNC_END  # noqa: E402
+from telix.fonts import font_registry  # noqa: E402
+from telix import graphics_renderer  # noqa: E402
 
-GLYPH_COLS = 4  # octant cells per glyph (horizontal)
-GLYPH_ROWS = 4  # octant cells per glyph (vertical)
 CHARS_PER_ROW = 16
-TOTAL_GLYPHS = 256
+SCALE = 3
 
 
-def render_glyph_octants(font, char_code: int) -> list[list[int]]:
-    """Return 4x4 grid of octant pattern indices for a single glyph."""
-    bitmap = font.glyph(char_code)
-    return glyph_to_octants(bitmap)
+def find_font(key: str) -> int:
+    """Resolve a font identifier (numeric ID or name substring) to a font_id."""
+    try:
+        font_id = int(key)
+        if font_id in {e.font_id for e in font_registry.FONT_TABLE}:
+            return font_id
+    except ValueError:
+        pass
+    lower = key.lower()
+    for entry in font_registry.FONT_TABLE:
+        if lower in entry.name.lower():
+            return entry.font_id
+    sys.exit(f"Unknown font: {key!r}")
 
 
-def build_grid(font, show_labels: bool = False) -> str:
-    """Build a text grid of all 256 glyphs, 16 per row."""
-    # Pre-render all glyphs to octant grids
-    all_glyphs = [render_glyph_octants(font, code) for code in range(TOTAL_GLYPHS)]
+def render_grid(font) -> None:
+    """Render all glyphs as a pixel-sharp kitty or sixel image."""
+    import numpy as np
+    import blessed
 
-    glyph_rows = TOTAL_GLYPHS // CHARS_PER_ROW  # 16
-    lines: list[str] = []
+    nglyphs = font.nglyphs
+    glyph_rows = (nglyphs + CHARS_PER_ROW - 1) // CHARS_PER_ROW
+    fh = font.height
+    fw = font.width
 
-    # Column header labels
-    if show_labels:
-        header_parts = ["    "]
-        for col in range(CHARS_PER_ROW):
-            header_parts.append(f"  {col:02X}  ")
-        lines.append("".join(header_parts))
+    img_h = glyph_rows * fh
+    img_w = CHARS_PER_ROW * fw
+
+    colors = np.zeros((img_h, img_w, 3), dtype=np.float32)
+    fg_buf = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
     for glyph_row in range(glyph_rows):
-        if show_labels:
-            lines.append(f"    {'─' * (CHARS_PER_ROW * 6)}")
+        for col in range(CHARS_PER_ROW):
+            idx = glyph_row * CHARS_PER_ROW + col
+            if idx >= nglyphs:
+                continue
+            rows = font.glyph(idx)
+            py = glyph_row * fh
+            px = col * fw
+            for r in range(fh):
+                val = rows[r] if r < len(rows) else 0
+                for c in range(fw):
+                    if (val >> (fw - 1 - c)) & 1:
+                        colors[py + r, px + c] = fg_buf
 
-        # Each glyph is 4 octant rows tall
-        for oct_row in range(GLYPH_ROWS):
-            line_parts: list[str] = []
+    colors = np.repeat(np.repeat(colors, SCALE, axis=0), SCALE, axis=1)
 
-            # Row label
-            if show_labels and oct_row == 0:
-                line_parts.append(f"{glyph_row:02X}x ")
+    term = blessed.Terminal()
+    protocol = graphics_renderer.detect_graphics_protocol(term)
+    if protocol is None:
+        sys.exit("Terminal does not support kitty or sixel graphics.")
 
-            for col in range(CHARS_PER_ROW):
-                glyph_idx = glyph_row * CHARS_PER_ROW + col
-                octants = all_glyphs[glyph_idx][oct_row]
-                line_parts.append("".join(OCTANT[p] for p in octants))
-                if show_labels:
-                    line_parts.append("│")
+    sys.stdout.write(SYNC_START)
+    sys.stdout.write("\033[H\033[2J")
+    sys.stdout.write(SYNC_END)
+    sys.stdout.flush()
 
-            if show_labels and oct_row == 0:
-                # Right row label
-                line = "".join(line_parts) + f" x{glyph_row:02X}"
-            else:
-                line = "".join(line_parts)
-
-            lines.append(line)
-
-    return "\n".join(lines)
+    sys.stdout.write(SYNC_START)
+    sys.stdout.write("\033[H")
+    if protocol == "kitty":
+        graphics_renderer.encode_kitty(colors, sys.stdout)
+    else:
+        graphics_renderer.encode_sixel(colors, sys.stdout)
+    sys.stdout.write(SYNC_END)
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Dump a SyncTERM bitmap font as octant characters."
-    )
-    parser.add_argument(
-        "--font", default="topaz",
-        help="Font short name (default: topaz)"
-    )
-    parser.add_argument(
-        "--labels", action="store_true",
-        help="Show row/column hex labels"
-    )
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Dump a bitmap font via terminal graphics.")
+    parser.add_argument("--font", default="0", help="Font id or name substring (default: 0)")
     args = parser.parse_args()
 
-    try:
-        entry = FONT_BY_SHORT_NAME[args.font]
-    except KeyError:
-        sys.exit(f"Unknown font: {args.font!r}")
-
-    font = load_font(entry.font_id)
-    print(f"Font: {font.name}  (id={font.font_id}, encoding={font.encoding})")
-    print(f"Grid: {CHARS_PER_ROW} cols x {TOTAL_GLYPHS // CHARS_PER_ROW} rows, "
-          f"glyph={GLYPH_COLS}x{GLYPH_ROWS} octants")
-    print()
-
-    grid = build_grid(font, show_labels=args.labels)
-    print(grid)
+    font_id = find_font(args.font)
+    font = load_font(font_id)
+    render_grid(font)
 
 
 if __name__ == "__main__":

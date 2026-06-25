@@ -1,12 +1,11 @@
 """
 Async Python scripting engine for telix.
 
-Provides :class:`ScriptOutputBuffer` for per-script server output buffering,
-:class:`ScriptContext` for the user-facing scripting API, and
-:class:`ScriptManager` for loading, running, and stopping scripts.
+Provides :class:`ScriptOutputBuffer` for per-script server output buffering, :class:`ScriptContext` for the user-facing
+scripting API, and :class:`ScriptManager` for loading, running, and stopping scripts.
 
-Scripts are Python files with ``async def run(ctx)`` (or another named
-function) that receive a :class:`ScriptContext` as their sole argument.
+Scripts are Python files with ``async def run(ctx)`` (or another named function) that receive a :class:`ScriptContext`
+as their sole argument.
 """
 
 # std imports
@@ -93,9 +92,8 @@ class ScriptOutputBuffer:
         """
         Signal end of a server output turn (GA/EOR received).
 
-        Closes the current turn, appends it to the turns deque, increments the
-        prompt counter, and sets the prompt event so that :meth:`wait_for_prompt`
-        can return.
+        Closes the current turn, appends it to the turns deque, increments the prompt counter, and sets the prompt event
+        so that :meth:`wait_for_prompt` can return.
         """
         turn_text = "\n".join(self._current_turn_lines)
         if self._partial:
@@ -158,8 +156,8 @@ class ScriptOutputBuffer:
         """
         Wait for *pattern* to appear in the buffer within *timeout* seconds.
 
-        Each call consumes the matched content so subsequent calls cannot re-match the same text.
-        If the pattern appears multiple times between prompts it will match once per call.
+        Each call consumes the matched content so subsequent calls cannot re-match the same text. If the pattern appears
+        multiple times between prompts it will match once per call.
 
         :param pattern: Compiled regex pattern to search for.
         :param timeout: Maximum seconds to wait.
@@ -188,7 +186,7 @@ class ScriptOutputBuffer:
         Wait until the next GA/EOR prompt signal.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if prompt arrived, ``False`` on timeout.
+        :returns:``True`` if prompt arrived, ``False`` on timeout.
         """
         target = self._prompt_count + 1
         if timeout is None:
@@ -239,8 +237,8 @@ class ScriptContext:
     """
     User-facing API handed to scripts as their ``ctx`` argument.
 
-    Every script receives a single ``ctx`` argument that provides access to all
-    known information about the MUD session and scripting capabilities of Telix.
+    Every script receives a single ``ctx`` argument that provides access to all known information about the MUD session
+    and scripting capabilities of Telix.
 
     :param session_ctx: The live session context.
     :param buf: Per-script output buffer.
@@ -278,8 +276,8 @@ class ScriptContext:
         """
         The current :class:`~telix.rooms.Room`, or ``None`` if unknown.
 
-        Returns ``None`` if no GMCP room data has been received.  The room
-        object has ``name``, ``area``, and ``exits`` attributes.
+        Returns ``None`` if no GMCP room data has been received.  The room object has ``name``, ``area``, and ``exits``
+        attributes.
         """
         rg = self._ctx.room.graph
         if rg is None or not self._ctx.room.current:
@@ -343,7 +341,7 @@ class ScriptContext:
         """
         Search all GMCP package dicts for *field*.
 
-        :returns: ``(value, package_dict)`` or ``(None, None)`` if not found.
+        :returns:``(value, package_dict)`` or ``(None, None)`` if not found.
         """
         for pkg_data in self._ctx.gmcp_data.values():
             if not isinstance(pkg_data, dict):
@@ -479,7 +477,7 @@ class ScriptContext:
         Wait for the next GA/EOR signal from the server.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if prompt arrived within *timeout*.
+        :returns:``True`` if prompt arrived within *timeout*.
         """
         return await self._buf.wait_for_prompt(timeout)
 
@@ -489,7 +487,7 @@ class ScriptContext:
 
         :param n: Number of prompts to wait for.
         :param timeout: Timeout in seconds for *each* prompt, or ``None`` to wait indefinitely.
-        :returns: ``True`` if all prompts arrived; ``False`` if any timed out.
+        :returns:``True`` if all prompts arrived; ``False`` if any timed out.
         """
         for _ in range(n):
             if not await self._buf.wait_for_prompt(timeout):
@@ -608,9 +606,8 @@ class ScriptContext:
         """
         Write args to the terminal scroll region (cyan).
 
-        Behaves like the built-in :func:`print`: multiple positional arguments
-        are joined with *sep*, and non-string values are converted via
-        :func:`str`.  Uses the same echo mechanism as trigger notifications.
+        Behaves like the built-in :func:`print`: multiple positional arguments are joined with *sep*, and non-string
+        values are converted via :func:`str`.  Uses the same echo mechanism as trigger notifications.
 
         :param args: Values to display.
         :param sep: Separator string inserted between values (default ``" "``).
@@ -669,8 +666,8 @@ class ScriptContext:
         """
         Full capture event history: ``{variable: [{value, time, ...}, ...]}``.
 
-        Unlike :attr:`captures` (which holds only the current value), this dict
-        accumulates every capture event so scripts can track trends over time.
+        Unlike :attr:`captures` (which holds only the current value), this dict accumulates every capture event so
+        scripts can track trends over time.
         """
         return self._ctx.highlights.capture_log
 
@@ -788,10 +785,9 @@ class ScriptContext:
         """
         Wait until the next command is sent by any source.
 
-        Returns the command string, or ``None`` on timeout.  If a command was
-        issued while no waiter was registered (e.g. during the event-loop gap
-        between one call completing and the next being set up), it is buffered
-        and returned immediately by the next call.
+        Returns the command string, or ``None`` on timeout.  If a command was issued while no waiter was registered
+        (e.g. during the event-loop gap between one call completing and the next being set up), it is buffered and
+        returned immediately by the next call.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
         """
@@ -814,8 +810,8 @@ class ScriptManager:
     """
     Load, run, and manage async scripts.
 
-    Scripts are Python files on the search path. Each script run gets its own
-    :class:`ScriptOutputBuffer` so output matching does not conflict.
+    Scripts are Python files on the search path. Each script run gets its own :class:`ScriptOutputBuffer` so output
+    matching does not conflict.
 
     :param scripts_dir: Path to the user global scripts directory.
     :param log: Logger instance.
@@ -833,9 +829,8 @@ class ScriptManager:
         """
         Import (or reload) a module from the scripts search path.
 
-        The scripts directory and cwd are temporarily prepended to ``sys.path``
-        during load and removed in a ``finally`` block. If the source file's
-        mtime has changed since the last load, ``importlib.reload`` is called.
+        The scripts directory and cwd are temporarily prepended to ``sys.path`` during load and removed in a ``finally``
+        block. If the source file's mtime has changed since the last load, ``importlib.reload`` is called.
 
         :param module_path: Dotted module path (e.g. ``"combat"`` or ``"ai.bot"``).
         :returns: The loaded module object.
@@ -882,12 +877,10 @@ class ScriptManager:
         """
         Load and start a script.
 
-        *spec* is the module.function token plus optional arguments, e.g.
-        ``"combat.hunt goblin"`` or ``"demo"``.
+        *spec* is the module.function token plus optional arguments, e.g. ``"combat.hunt goblin"`` or ``"demo"``.
 
-        The last dot-separated segment of the first token is the function name;
-        everything before it is the module path. If no dot is present, the
-        function name defaults to ``"run"``.
+        The last dot-separated segment of the first token is the function name; everything before it is the module path.
+        If no dot is present, the function name defaults to ``"run"``.
 
         :param session_ctx: Active session context.
         :param spec: Script spec string (``"module.fn arg1 arg2"``).

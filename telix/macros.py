@@ -1,13 +1,11 @@
 """
 Macro key binding support for the REPL client.
 
-Provides :class:`Macro` for representing key-to-text bindings and
-:func:`build_macro_dispatch` for building a blessed key name to handler
-mapping.
+Provides :class:`Macro` for representing key-to-text bindings and :func:`build_macro_dispatch` for building a blessed
+key name to handler mapping.
 
-Keys are stored as blessed key names (e.g. ``KEY_F1``, ``KEY_ALT_E``)
-or single characters, matching :attr:`blessed.keyboard.Keystroke.name`
-and ``str(keystroke)`` respectively.
+Keys are stored as blessed key names (e.g. ``KEY_F1``, ``KEY_ALT_E``) or single characters, matching
+:attr:`blessed.keyboard.Keystroke.name` and ``str(keystroke)`` respectively.
 """
 
 # std imports
@@ -44,10 +42,9 @@ class Macro:
 
     :param key: Blessed key name (e.g. ``KEY_F5``, ``KEY_ALT_E``).
     :param text: Text to insert/send, with ``;`` as command separators.
-    :param builtin: When true, the macro is a system default that cannot
-        be deleted in the editor.
-    :param builtin_name: Stable identifier for builtin macros (e.g.
-        ``"help"``, ``"edit_macros"``).  Empty for user-defined macros.
+    :param builtin: When true, the macro is a system default that cannot be deleted in the editor.
+    :param builtin_name: Stable identifier for builtin macros (e.g. ``"help"``, ``"edit_macros"``). Empty for user-
+        defined macros.
     """
 
     key: str
@@ -94,8 +91,7 @@ def load_macros(path: str, session_key: str) -> list[Macro]:
     """
     Load macro definitions for a session from a JSON file.
 
-    The file is keyed by session (``"host:port"``).  Each value is
-    an object with a ``"macros"`` list.
+    The file is keyed by session (``"host:port"``).  Each value is an object with a ``"macros"`` list.
 
     :param path: Path to the macros JSON file.
     :param session_key: Session identifier (``"host:port"``).
@@ -213,9 +209,8 @@ def key_name_to_seq(name: str) -> str | None:
     """
     Convert a blessed key name to a raw character sequence.
 
-    Returns ``None`` for key names that have no single-sequence
-    representation (e.g. F-keys, which are multi-byte terminal
-    escape sequences handled by blessed's keyboard database).
+    Returns ``None`` for key names that have no single-sequence representation (e.g. F-keys, which are multi-byte
+    terminal escape sequences handled by blessed's keyboard database).
 
     :param name: Blessed key name (e.g. ``KEY_CTRL_L``, ``KEY_ALT_H``).
     :returns: Raw character sequence, or ``None``.
@@ -257,8 +252,8 @@ def ensure_builtin_macros(macros: list[Macro]) -> list[Macro]:
     """
     Ensure all builtin macros are present in a macro list.
 
-    Missing builtins are appended.  Existing builtins (matched by
-    ``builtin_name``) are preserved, keeping any user key overrides.
+    Missing builtins are appended.  Existing builtins (matched by ``builtin_name``) are preserved, keeping any user key
+    overrides.
 
     :param macros: Existing macro list (may be empty).
     :returns: New list with all builtins guaranteed present.

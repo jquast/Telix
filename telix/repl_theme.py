@@ -100,9 +100,8 @@ def compute_derived(palette: dict[str, str]) -> None:
     """
     Compute contrast-derived palette entries in-place from ``input_ar_bg``.
 
-    ``active_cmd``, ``pending_cmd``, and ``input_ar_suggestion`` are set to
-    blends of the trigger background toward its RGB inverse so they are
-    always readable regardless of theme.
+    ``active_cmd``, ``pending_cmd``, and ``input_ar_suggestion`` are set to blends of the trigger background toward its
+    RGB inverse so they are always readable regardless of theme.
 
     :param palette: Partially-resolved palette dict; modified in place.
     """
@@ -150,9 +149,8 @@ def get_repl_palette(session_key: str = "") -> dict[str, str]:
     """
     Return semantic REPL color names mapped to ``#rrggbb`` hex values.
 
-    Loads the saved theme name from per-session or global preferences, then
-    resolves Textual theme tokens into concrete hex colors.  Results are
-    cached per theme name.
+    Loads the saved theme name from per-session or global preferences, then resolves Textual theme tokens into concrete
+    hex colors.  Results are cached per theme name.
 
     :param session_key: Session identifier (``host:port``), or empty string.
     :returns: Dict of semantic color names to hex strings.

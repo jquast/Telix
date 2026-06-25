@@ -139,7 +139,7 @@ def client_name(sw_name: str | None = None) -> str:
     Build the MNES CLIENT_NAME value.
 
     :param sw_name: Terminal software name detected via XTVERSION (e.g. ``"Konsole"``).
-    :returns: ``"Telix"`` or ``"Telix/Konsole"`` when a name is available.
+    :returns:``"Telix"`` or ``"Telix/Konsole"`` when a name is available.
     """
     if sw_name:
         return f"Telix/{sw_name}"
@@ -150,9 +150,8 @@ def install_mtts(term: str, ssl: bool = False, sw_name: str | None = None, encod
     """
     Patch telnetlib3 client classes to use MTTS/MNES.
 
-    Replaces ``TelnetClient`` and ``TelnetTerminalClient`` in the
-    ``telnetlib3.client`` module so that :func:`telnetlib3.client.run_client`
-    picks up the subclasses.
+    Replaces ``TelnetClient`` and ``TelnetTerminalClient`` in the ``telnetlib3.client`` module so that
+    :func:`telnetlib3.client.run_client` picks up the subclasses.
 
     :param term: Terminal type string (e.g. from ``$TERM``).
     :param ssl: Whether the connection uses TLS.

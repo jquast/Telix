@@ -51,6 +51,7 @@ dependencies = [
     "websockets>=16,<17",
     "asyncssh>=2.14,<3",
     "numpy>=1.20,<3",
+    "pyte",
 ]
 
 [project.optional-dependencies]

@@ -118,18 +118,18 @@ class TestGraphicsWriter:
         assert gtw.virtual_size() == (25, 40)
 
     def test_resize_preserves_graphics_columns(self, monkeypatch):
-        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+        monkeypatch.setattr("telix.graphics_writer.terminal.get_terminal_size", lambda: (50, 160))
         gtw, _ = self._make_writer(columns=40, rows=25)
         gtw.ctx.repl.graphics_columns = 40
         gtw.resize(160, 50)
         assert gtw.columns == 40
 
-    def test_resize_computes_from_real_when_none(self, monkeypatch):
-        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (50, 160))
+    def test_resize_keeps_configured_columns(self, monkeypatch):
+        monkeypatch.setattr("telix.graphics_writer.terminal.get_terminal_size", lambda: (50, 160))
         gtw, _ = self._make_writer(columns=80, rows=25)
         gtw.ctx.repl.graphics_columns = None
         gtw.resize(160, 50)
-        assert gtw.columns == 40
+        assert gtw.columns == 80  # resize only tracks real size, columns stay at configured value
 
     def test_dsr_sends_cpr_response(self):
         inner = FakeWriter()
@@ -159,7 +159,7 @@ class TestGraphicsWriter:
         assert gtw.custom_attr == "test"
 
     def test_schedule_resize_applied_on_write(self, monkeypatch):
-        monkeypatch.setattr("telix.graphics_writer_octant.terminal.get_terminal_size", lambda: (48, 160))
+        monkeypatch.setattr("telix.graphics_writer.terminal.get_terminal_size", lambda: (48, 160))
         gtw, inner = self._make_writer(columns=80, rows=25)
         gtw.schedule_resize(160, 48)
         assert gtw._pending_resize == (160, 48)
