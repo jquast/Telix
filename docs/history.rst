@@ -1,17 +1,12 @@
 History
 =======
 
-0.1.8 -- unreleased
+0.1.8 -- 2026-06-26
 -------------------
 
-- bugfix: correct some kinds of VGA color filtering
-- bugfix: session manager table not redrawn on terminal resize
-- bugfix: add ``--local-echo`` / ``--remote-echo`` options to fix doubled-input on raw-mode BBSes that echo but do not negotiate telnet ECHO
-- enhancement: new "Font Graphics" support using kitty/sixel for BBS/SyncTERM-compatible bitmap fonts
+- enhcancement: add ``--local-echo`` or ``--remote-echo`` for retrocomputer BBS's that require it.
+- enhancement: add ``--graphics-font`` option, uses kitty or sixel for retrocomputer fonts.
 - enhancement: new "FF is Clear+Home" toggle (SyncTERM compatibility)
-- enhancement: Topaz, MicroKnight, and other ISO-8859-1 fonts now available as encoding names
-- bugfix: various graphics and SSH font rendering improvements
-- enhancement: completely rewritten bitmap font subsystem with clean upstream font sources
 
 0.1.7 -- 2026-03-16
 -------------------

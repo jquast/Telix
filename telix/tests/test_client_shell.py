@@ -21,9 +21,9 @@ from telix.client_shell import (
     ws_client_shell,
     ssh_client_shell,
     build_session_key,
+    compute_local_echo,
     setup_color_filter,
     telix_client_shell,
-    compute_local_echo,
 )
 from telix.ws_transport import GMCP, WebSocketWriter
 from telix.session_context import TelixSessionContext

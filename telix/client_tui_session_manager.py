@@ -2070,7 +2070,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
             self.notify(
-                f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off, MCCP Compression {compress_label}"
+                f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off,"
+                f" MCCP Compression {compress_label}"
             )
         elif button_id == "type-mud":
             if ssl_on:
