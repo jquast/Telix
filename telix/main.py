@@ -90,7 +90,22 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
     parser.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
     parser.add_argument("--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering")
+    parser.add_argument("--local-echo", action="store_true", default=False, dest="local_echo")
+    parser.add_argument("--remote-echo", action="store_true", default=False, dest="remote_echo")
     return parser
+
+
+def resolve_echo_mode(args: argparse.Namespace) -> str:
+    """Return ``"local"``, ``"remote"``, or ``"auto"`` from CLI flags."""
+    local = getattr(args, "local_echo", False)
+    remote = getattr(args, "remote_echo", False)
+    if local and remote:
+        raise argparse.ArgumentError(None, "--local-echo and --remote-echo are mutually exclusive")
+    if local:
+        return "local"
+    if remote:
+        return "remote"
+    return "auto"
 
 
 def strip_telix_args() -> argparse.Namespace:
@@ -215,6 +230,8 @@ def build_help_parser() -> argparse.ArgumentParser:
     telix.add_argument(
         "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
     )
+    telix.add_argument("--local-echo", action="store_true", help="force local echo (client echoes input)")
+    telix.add_argument("--remote-echo", action="store_true", help="force remote echo (server echoes input)")
 
     return parser
 
@@ -226,7 +243,7 @@ def reinit() -> None:
     print(f"Loaded {len(sessions)} sessions from directory.")
 
 
-BBS_TELNET_FLAGS = ["--raw-mode", "--colormatch", "vga", "--clear-homes-cursor", "--ff-clears-screen"]
+BBS_TELNET_FLAGS = ["--raw-mode", "--remote-echo", "--colormatch", "vga", "--clear-homes-cursor", "--ff-clears-screen"]
 
 MUD_TELNET_FLAGS = ["--line-mode", "--compression", "--colormatch", "none", "--no-ice-colors"]
 
@@ -326,6 +343,7 @@ def main() -> None:
             no_ice_colors=args.no_ice_colors,
             ansi_keys=False,
             no_repl=no_repl,
+            echo_mode=resolve_echo_mode(args),
             clear_homes_cursor=False,
             ff_clears_screen=False,
             graphics_font="",
@@ -406,6 +424,7 @@ def main() -> None:
             no_ice_colors=args.no_ice_colors,
             ansi_keys=False,
             no_repl=False,
+            echo_mode=resolve_echo_mode(args),
             clear_homes_cursor=False,
             ff_clears_screen=False,
             graphics_font="",
@@ -447,6 +466,7 @@ def main() -> None:
     # Parse and strip telix-specific flags so telnetlib3 doesn't see them.
     telix_args = strip_telix_args()
     _color_args = telix_args
+    _color_args.echo_mode = resolve_echo_mode(_color_args)
 
     # Inject the telix shell so telnetlib3 uses our REPL-aware shell.
     # Our shell waits for echo negotiation before entering the raw event loop,

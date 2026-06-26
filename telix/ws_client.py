@@ -607,5 +607,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="no_ice_colors",
         help="disable iCE color (blink as bright background) support",
     )
+    telix.add_argument(
+        "--local-echo", action="store_true", default=False, dest="local_echo", help="force local echo"
+    )
+    telix.add_argument(
+        "--remote-echo", action="store_true", default=False, dest="remote_echo", help="force remote echo"
+    )
 
     return parser

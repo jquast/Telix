@@ -53,6 +53,9 @@ def load_favorites() -> list[dict[str, typing.Any]]:
         mode = values.get("mode")
         if mode in ("auto", "raw", "line"):
             entry["mode"] = mode
+        echo_mode = values.get("echo_mode")
+        if echo_mode in ("auto", "local", "remote"):
+            entry["echo_mode"] = echo_mode
         protocol = values.get("protocol")
         if protocol in ("telnet", "websocket"):
             entry["protocol"] = protocol
@@ -64,13 +67,19 @@ def load_favorites() -> list[dict[str, typing.Any]]:
 
 
 def apply_overrides(
-    cfg: client_tui_session_manager.SessionConfig, enc: str | None, mode: str | None, protocol: str | None
+    cfg: client_tui_session_manager.SessionConfig,
+    enc: str | None,
+    mode: str | None,
+    echo_mode: str | None = None,
+    protocol: str | None = None,
 ) -> None:
     """Apply optional field overrides to *cfg* when values are present and valid."""
     if enc:
         cfg.encoding = enc
     if mode in ("auto", "raw", "line"):
         cfg.mode = mode
+    if echo_mode in ("auto", "local", "remote"):
+        cfg.echo_mode = echo_mode
     if protocol in ("telnet", "websocket"):
         cfg.protocol = protocol
 
@@ -108,7 +117,7 @@ def entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager
     entry_type = entry.get("type", "")
     apply_type_presets(cfg, entry_type)
     cfg.server_type = entry_type
-    apply_overrides(cfg, enc, entry.get("mode"), entry.get("protocol"))
+    apply_overrides(cfg, enc, entry.get("mode"), entry.get("echo_mode"), entry.get("protocol"))
     ws_path = entry.get("ws_path")
     if ws_path:
         cfg.ws_path = ws_path
@@ -135,7 +144,13 @@ def directory_to_sessions() -> dict[str, typing.Any]:
         key = f"{fav['host']}:{fav.get('port', 23)}"
         if key in sessions:
             sessions[key].bookmarked = True
-            apply_overrides(sessions[key], fav.get("encoding"), fav.get("mode"), fav.get("protocol"))
+            apply_overrides(
+                sessions[key],
+                fav.get("encoding"),
+                fav.get("mode"),
+                fav.get("echo_mode"),
+                fav.get("protocol"),
+            )
         else:
             cfg = entry_to_session(fav)
             cfg.bookmarked = True

@@ -27,6 +27,12 @@ BBSs, it provides color correction, automatic encoding translations, and era-acc
 colors and fonts using modern terminal graphics protocols like kitty or sixel, or modern unicode 16
 fonts supporting octants.
 
+Telix uses sub-processes to launch sessions, and further, uses subprocesses to launch TUI's from the
+MUD/linemode REPL. Inter-process communication is achieved by modification of shared files, like
+``.current-room-<hash>`` and ``.fasttravel-<hash>``. This is a complication for developer
+convenience, by launching new sub-processes, the latest code is automatically loaded without
+requiring a full restart of Telix.
+
 Dependencies
 ------------
 

@@ -23,6 +23,7 @@ from telix.client_shell import (
     build_session_key,
     setup_color_filter,
     telix_client_shell,
+    compute_local_echo,
 )
 from telix.ws_transport import GMCP, WebSocketWriter
 from telix.session_context import TelixSessionContext
@@ -793,3 +794,19 @@ class TestSshClientShellNoLocalEcho:
 
         assert len(captured_state) == 1
         assert captured_state[0].local_echo is False
+
+
+class TestComputeLocalEcho:
+    def test_auto_with_will_echo(self) -> None:
+        assert compute_local_echo("auto", True) is False
+
+    def test_auto_without_will_echo(self) -> None:
+        assert compute_local_echo("auto", False) is True
+
+    def test_local_mode(self) -> None:
+        assert compute_local_echo("local", True) is True
+        assert compute_local_echo("local", False) is True
+
+    def test_remote_mode(self) -> None:
+        assert compute_local_echo("remote", True) is False
+        assert compute_local_echo("remote", False) is False

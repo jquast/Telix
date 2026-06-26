@@ -53,6 +53,21 @@ log = logging.getLogger(__name__)
 __all__ = ("ssh_client_shell", "telix_client_shell", "ws_client_shell")
 
 
+def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
+    """
+    Compute local echo flag from echo mode and server's WILL ECHO state.
+
+    :param echo_mode: ``"auto"``, ``"local"``, or ``"remote"``
+    :param will_echo: ``True`` when server has negotiated WILL ECHO
+    :returns: ``True`` if client should echo input locally
+    """
+    if echo_mode == "local":
+        return True
+    if echo_mode == "remote":
+        return False
+    return not will_echo
+
+
 def _apply_delete_to_backspace(stdin: typing.Any) -> None:
     """
     Patch stdin so Delete (0x7f) is sent as Backspace (0x08).
@@ -597,6 +612,8 @@ async def telix_client_shell(
         encoding=telnet_writer.fn_encoding(incoming=True),
     )
     ctx.repl.enabled = not _main_mod._color_args.no_repl
+    if hasattr(_main_mod._color_args, "echo_mode"):
+        ctx.echo_mode = _main_mod._color_args.echo_mode
 
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)
@@ -724,7 +741,7 @@ async def telix_client_shell(
             if not switched_to_raw and tty_shell._istty and tty_shell._save_mode is not None:
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
                 switched_to_raw = True
-                local_echo = not telnet_writer.will_echo
+                local_echo = compute_local_echo(ctx.echo_mode, telnet_writer.will_echo)
                 linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
@@ -898,6 +915,9 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         session_key=build_session_key(ws_writer), writer=ws_writer, encoding=ws_writer.encoding
     )
     ctx.repl.enabled = not no_repl
+    if color_args := getattr(ws_writer.ctx, "color_args", None):
+        if hasattr(color_args, "echo_mode"):
+            ctx.echo_mode = color_args.echo_mode
 
     # 2. Load per-session configs.
     load_configs(ctx)
@@ -974,7 +994,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             if not ctx.repl.ansi_keys:
                 _apply_delete_to_backspace(stdin)
             state = telnetlib3.client_shell._RawLoopState(
-                switched_to_raw=True, last_will_echo=False, local_echo=not ws_writer.will_echo, linesep=linesep
+                switched_to_raw=True, last_will_echo=False, local_echo=compute_local_echo(ctx.echo_mode, ws_writer.will_echo), linesep=linesep
             )
             raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ws_writer)
             raw_stdout_ref[0] = raw_stdout

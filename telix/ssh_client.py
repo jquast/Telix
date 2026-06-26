@@ -253,6 +253,12 @@ def build_parser() -> argparse.ArgumentParser:
     telix.add_argument(
         "--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering (default: 0)"
     )
+    telix.add_argument(
+        "--local-echo", action="store_true", default=False, dest="local_echo", help="force local echo"
+    )
+    telix.add_argument(
+        "--remote-echo", action="store_true", default=False, dest="remote_echo", help="force remote echo"
+    )
     return parser
 
 

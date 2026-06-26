@@ -6,7 +6,8 @@ History
 
 - bugfix: correct some kinds of VGA color filtering
 - bugfix: session manager table not redrawn on terminal resize
-- enhancement: new "Font Graphics" support using kitty/sixel or "Octants" for BBS/SyncTERM fonts
+- bugfix: add ``--echo-mode`` option to fix doubled-input on raw-mode BBSes that echo but do not negotiate telnet ECHO
+- enhancement: new "Font Graphics" support using kitty/sixel for BBS/SyncTERM-compatible bitmap fonts
 - enhancement: new "FF is Clear+Home" toggle (SyncTERM compatibility)
 
 0.1.7 -- 2026-03-16

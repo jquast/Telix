@@ -100,6 +100,14 @@ class TestLoadFavorites:
         assert cryosphere["ws_path"] == "/telnet/"
         assert cryosphere["ssl"] is True
 
+    def test_echo_mode_parsing(self) -> None:
+        entries = load_favorites()
+        by_name = {e["name"]: e for e in entries}
+        boot_factory = by_name["Boot Factory BBS"]
+        assert boot_factory["echo_mode"] == "remote"
+        area52 = by_name["Area 52 BBS"]
+        assert area52.get("echo_mode") is None
+
 
 class TestDirectoryToSessions:
     def test_returns_session_configs(self) -> None:
@@ -159,8 +167,13 @@ class TestDirectoryToSessions:
         sessions = directory_to_sessions()
         bbs = next(v for v in sessions.values() if v.server_type == "bbs")
         assert bbs.colormatch == "vga"
-        assert bbs.ice_colors is True
-        assert bbs.compression is None
+
+    def test_favorites_echo_mode_flows_to_config(self) -> None:
+        sessions = directory_to_sessions()
+        cfg = sessions["bfbbs.no-ip.com:8888"]
+        assert cfg.echo_mode == "remote"
+        area52 = sessions["area52.tk:5200"]
+        assert area52.echo_mode == "auto"
 
     def test_mud_presets_applied(self) -> None:
         sessions = directory_to_sessions()

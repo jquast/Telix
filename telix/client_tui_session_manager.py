@@ -437,6 +437,9 @@ class SessionConfig:
     # Mode: "auto", "raw", or "line"
     mode: str = "auto"
 
+    # Echo mode: "auto", "local", or "remote"
+    echo_mode: str = "auto"
+
     # Display
     colormatch: str = "vga"
     color_brightness: float = 1.0
@@ -627,6 +630,10 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
         cmd.append("--raw-mode")
     elif config.mode == "line":
         cmd.append("--line-mode")
+    if config.echo_mode == "local":
+        cmd.append("--local-echo")
+    elif config.echo_mode == "remote":
+        cmd.append("--remote-echo")
 
     for attr, flag, default in CMD_BOOL_FLAGS:
         if getattr(config, attr) != default:
@@ -691,6 +698,10 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         cmd.append("--raw-mode")
     elif config.mode == "line":
         cmd.append("--line-mode")
+    if config.echo_mode == "local":
+        cmd.append("--local-echo")
+    elif config.echo_mode == "remote":
+        cmd.append("--remote-echo")
     if config.ansi_keys:
         cmd.append("--ansi-keys")
     if config.ascii_eol:
@@ -1748,6 +1759,17 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     yield textual.widgets.RadioButton(
                         "Line mode", value=not is_ssh and cfg.mode == "line", id="mode-line"
                     )
+                yield textual.widgets.Label("Echo Mode")
+                with textual.widgets.RadioSet(id="echo-mode-radio"):
+                    yield textual.widgets.RadioButton(
+                        "Auto", value=cfg.echo_mode == "auto", id="echo-auto"
+                    )
+                    yield textual.widgets.RadioButton(
+                        "Local echo", value=cfg.echo_mode == "local", id="echo-local"
+                    )
+                    yield textual.widgets.RadioButton(
+                        "Remote echo", value=cfg.echo_mode == "remote", id="echo-remote"
+                    )
             with textual.containers.Vertical(id="repl-col"), textual.containers.Horizontal(classes="switch-row"):
                 repl_dim = "" if cfg.mode != "raw" else " dimmed"
                 yield textual.widgets.Label("Advanced REPL", id="repl-label", classes=f"field-label{repl_dim}")
@@ -2038,6 +2060,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#colormatch", textual.widgets.Select).value = "vga"
             self.query_one("#ice-colors", textual.widgets.Switch).value = True
             self.select_radio("mode-radio", "mode-raw")
+            self.select_radio("echo-mode-radio", "echo-remote")
             self.query_one("#use-repl", textual.widgets.Switch).value = False
             self.query_one("#use-repl", textual.widgets.Switch).disabled = True
             self.query_one("#repl-label", textual.widgets.Label).set_class(True, "dimmed")
@@ -2049,13 +2072,14 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#ff-clears-screen", textual.widgets.Switch).value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
-            self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, REPL off, MCCP Compression {compress_label}")
+            self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off, MCCP Compression {compress_label}")
         elif button_id == "type-mud":
             if ssl_on:
                 self.select_radio("compression-radio", "compress-no")
             else:
                 self.select_radio("compression-radio", "compress-yes")
             self.select_radio("mode-radio", "mode-line")
+            self.select_radio("echo-mode-radio", "echo-auto")
             self.query_one("#use-repl", textual.widgets.Switch).value = True
             self.query_one("#use-repl", textual.widgets.Switch).disabled = False
             self.query_one("#repl-label", textual.widgets.Label).set_class(False, "dimmed")
@@ -2091,8 +2115,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         self.query_one("#ssh-details-row").set_class(is_ssh, "visible")
         self.query_one("#compression-row").display = not is_ssh
         self.query_one("#mode-radio", textual.widgets.RadioSet).disabled = is_ssh
+        self.query_one("#echo-mode-radio", textual.widgets.RadioSet).disabled = is_ssh
         if is_ssh:
             self.select_radio("mode-radio", "mode-raw")
+            self.select_radio("echo-mode-radio", "echo-remote")
             self.select_radio("server-type-radio", "type-bbs")
         compression_radio = self.query_one("#compression-radio", textual.widgets.RadioSet)
         if is_ssl:
@@ -2304,6 +2330,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             cfg.mode = "line"
         else:
             cfg.mode = "auto"
+
+        if self.query_one("#echo-local", textual.widgets.RadioButton).value:
+            cfg.echo_mode = "local"
+        elif self.query_one("#echo-remote", textual.widgets.RadioButton).value:
+            cfg.echo_mode = "remote"
+        else:
+            cfg.echo_mode = "auto"
 
         cfg.ansi_keys = self.query_one("#ansi-keys", textual.widgets.Switch).value
         cfg.ascii_eol = self.query_one("#ascii-eol", textual.widgets.Switch).value
