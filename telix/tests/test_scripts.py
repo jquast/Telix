@@ -393,8 +393,8 @@ class TestConditionsMet:
         sctx.gmcp_data["Char.Vitals"]["hp"] = "50"
         evt = sctx.gmcp.any_update
         evt.set()
-        evt.clear()
         await asyncio.sleep(0)
+        evt.clear()
         assert task.done()
         assert task.result() is True
 
@@ -635,6 +635,7 @@ class TestScriptContextEventChanged:
         async def pulse():
             await asyncio.sleep(0.05)
             sctx.room.changed.set()
+            await asyncio.sleep(0)
             sctx.room.changed.clear()
 
         asyncio.ensure_future(pulse())
@@ -656,6 +657,7 @@ class TestScriptContextEventChanged:
             evt = sctx.gmcp.package_events.get("Char.Vitals")
             if evt is not None:
                 evt.set()
+                await asyncio.sleep(0)
                 evt.clear()
 
         asyncio.ensure_future(pulse())
@@ -678,6 +680,7 @@ class TestScriptContextEventChanged:
             evt = sctx.gmcp.package_events.get("Char.Vitals")
             if evt is not None:
                 evt.set()
+                await asyncio.sleep(0)
                 evt.clear()
 
         asyncio.ensure_future(pulse())
@@ -691,6 +694,7 @@ class TestScriptContextEventChanged:
         async def pulse():
             await asyncio.sleep(0.02)
             sctx.gmcp.any_update.set()
+            await asyncio.sleep(0)
             sctx.gmcp.any_update.clear()
 
         asyncio.ensure_future(pulse())
