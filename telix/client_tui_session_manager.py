@@ -567,8 +567,11 @@ def append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
 
 def append_graphics_flags(cmd: list[str], config: SessionConfig) -> None:
     """Append ``--graphics-font`` related flags to *cmd* when a graphics font is selected."""
-    if config.graphics_font:
-        cmd.extend(["--graphics-font", config.graphics_font])
+    gfx = config.graphics_font
+    if gfx and gfx is not True:
+        cmd.extend(["--graphics-font", gfx])
+    elif gfx is True:
+        cmd.append("--graphics-font")
     if config.graphics_columns is not None:
         cmd.extend(["--graphics-columns", str(config.graphics_columns)])
     if config.graphics_rows is not None:
