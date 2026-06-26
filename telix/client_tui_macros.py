@@ -46,6 +46,7 @@ class MacroEditPane(client_tui_base.EditListPane):
     #macro-form .form-gap { width: 10; }
     .command-text-area { height: 1fr; min-height: 3; }
     """
+
     )
 
     def __init__(self, path: str, session_key: str = "", rooms_file: str = "", current_room_file: str = "") -> None:

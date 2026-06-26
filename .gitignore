@@ -25,3 +25,4 @@ htmlcov
 __pycache__/
 logs
 my-run.sh
+telix/fonts/deps/

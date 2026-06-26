@@ -1,13 +1,12 @@
 """
 SSH reader/writer adapters for telix sessions.
 
-Provides :class:`SSHReader` and :class:`SSHWriter`, which present a compatible
-interface to telnetlib3's reader/writer so that the REPL can operate over an
-SSH transport without modification.
+Provides :class:`SSHReader` and :class:`SSHWriter`, which present a compatible interface to telnetlib3's reader/writer
+so that the REPL can operate over an SSH transport without modification.
 
-:class:`SSHReader` is a queue-based reader fed by the asyncssh receive loop.
-:class:`SSHWriter` wraps an :class:`asyncssh.SSHClientProcess[str]` for writing and
-carries the auth coordination state used by :class:`~telix.ssh_client.SSHTelix`.
+:class:`SSHReader` is a queue-based reader fed by the asyncssh receive loop. :class:`SSHWriter` wraps an
+:class:`asyncssh.SSHClientProcess[str]` for writing and carries the auth coordination state used by
+:class:`~telix.ssh_client.SSHTelix`.
 """
 
 import typing
@@ -29,12 +28,11 @@ class SSHReader:
     """
     Async reader fed by asyncssh process stdout.
 
-    Presents the same ``read()`` / ``at_eof()`` interface as
-    :class:`~telnetlib3.stream_reader.TelnetReader` so the REPL's
-    ``_read_server`` loop works without changes.
+    Presents the same ``read()`` / ``at_eof()`` interface as :class:`~telnetlib3.stream_reader.TelnetReader` so the
+    REPL's ``_read_server`` loop works without changes.
 
-    Unlike :class:`~telix.ws_transport.WebSocketReader`, ``feed_data`` accepts
-    a ``str`` because asyncssh already decodes the stream.
+    Unlike :class:`~telix.ws_transport.WebSocketReader`, ``feed_data`` accepts a ``str`` because asyncssh already
+    decodes the stream.
     """
 
     def __init__(self) -> None:
@@ -116,9 +114,8 @@ class SSHWriter:
         """
         Initialise the writer.
 
-        :param process: The asyncssh process; may be ``None`` initially and set
-            later once the connection is established.
-        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param process: The asyncssh process; may be None initially and set later once the connection is established.
+        :param peername: (host, port) tuple for get_extra_info("peername").
         """
         self._process: asyncssh.SSHClientProcess[str] | None = process
         self._peername = peername
@@ -127,6 +124,7 @@ class SSHWriter:
         self._iac_callback: dict[bytes, Callable[..., object]] = {}
         self.log = logging.getLogger("telix.ssh_transport")
         self.encoding: str = "utf-8"
+        self.encoding_errors: str = "replace"
         self.ctx: TelixSessionContext = None  # type: ignore[assignment]
         self.will_echo: bool = False
         self.mode: str = "local"
@@ -159,7 +157,7 @@ class SSHWriter:
         if self._process is None:
             return
         if isinstance(text, bytes):
-            text = text.decode(self.encoding, errors="replace")
+            text = text.decode(self.encoding, errors=self.encoding_errors)
         self._process.stdin.write(text)
 
     def _write(self, buf: bytes, escape_iac: bool = True) -> None:
@@ -172,7 +170,21 @@ class SSHWriter:
         self.write(buf)
 
     def _send_naws(self) -> None:
-        """No-op stub for telnetlib3 NAWS negotiation."""
+        """
+        Notify the SSH server of current terminal size.
+
+        Uses ``handle_send_naws`` when patched by the graphics writer to report the virtual terminal size instead of the
+        real one.
+        """
+        if self._process is None:
+            return
+        if self.handle_send_naws is not None:
+            rows, cols = self.handle_send_naws()
+        else:
+            import shutil
+
+            cols, rows = shutil.get_terminal_size()
+        self._process.change_terminal_size(cols, rows)
 
     def close(self) -> None:
         """Close the SSH process stdin."""
@@ -199,7 +211,7 @@ class SSHWriter:
         """
         Return transport metadata.
 
-        :param name: Key name (only ``"peername"`` and ``"ssl_object"`` supported).
+        :param name: Key name (only "peername" and "ssl_object" supported).
         :param default: Value to return if *name* is not available.
         """
         if name == "peername":
@@ -212,8 +224,8 @@ class SSHWriter:
         r"""
         Register an extension callback.
 
-        :param key: Telopt byte (e.g. ``b'\xc9'`` for GMCP).
-        :param callback: Callable receiving ``(package, data)``.
+        :param key: Telopt byte (e.g. b'\xc9' for GMCP).
+        :param callback: Callable receiving (package, data).
         """
         self._ext_callback[key] = callback
 
@@ -221,7 +233,7 @@ class SSHWriter:
         r"""
         Register an IAC callback.
 
-        :param key: IAC command byte (e.g. ``b'\xf9'`` for GA).
+        :param key: IAC command byte (e.g. b'\xf9' for GA).
         :param callback: Callable receiving the command byte.
         """
         self._iac_callback[key] = callback

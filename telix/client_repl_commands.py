@@ -60,10 +60,10 @@ class DispatchHooks:
     :param wait_fn: Async callable to wait for GA/EOR prompt.
     :param send_fn: Callable that sends a command string to the server.
     :param echo_fn: Callable that echoes a command for display.
-    :param on_status: Callback to set a status string, or ``None``.
-    :param on_progress: Callback ``(start, deadline)`` to set progress bar, or ``None``.
-    :param on_progress_clear: Callback to clear the progress bar, or ``None``.
-    :param on_activity: Callback to signal activity (e.g. toolbar refresh), or ``None``.
+    :param on_status: Callback to set a status string, or None.
+    :param on_progress: Callback (start, deadline) to set progress bar, or None.
+    :param on_progress_clear: Callback to clear the progress bar, or None.
+    :param on_activity: Callback to signal activity (e.g. toolbar refresh), or None.
     :param prompt_ready: Event to clear before waiting for the next prompt.
     """
 
@@ -86,7 +86,7 @@ class ExpandedCommands(typing.NamedTuple):
     Result of :func:`expand_commands_ex`.
 
     :param commands: Flat list of individual commands.
-    :param immediate_set: Indices of commands whose preceding separator was ``|`` (send immediately, no GA/EOR wait).
+    :param immediate_set: Indices of commands whose preceding separator was | (send immediately, no GA/EOR wait).
     """
 
     commands: list[str]
@@ -97,23 +97,19 @@ def expand_commands_ex(line: str) -> ExpandedCommands:
     r"""
     Split *line* on ``;`` and ``|`` (outside backticks) and expand repeat prefixes.
 
-    Whitespace around separators is optional, including newlines --
-    ``a;b``, ``a ; b``, and ``a;\nb`` are all equivalent.
+    Whitespace around separators is optional, including newlines -- ``a;b``, ``a ; b``, and ``a;\nb`` are all
+    equivalent.
 
-    Backtick-enclosed tokens (e.g. ```travel 123```, ```delay 1s```,
-    ```until 4 died\\.```) are preserved verbatim -- they are not split
-    on ``;`` or ``|`` and repeat expansion is not applied.
+    Backtick-enclosed tokens (e.g. ```travel 123```, ```delay 1s```, ```until 4 died\\.```) are preserved verbatim --
+    they are not split on ``;`` or ``|`` and repeat expansion is not applied.
 
-    ``;`` means *wait for GA/EOR* before the next command (default).
-    ``|`` means *send immediately* without waiting.
+    ``;`` means *wait for GA/EOR* before the next command (default). ``|`` means *send immediately* without waiting.
 
-    Backslash-escaped separators (``\;``, ``\|``, ``\```) produce the
-    literal character without triggering a split.
+    Backslash-escaped separators (``\;``, ``\|``, ``\```) produce the literal character without triggering a split.
 
-    A segment like ``5e`` becomes ``['e', 'e', 'e', 'e', 'e']``.
-    Only a leading integer followed immediately by an alphabetic
-    character triggers expansion (e.g. ``5east`` -> 5 × ``east``).
-    Segments without a leading digit are passed through unchanged.
+    A segment like ``5e`` becomes ``['e', 'e', 'e', 'e', 'e']``. Only a leading integer followed immediately by an
+    alphabetic character triggers expansion (e.g. ``5east`` -> 5 × ``east``). Segments without a leading digit are
+    passed through unchanged.
 
     :param line: Raw user input line.
     :returns: :class:`ExpandedCommands` with commands and immediate indices.
@@ -194,8 +190,8 @@ def expand_commands(line: str) -> list[str]:
     """
     Split *line* on ``;`` and ``|`` (outside backticks) and expand repeat prefixes.
 
-    Convenience wrapper around :func:`expand_commands_ex` that returns
-    only the command list (discarding separator metadata).
+    Convenience wrapper around :func:`expand_commands_ex` that returns only the command list (discarding separator
+    metadata).
 
     :param line: Raw user input line.
     :returns: Flat list of individual commands.
@@ -207,12 +203,11 @@ def get_search_buffer(ctx: "TelixSessionContext") -> typing.Any | None:
     """
     Return the :class:`SearchBuffer` for *ctx*, or ``None``.
 
-    Works for both macro execution (where ``ctx.trigger_engine`` is the
-    engine) and trigger execution (where the engine *is* ``self`` and
-    ``ctx.trigger_engine`` points to it).
+    Works for both macro execution (where ``ctx.trigger_engine`` is the engine) and trigger execution (where the engine
+    *is* ``self`` and ``ctx.trigger_engine`` points to it).
 
     :param ctx: Session context.
-    :returns: The engine's :class:`SearchBuffer`, or ``None``.
+    :returns: The engine's :class:`SearchBuffer`, or None.
     """
     engine = ctx.triggers.engine
     if engine is not None:
@@ -226,15 +221,14 @@ async def dispatch_one(
     """
     Dispatch a single backtick command or plain send.
 
-    Handles ``delay``, ``when``, ``until``, ``untils``, and plain send
-    commands.  Caller keeps its own loop structure.
+    Handles ``delay``, ``when``, ``until``, ``untils``, and plain send commands.  Caller keeps its own loop structure.
 
     :param cmd: Command string (may be backtick-enclosed).
     :param idx: Index of this command in the expanded sequence.
     :param sent_count: Number of plain sends already issued.
     :param immediate_set: Indices of commands that skip GA/EOR wait.
     :param hooks: Caller-specific callbacks.
-    :param mask_send: If ``True``, mask plain command text in status.
+    :param mask_send: If True, mask plain command text in status.
     :returns: :class:`StepResult` indicating what happened.
     """
     from .trigger import check_condition
@@ -396,8 +390,7 @@ def is_known_exit(cmd: str, ctx: "TelixSessionContext") -> bool:
     """
     Return ``True`` if *cmd* matches a known exit from the current room.
 
-    Falls back to ``True`` when room data is unavailable so that
-    movement pacing is used conservatively.
+    Falls back to ``True`` when room data is unavailable so that movement pacing is used conservatively.
     """
     room_num = ctx.room.current
     if not room_num:
@@ -417,7 +410,7 @@ def collapse_runs(commands: list[str], start: int = 0) -> list[tuple[str, int, i
 
     :param commands: Full command list.
     :param start: Index to start collapsing from (earlier entries are skipped).
-    :returns: List of ``(display_text, start_idx, end_idx)`` tuples.
+    :returns: List of (display_text, start_idx, end_idx) tuples.
     """
     if start >= len(commands):
         return []
@@ -458,12 +451,11 @@ def render_active_command(
     """
     Render a single highlighted active command on the input row.
 
-    The text is drawn in the secondary palette colour with no background
-    flash animation.
+    The text is drawn in the secondary palette colour with no background flash animation.
 
     :param flash_elapsed: Unused (kept for API compatibility).
     :param hint: Right-aligned dim hint text (e.g. trigger status).
-    :param progress: Until timer progress ``0.0..1.0``, or ``None``.
+    :param progress: Until timer progress 0.0..1.0, or None.
     :param base_bg_sgr: Background SGR for the input row.
     :param trigger: Use trigger suggestion color for hints.
     :returns: Display width of the rendered command text.
@@ -510,13 +502,12 @@ def render_command_queue(
     """
     Render the command queue on the input row.
 
-    The active run uses the secondary palette colour.  Pending runs use
-    dim grey.  If the display is too wide it is truncated with an
-    ellipsis.
+    The active run uses the secondary palette colour.  Pending runs use dim grey.  If the display is too wide it is
+    truncated with an ellipsis.
 
     :param flash_elapsed: Unused (kept for API compatibility).
     :param hint: Right-aligned dim hint text (e.g. trigger status).
-    :param progress: Until timer progress ``0.0..1.0``, or ``None``.
+    :param progress: Until timer progress 0.0..1.0, or None.
     :param base_bg_sgr: Background SGR for the input row.
     :param trigger: Use trigger suggestion color for hints.
     :returns: Total display width of all rendered fragments.
@@ -579,17 +570,14 @@ async def send_chained(
     """
     Send multiple commands with GA/EOR pacing between each.
 
-    The first command is assumed to have already been sent by the caller.
-    This coroutine sends commands 2..N, waiting for the server prompt
-    signal before each one.
+    The first command is assumed to have already been sent by the caller. This coroutine sends commands 2..N, waiting
+    for the server prompt signal before each one.
 
-    Commands whose index is in *immediate_set* (from a ``|`` separator)
-    skip the GA/EOR wait and are sent immediately.
+    Commands whose index is in *immediate_set* (from a ``|`` separator) skip the GA/EOR wait and are sent immediately.
 
-    When all commands in the list are identical (e.g. ``9e`` expanded to
-    nine ``e`` commands), movement retry logic is applied: if the room
-    does not change after a command, the same command is retried up to
-    :data:`MOVE_MAX_RETRIES` times with a delay between attempts.
+    When all commands in the list are identical (e.g. ``9e`` expanded to nine ``e`` commands), movement retry logic is
+    applied: if the room does not change after a command, the same command is retried up to :data:`MOVE_MAX_RETRIES`
+    times with a delay between attempts.
 
     :param commands: List of commands (index 1+ will be sent).
     :param ctx: Session context.
@@ -750,13 +738,12 @@ def macro_send(ctx: "TelixSessionContext", log: logging.Logger, cmd: str) -> Non
     ctx.writer.write(cmd + "\r\n")
 
 
-def _dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Logger) -> bool:
+def dispatch_repl_action(cmd: str, ctx: "TelixSessionContext", log: logging.Logger) -> bool:
     """
     Dispatch a REPL action backtick command via ``ctx.repl_actions``.
 
-    Returns ``True`` if the command was recognized and handled (or
-    silently ignored because the action is unavailable), ``False``
-    if the command is not a REPL action.
+    Returns ``True`` if the command was recognized and handled (or silently ignored because the action is unavailable),
+    ``False`` if the command is not a REPL action.
     """
     am = REPL_ACTION_RE.match(cmd)
     if am:
@@ -813,7 +800,7 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
     dispatched via :func:`dispatch_one`, and plain commands are sent to
     the server with GA/EOR pacing (or immediately if ``|`` separated).
 
-    :param text: Raw macro text with ``;``/``|`` separators.
+    :param text: Raw macro text with ;/| separators.
     :param ctx: Session context.
     :param log: Logger.
     """
@@ -843,7 +830,7 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
     while idx < len(parts):
         cmd = parts[idx]
 
-        if _dispatch_repl_action(cmd, ctx, log):
+        if dispatch_repl_action(cmd, ctx, log):
             idx += 1
             continue
 

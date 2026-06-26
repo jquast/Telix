@@ -1,11 +1,9 @@
 """
 Confirmation dialogs, walk dialogs, and the tabbed editor screen.
 
-Contains ``ConfirmDialogScreen``, ``RandomwalkDialogScreen``,
-``AutodiscoverDialogScreen``, ``TabbedEditorScreen``, and their
-standalone entry points. Room browser, captures viewer, and main app
-live in ``client_tui_rooms``, ``client_tui_captures``, and
-``client_tui_app`` respectively.
+Contains ``ConfirmDialogScreen``, ``RandomwalkDialogScreen``, ``AutodiscoverDialogScreen``, ``TabbedEditorScreen``, and
+their standalone entry points. Room browser, captures viewer, and main app live in ``client_tui_rooms``,
+``client_tui_captures``, and ``client_tui_app`` respectively.
 """
 
 # std imports
@@ -96,8 +94,8 @@ class TabbedEditorScreen(textual.screen.Screen[None]):
         """
         Initialize tabbed editor from a parameters dict.
 
-        :param params: Dict with keys for each pane's constructor args, plus ``initial_tab``,
-            ``initial_channel``, and ``hide_globals``.
+        :param params: Dict with keys for each pane's constructor args, plus initial_tab, initial_channel, and
+            ``hide_globals``.
         """
         super().__init__()
         self.params = params
@@ -292,8 +290,8 @@ def unified_editor_main() -> None:
     """
     Launch the tabbed editor TUI as a standalone process.
 
-    Reads a single JSON blob from ``sys.argv[1]`` containing all parameters for every pane. Called
-    from the REPL via ``launch_unified_editor()``.
+    Reads a single JSON blob from ``sys.argv[1]`` containing all parameters for every pane. Called from the REPL via
+    ``launch_unified_editor()``.
     """
     params = json.loads(sys.argv[1])
     logfile = params.get("logfile", "")
@@ -922,7 +920,7 @@ def run_autodiscover_dialog(
     Launch the autodiscover dialog in the current (worker) thread.
 
     :param result_file: Path to the JSON file where the result is written.
-    :param default_strategy: Initial strategy selection (``"bfs"`` or ``"dfs"``).
+    :param default_strategy: Initial strategy selection ("bfs" or "dfs").
     :param default_room_change_cmd: Initial room change command string.
     :param default_triggers: Initial triggers toggle state.
     :param default_command_delay: Initial command delay in seconds.

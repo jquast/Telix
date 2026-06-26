@@ -56,9 +56,8 @@ class SSHTelix(asyncssh.SSHClient):
         """
         Collect a password from the REPL with masked input.
 
-        Activates ``will_echo`` so the REPL scrambles the typed password, feeds
-        a ``"Password: "`` prompt into the output stream, sets ``pending_auth``
-        to route the next Enter-key submission to the auth queue, then waits.
+        Activates ``will_echo`` so the REPL scrambles the typed password, feeds a ``"Password: "`` prompt into the
+        output stream, sets ``pending_auth`` to route the next Enter-key submission to the auth queue, then waits.
 
         :returns: The password entered by the user.
         """
@@ -84,14 +83,13 @@ class SSHTelix(asyncssh.SSHClient):
         """
         Collect responses to keyboard-interactive challenge prompts.
 
-        For each prompt, feeds the prompt text into the output stream and
-        awaits a response from the REPL.  Echoing is suppressed for prompts
-        where *echo* is ``False`` (passwords, PINs, etc.).
+        For each prompt, feeds the prompt text into the output stream and awaits a response from the REPL.  Echoing is
+        suppressed for prompts where *echo* is ``False`` (passwords, PINs, etc.).
 
         :param name: Challenge name (displayed for context).
         :param instructions: Instructions from the server.
         :param lang: Language tag (unused).
-        :param prompts: List of ``(prompt_text, echo)`` pairs.
+        :param prompts: List of (prompt_text, echo) pairs.
         :returns: List of responses in the same order as *prompts*.
         """
         if instructions:
@@ -128,32 +126,43 @@ async def run_ssh_client(
     term_type: str,
     shell: Callable[..., Awaitable[None]],
     color_args: "argparse.Namespace | None" = None,
+    encoding: str = "utf-8",
+    encoding_errors: str = "replace",
+    typescript: str = "",
 ) -> None:
     """
     Connect to an SSH server and run the telix shell.
 
-    Creates :class:`~telix.ssh_transport.SSHReader` and
-    :class:`~telix.ssh_transport.SSHWriter` adapters, starts the shell as a
-    background task, then opens an SSH connection and process.  Data received
-    from the server is fed directly into the reader queue; EOF is signalled on
-    disconnect.
+    Creates :class:`~telix.ssh_transport.SSHReader` and :class:`~telix.ssh_transport.SSHWriter` adapters, starts the
+    shell as a background task, then opens an SSH connection and process.  Data received from the server is fed directly
+    into the reader queue; EOF is signalled on disconnect.
 
     :param host: SSH server hostname or address.
     :param port: SSH port (default 22).
     :param username: Login username; empty string uses the system login name.
     :param key_file: Path to a private key file; empty string uses password auth.
-    :param term_type: Terminal type string (e.g. ``"xterm-256color"``).
-    :param shell: Async callable ``shell(reader, writer)`` -- the REPL entry point.
-    :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
+    :param term_type: Terminal type string (e.g. "xterm-256color").
+    :param shell: Async callable shell(reader, writer) -- the REPL entry point.
+    :param color_args: Parsed color/palette CLI options, or None to skip color setup.
+    :param encoding: Wire byte decoding (e.g. "utf-8", "iso-8859-1").
+    :param encoding_errors: Error handling for the wire decoder (default "replace").
     """
     reader = ssh_transport.SSHReader()
     writer = ssh_transport.SSHWriter(peername=(host, port))
     writer.color_args = color_args  # type: ignore[attr-defined]
+    writer.encoding = encoding
+    writer.encoding_errors = encoding_errors
+    writer.typescript = typescript  # type: ignore[attr-defined]
 
     shell_task = asyncio.ensure_future(shell(reader, writer))
 
     client_keys = [resolve_key_file(key_file)] if key_file else []
     cols, rows = shutil.get_terminal_size()
+
+    if color_args is not None:
+        if color_args.graphics_font:
+            cols = color_args.graphics_columns or 80
+            rows = color_args.graphics_rows or 25
 
     async with asyncssh.connect(
         host,
@@ -180,7 +189,7 @@ async def run_ssh_client(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for the ``telix-ssh`` entry point."""
-    parser = argparse.ArgumentParser(prog="telix-ssh", description="Connect to an SSH BBS/MUD server.")
+    parser = argparse.ArgumentParser(prog="telix", description="SSH connection (internal subprocess)")
     parser.add_argument("host", help="SSH server hostname")
 
     conn = parser.add_argument_group("Connection options")
@@ -196,6 +205,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--logfile", default="", metavar="FILE", help="write log to FILE")
     conn.add_argument("--typescript", default="", metavar="FILE", help="record session to FILE")
+    conn.add_argument("--encoding", default="utf-8", metavar="ENC", help="connection encoding (default: utf-8)")
+    conn.add_argument(
+        "--encoding-errors", default="replace", metavar="POLICY", help="encoding error handling (default: replace)"
+    )
 
     telix = parser.add_argument_group("Telix options")
     telix.add_argument(
@@ -231,6 +244,19 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="color contrast multiplier (default: 1.0)",
     )
+    telix.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
+    telix.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
+    telix.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
+    telix.add_argument("--graphics-font", nargs="?", const="auto", default="", dest="graphics_font")
+    telix.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
+    telix.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
+    telix.add_argument(
+        "--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering (default: 0)"
+    )
+    telix.add_argument("--local-echo", action="store_true", default=False, dest="local_echo", help="force local echo")
+    telix.add_argument(
+        "--remote-echo", action="store_true", default=False, dest="remote_echo", help="force remote echo"
+    )
     return parser
 
 
@@ -252,7 +278,27 @@ def main() -> None:
         color_contrast=args.color_contrast,
         background_color=args.background_color,
         no_ice_colors=args.no_ice_colors,
+        ansi_keys=args.ansi_keys,
+        clear_homes_cursor=args.clear_homes_cursor,
+        ff_clears_screen=args.ff_clears_screen,
+        graphics_font=args.graphics_font,
+        graphics_columns=args.graphics_columns,
+        graphics_rows=args.graphics_rows,
+        font_id=args.font_id,
     )
+
+    if args.logfile:
+        logging.basicConfig(
+            level=logging.getLevelName(args.loglevel.upper()),
+            filename=args.logfile,
+            filemode="w",
+            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.getLevelName(args.loglevel.upper()),
+            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
+        )
 
     asyncio.run(
         run_ssh_client(
@@ -263,6 +309,9 @@ def main() -> None:
             term_type=term_type,
             shell=ssh_client_shell,
             color_args=color_args,
+            encoding=args.encoding,
+            encoding_errors=args.encoding_errors,
+            typescript=args.typescript,
         )
     )
     sys.exit(0)

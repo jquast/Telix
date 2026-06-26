@@ -44,12 +44,11 @@ def parse_gmcp_frame(text: str) -> tuple[str, typing.Any]:
     """
     Parse a GMCP TEXT frame into ``(package_name, payload)``.
 
-    The format is ``"Package.Name optional_json_payload"``.  If no payload
-    is present, *payload* is ``None``.  Malformed JSON is returned as a
-    raw string.
+    The format is ``"Package.Name optional_json_payload"``.  If no payload is present, *payload* is ``None``.  Malformed
+    JSON is returned as a raw string.
 
     :param text: Raw TEXT frame content.
-    :returns: ``(package_name, parsed_payload)``
+    :returns: (package_name, parsed_payload)
     :raises ValueError: If *text* is empty.
     """
     if not text:
@@ -96,7 +95,7 @@ def extract_iac(data: bytes, remainder: bytes = b"") -> tuple[bytes, list[IacEve
 
     :param data: Raw bytes from a BINARY WebSocket frame.
     :param remainder: Leftover bytes from the previous frame.
-    :returns:``(clean_data, events, new_remainder)``
+    :returns: (clean_data, events, new_remainder)
     """
     buf = remainder + data
     iac_byte = telnetlib3.telopt.IAC[0]
@@ -171,12 +170,11 @@ class WSTelnetTransport(asyncio.Transport):
     """
     Asyncio Transport that sends bytes as WebSocket binary frames.
 
-    Writes are enqueued for delivery by a drain coroutine.  Inbound data is
-    injected by calling the owning ``asyncio.Protocol``'s
-    ``data_received()`` directly from the receive loop.
+    Writes are enqueued for delivery by a drain coroutine.  Inbound data is injected by calling the owning
+    ``asyncio.Protocol``'s ``data_received()`` directly from the receive loop.
 
     :param send_queue: Queue shared with the drain coroutine.
-    :param extra: Mapping for :meth:`get_extra_info` (``"peername"`` etc.).
+    :param extra: Mapping for :meth:`get_extra_info` ("peername" etc.).
     """
 
     def __init__(self, send_queue: "asyncio.Queue[bytes | None]", extra: "dict[str, object]") -> None:
@@ -225,9 +223,8 @@ class WebSocketReader:
     """
     Async reader fed by WebSocket BINARY frames.
 
-    Presents the same ``read()`` / ``at_eof()`` interface as
-    :class:`~telnetlib3.stream_reader.TelnetReader` so the REPL's
-    ``_read_server`` loop works without changes.
+    Presents the same ``read()`` / ``at_eof()`` interface as :class:`~telnetlib3.stream_reader.TelnetReader` so the
+    REPL's ``_read_server`` loop works without changes.
     """
 
     def __init__(self, encoding: str = "utf-8", encoding_errors: str = "replace") -> None:
@@ -235,7 +232,7 @@ class WebSocketReader:
         Initialise the reader with an empty queue.
 
         :param encoding: Character encoding for decoding binary frames.
-        :param encoding_errors: Error handler for decoding (default ``"replace"``).
+        :param encoding_errors: Error handler for decoding (default "replace").
         """
         self._buffer: asyncio.Queue[str | None] = asyncio.Queue()
         self._eof = False
@@ -308,8 +305,8 @@ class WebSocketWriter:
         """
         Initialise the writer.
 
-        :param ws: A ``websockets`` connection object.
-        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param ws: A websockets connection object.
+        :param peername: (host, port) tuple for get_extra_info("peername").
         :param encoding: Character encoding for outgoing text.
         """
         self._ws = ws
@@ -367,7 +364,7 @@ class WebSocketWriter:
         """
         Return transport metadata.
 
-        :param name: Key name (only ``"peername"`` and ``"ssl_object"`` supported).
+        :param name: Key name (only "peername" and "ssl_object" supported).
         :param default: Value to return if *name* is not available.
         """
         if name == "peername":
@@ -380,8 +377,8 @@ class WebSocketWriter:
         r"""
         Register an extension callback (e.g. GMCP).
 
-        :param key: Telopt byte (e.g. ``b'\xc9'`` for GMCP).
-        :param callback: Callable receiving ``(package, data)``.
+        :param key: Telopt byte (e.g. b'\xc9' for GMCP).
+        :param callback: Callable receiving (package, data).
         """
         self._ext_callback[key] = callback
 
@@ -389,7 +386,7 @@ class WebSocketWriter:
         r"""
         Register an IAC callback (e.g. GA, EOR).
 
-        :param key: IAC command byte (e.g. ``b'\xf9'`` for GA).
+        :param key: IAC command byte (e.g. b'\xf9' for GA).
         :param callback: Callable receiving the command byte.
         """
         self._iac_callback[key] = callback
@@ -398,8 +395,8 @@ class WebSocketWriter:
         """
         Dispatch a parsed GMCP message to the registered ext callback.
 
-        :param package: GMCP package name (e.g. ``"Room.Info"``).
-        :param data: Parsed JSON payload (or ``None``).
+        :param package: GMCP package name (e.g. "Room.Info").
+        :param data: Parsed JSON payload (or None).
         """
         cb = self._ext_callback.get(GMCP)
         if cb is not None:
@@ -409,10 +406,9 @@ class WebSocketWriter:
         """
         Enqueue an IAC response (e.g. ``IAC DO ECHO``) as a binary frame.
 
-        Used by the telnet-over-WebSocket receive loop to send negotiation
-        responses back to the server.
+        Used by the telnet-over-WebSocket receive loop to send negotiation responses back to the server.
 
-        :param cmd: IAC command byte (e.g. ``WILL``, ``WONT``, ``DO``, ``DONT``).
+        :param cmd: IAC command byte (e.g. WILL, WONT, DO, DONT).
         :param option: Telnet option byte.
         """
         self._send_queue.put_nowait(telnetlib3.telopt.IAC + cmd + option)
@@ -424,7 +420,7 @@ class WebSocketWriter:
         The actual send is performed by the :meth:`drain` background task.
 
         :param package: GMCP package name.
-        :param data: JSON-serialisable payload, or ``None``.
+        :param data: JSON-serialisable payload, or None.
         """
         if data is None:
             self._send_queue.put_nowait(package)
@@ -435,9 +431,8 @@ class WebSocketWriter:
         """
         Send queued messages over the WebSocket until closed.
 
-        Must be run as a background task.  Items are sent in FIFO order.
-        Stops when a ``None`` sentinel is received (placed by :meth:`close`)
-        or when the connection closes unexpectedly.
+        Must be run as a background task.  Items are sent in FIFO order. Stops when a ``None`` sentinel is received
+        (placed by :meth:`close`) or when the connection closes unexpectedly.
         """
         while True:
             item = await self._send_queue.get()

@@ -55,10 +55,8 @@ def append_chat_msg(ctx: "TelixSessionContext", data: dict[str, typing.Any]) -> 
     """
     Append a GMCP ``Comm.Channel.Text`` message to chat state and disk.
 
-    :param ctx: Session context with ``chat_messages``, ``chat_unread``,
-        and ``chat_file`` attrs.
-    :param data: GMCP message dict with ``channel``, ``talker``, ``text``,
-        etc.
+    :param ctx: Session context with chat_messages, chat_unread, and chat_file attrs.
+    :param data: GMCP message dict with channel, talker, text, etc.
     """
     msg: dict[str, typing.Any] = {
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),

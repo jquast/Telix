@@ -95,6 +95,8 @@ class TestServerTypePresets:
             main()
         assert "--raw-mode" in sys.argv
         assert main_mod._color_args.colormatch == "vga"
+        assert main_mod._color_args.clear_homes_cursor is True
+        assert main_mod._color_args.ff_clears_screen is True
         assert "--colormatch" not in sys.argv
         assert "--shell=telix.client_shell.telix_client_shell" in sys.argv
 
@@ -467,35 +469,35 @@ class TestSshUrlRouting:
 class TestGetArgvValue:
     def test_flag_equals_form(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "--term=xterm-256color", "host"])
-        assert main_mod._get_argv_value("--term", "unknown") == "xterm-256color"
+        assert main_mod.get_argv_value("--term", "unknown") == "xterm-256color"
 
     def test_flag_space_form(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "--term", "vt100", "host"])
-        assert main_mod._get_argv_value("--term", "unknown") == "vt100"
+        assert main_mod.get_argv_value("--term", "unknown") == "vt100"
 
     def test_flag_missing_returns_default(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "host"])
-        assert main_mod._get_argv_value("--term", "fallback") == "fallback"
+        assert main_mod.get_argv_value("--term", "fallback") == "fallback"
 
     def test_flag_at_end_without_value(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "--term"])
-        assert main_mod._get_argv_value("--term", "default") == "default"
+        assert main_mod.get_argv_value("--term", "default") == "default"
 
 
 class TestGetTermValue:
     def test_uses_argv_term(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "--term=xterm", "host"])
-        assert main_mod._get_term_value() == "xterm"
+        assert main_mod.get_term_value() == "xterm"
 
     def test_falls_back_to_env(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "host"])
         monkeypatch.setenv("TERM", "screen-256color")
-        assert main_mod._get_term_value() == "screen-256color"
+        assert main_mod.get_term_value() == "screen-256color"
 
     def test_falls_back_to_ansi(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["telix", "host"])
         monkeypatch.delenv("TERM", raising=False)
-        assert main_mod._get_term_value() == "ansi"
+        assert main_mod.get_term_value() == "ansi"
 
 
 class TestPopServerType:

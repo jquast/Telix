@@ -28,7 +28,7 @@ def test_resolve_key_file(key_file, expected):
 class TestBuildParser:
     def test_returns_parser(self):
         parser = build_parser()
-        assert parser.prog == "telix-ssh"
+        assert parser.prog == "telix"
 
     def test_parses_host(self):
         args = build_parser().parse_args(["example.com"])
@@ -59,6 +59,26 @@ class TestBuildParser:
         assert args.term == "vt100"
         assert args.colormatch == "cga"
         assert args.color_brightness == 1.5
+
+    def test_parser_exposes_all_color_args_attributes(self):
+        """Every attr accessed via ctx.color_args in client_shell.py must exist on parsed args."""
+        args = build_parser().parse_args(["localhost"])
+        required = [
+            "colormatch",
+            "color_brightness",
+            "color_contrast",
+            "background_color",
+            "no_ice_colors",
+            "ansi_keys",
+            "clear_homes_cursor",
+            "ff_clears_screen",
+            "graphics_font",
+            "graphics_columns",
+            "graphics_rows",
+            "font_id",
+        ]
+        missing = [a for a in required if not hasattr(args, a)]
+        assert not missing, f"parser is missing attributes: {missing}"
 
 
 class TestSSHTelixCallbacks:

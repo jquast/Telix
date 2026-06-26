@@ -10,7 +10,7 @@ import pytest
 from telix.session_context import TelixSessionContext
 from telix.client_repl_dialogs import (
     launch_tui_editor,
-    _safe_get_blocking,
+    safe_get_blocking,
     launch_chat_viewer,
     launch_room_browser,
     most_recent_channel,
@@ -20,13 +20,13 @@ from telix.client_repl_dialogs import (
 
 @pytest.fixture()
 def stub_terminal(monkeypatch):
-    """Stub terminal helpers and _run_in_thread so launchers don't touch the real TTY."""
+    """Stub terminal helpers and run_in_thread so launchers don't touch the real TTY."""
     monkeypatch.setattr("telix.client_repl.restore_after_subprocess", lambda buf: None)
     monkeypatch.setattr("telix.client_repl.terminal_cleanup", lambda: "")
     monkeypatch.setattr(
         "telix.client_repl.get_term", lambda: MagicMock(change_scroll_region=MagicMock(return_value=""), height=24)
     )
-    monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", lambda t, **kw: None)
+    monkeypatch.setattr("telix.client_repl_dialogs.run_in_thread", lambda t, **kw: None)
 
 
 def make_ctx():
@@ -42,7 +42,7 @@ def make_ctx():
 
 
 class TestLauncherCallsThread:
-    """Launchers delegate to _run_in_thread instead of subprocess.run."""
+    """Launchers delegate to run_in_thread instead of subprocess.run."""
 
     @pytest.mark.usefixtures("stub_terminal")
     @pytest.mark.parametrize(
@@ -53,13 +53,13 @@ class TestLauncherCallsThread:
             (launch_chat_viewer, (make_ctx(),)),
         ],
     )
-    def test_launcher_calls_run_in_thread(self, monkeypatch, launcher, args):
+    def test_launcher_callsrun_in_thread(self, monkeypatch, launcher, args):
         called = []
 
-        def fake_run_in_thread(target, **kw):
+        def fakerun_in_thread(target, **kw):
             called.append(target)
 
-        monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", fake_run_in_thread)
+        monkeypatch.setattr("telix.client_repl_dialogs.run_in_thread", fakerun_in_thread)
         monkeypatch.setattr("os.path.exists", lambda p: False)
         monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([], False))
         monkeypatch.setattr("sys.stdout", MagicMock(write=MagicMock(), flush=MagicMock()))
@@ -75,13 +75,13 @@ class TestLauncherCallsThread:
         assert callable(called[0])
 
     @pytest.mark.usefixtures("stub_terminal")
-    def test_unified_editor_calls_run_in_thread(self, monkeypatch):
+    def test_unified_editor_callsrun_in_thread(self, monkeypatch):
         called = []
 
-        def fake_run_in_thread(target, **kw):
+        def fakerun_in_thread(target, **kw):
             called.append(target)
 
-        monkeypatch.setattr("telix.client_repl_dialogs._run_in_thread", fake_run_in_thread)
+        monkeypatch.setattr("telix.client_repl_dialogs.run_in_thread", fakerun_in_thread)
         monkeypatch.setattr("os.path.exists", lambda p: False)
         monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([], False))
         monkeypatch.setattr("sys.stdout", MagicMock(write=MagicMock(), flush=MagicMock()))
@@ -130,8 +130,8 @@ class TestMostRecentChannel:
 
 class TestSafeGetBlocking:
     def test_returns_bool_for_valid_fd(self):
-        result = _safe_get_blocking(1)
+        result = safe_get_blocking(1)
         assert result is None or isinstance(result, bool)
 
     def test_returns_none_for_invalid_fd(self):
-        assert _safe_get_blocking(9999) is None
+        assert safe_get_blocking(9999) is None

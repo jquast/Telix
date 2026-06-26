@@ -1,10 +1,9 @@
 """
 Output text highlighting engine for MUD client sessions.
 
-Provides :class:`HighlightRule` for defining patterns and their terminal
-formatting, :class:`HighlightEngine` for applying highlights to output lines
-while preserving existing SGR sequences, and persistence via
-:func:`load_highlights` / :func:`save_highlights`.
+Provides :class:`HighlightRule` for defining patterns and their terminal formatting, :class:`HighlightEngine` for
+applying highlights to output lines while preserving existing SGR sequences, and persistence via :func:`load_highlights`
+/ :func:`save_highlights`.
 """
 
 # std imports
@@ -54,10 +53,10 @@ class HighlightRule:
     A single highlight pattern-action rule.
 
     :param pattern: Compiled regex pattern (case-insensitive).
-    :param highlight: Blessed compoundable name, e.g. ``"blink_black_on_yellow"``.
+    :param highlight: Blessed compoundable name, e.g. "blink_black_on_yellow".
     :param enabled: Whether this rule is active.
     :param stop_movement: Cancel discover/randomwalk when matched.
-    :param builtin: ``True`` for the trigger-pattern rule (undeletable).
+    :param builtin: True for the trigger-pattern rule (undeletable).
     """
 
     pattern: re.Pattern[str]
@@ -77,7 +76,7 @@ def validate_highlight(term: "blessed.Terminal", name: str) -> bool:
     Return ``True`` if *name* is a valid blessed compoundable.
 
     :param term: Blessed terminal instance.
-    :param name: Compoundable attribute name, e.g. ``"bold_red_on_white"``.
+    :param name: Compoundable attribute name, e.g. "bold_red_on_white".
     """
     try:
         attr = getattr(term, name)
@@ -132,7 +131,7 @@ def load_highlights(path: str, session_key: str) -> list[HighlightRule]:
     Load highlight rules for a session from a JSON file.
 
     :param path: Path to the highlights JSON file.
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     :returns: List of :class:`HighlightRule` instances.
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid or regex fails.
@@ -149,7 +148,7 @@ def save_highlights(path: str, rules: list[HighlightRule], session_key: str) -> 
 
     :param path: Path to the highlights JSON file.
     :param rules: List of :class:`HighlightRule` instances to save.
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     """
     entries = [
         {
@@ -173,8 +172,8 @@ class CompiledRuleSet:
     """
     A single combined regex built from all highlight + trigger patterns.
 
-    Each source pattern becomes a named group ``hl0``, ``hl1``, etc.
-    A single :meth:`finditer` call replaces N separate passes.
+    Each source pattern becomes a named group ``hl0``, ``hl1``, etc. A single :meth:`finditer` call replaces N separate
+    passes.
     """
 
     __slots__ = ("combined", "group_map")
@@ -237,9 +236,8 @@ class HighlightEngine:
     """
     Applies highlight rules to output lines.
 
-    Builds a single combined regex from all enabled highlight rules and
-    trigger patterns at init time. Each :meth:`process_line` call runs
-    one :meth:`finditer` pass, not N separate ones.
+    Builds a single combined regex from all enabled highlight rules and trigger patterns at init time. Each
+    :meth:`process_line` call runs one :meth:`finditer` pass, not N separate ones.
 
     :param rules: User-defined highlight rules.
     :param trigger_rules: Current trigger rules (for builtin highlight).
@@ -280,8 +278,7 @@ class HighlightEngine:
         Apply highlight rules to a single line of output.
 
         :param line: A single line of terminal output (may contain SGR sequences).
-        :returns:``(highlighted_line, had_matches)`` -- the original line is
-            returned unchanged when no rules match.
+        :returns: (highlighted_line, had_matches) -- the original line is returned unchanged when no rules match.
         """
         if not self.enabled:
             return line, False
@@ -305,12 +302,10 @@ class HighlightEngine:
         """
         Collect all highlight match spans from enabled rules.
 
-        Delegates to the combined :class:`CompiledRuleSet` for a single-pass
-        :meth:`finditer` over all patterns.  Remaps ``rule_idx`` from the
-        single-line subset back to the full ``rules`` list.
+        Delegates to the combined :class:`CompiledRuleSet` for a single-pass :meth:`finditer` over all patterns.  Remaps
+        ``rule_idx`` from the single-line subset back to the full ``rules`` list.
 
-        :returns: List of :class:`Span` instances sorted by start position,
-            with overlaps resolved (first rule wins).
+        :returns: List of :class:`Span` instances sorted by start position, with overlaps resolved (first rule wins).
         """
         spans = self.ruleset.finditer(plain)
         if not self.sl_indices:
@@ -387,7 +382,7 @@ class HighlightEngine:
         """
         Cancel discover/randomwalk tasks if any span has stop_movement.
 
-        :returns: Cyan-colored notice string to append, or ``None``.
+        :returns: Cyan-colored notice string to append, or None.
         """
         ctx = self.ctx
         if ctx is None:
@@ -497,13 +492,11 @@ class HighlightEngine:
         """
         Apply multiline highlight rules to a full text block.
 
-        Only multiline rules participate.  If none are enabled, returns
-        the block unchanged.  After highlighting, SGR codes are
-        propagated across line boundaries so each line is
-        self-contained.
+        Only multiline rules participate.  If none are enabled, returns the block unchanged.  After highlighting, SGR
+        codes are propagated across line boundaries so each line is self-contained.
 
         :param block: Multi-line terminal output (may contain SGR sequences).
-        :returns: ``(highlighted_block, had_matches)``.
+        :returns: (highlighted_block, had_matches).
         """
         if not self.enabled:
             return block, False

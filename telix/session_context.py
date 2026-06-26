@@ -149,6 +149,12 @@ class ReplState:
     history_file: str | None = None
     color_filter: typing.Any | None = None
     erase_eol: bool = False
+    clear_homes_cursor: bool = False
+    ff_clears_screen: bool = False
+    graphics_font: str = ""
+    graphics_columns: int | None = None
+    graphics_rows: int | None = None
+    font_id: int | None = None
 
 
 @dataclasses.dataclass
@@ -200,7 +206,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
     MUD-specific state grouped into typed sub-objects.
     Created in ``session_shell`` and attached as ``writer.ctx``.
 
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     """
 
     def __init__(
@@ -211,6 +217,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         ) = None,
         encoding: str = "",
         raw_mode: bool | None = None,
+        echo_mode: str = "auto",
         ascii_eol: bool = False,
         input_filter: typing.Any | None = None,
         trigger_engine: typing.Any | None = None,
@@ -233,6 +240,9 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         # back-reference to the writer (set by session_shell)
         self.writer = writer
         self.encoding = encoding or (getattr(writer, "encoding", "") if writer else "") or "utf-8"
+
+        # echo mode override: "auto", "local", or "remote"
+        self.echo_mode: str = echo_mode
 
         # identity
         self.session_key: str = session_key
@@ -285,6 +295,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             writer,
             encoding,
             writer.ctx.raw_mode,
+            getattr(writer.ctx, "echo_mode", "auto"),
             writer.ctx.ascii_eol,
             writer.ctx.input_filter,
             writer.ctx.autoreply_engine,

@@ -64,8 +64,6 @@ def _parse_line(line: str, entry_type: str, default_encoding: str = "utf-8") -> 
     # Field 2: encoding (non-numeric string)
     if rest and rest[0].lower() in _KNOWN_ENCODINGS:
         encoding = rest.pop(0).lower()
-        if encoding == "topaz":
-            encoding = "latin1"
 
     # Field 3: columns (numeric)
     if rest and rest[0].isdigit():
@@ -77,14 +75,12 @@ def _parse_line(line: str, entry_type: str, default_encoding: str = "utf-8") -> 
         "name": host,
         "type": entry_type,
     }
-    if encoding not in ("utf-8", "utf8"):
+    if encoding not in ("ascii", "utf-8", "utf8"):
         entry["encoding"] = encoding
     if ssl:
         entry["ssl"] = True
-    if columns:
+    if columns and columns != 80:
         entry["columns"] = columns
-    if rows:
-        entry["rows"] = rows
 
     return entry
 

@@ -16,75 +16,100 @@ necessary, the major version is incremented.
 
 This project does *not* follow semantic versioning for Python functions, classes, modules, or their
 signatures -- **any name can change at any time**.  It is not recommended to ``import telix`` for
-use in other projects.
+use in serious projects.
 
 Architecture
 ------------
 
-Telix is primarily a TUI interface for MUD scripting over Telnet. It also includes support for
-BBS, and the WebSocket and SSH protocol. Telix is mainly a TUI and automation/scripting layer
-above telnetlib3_, blessed_, wcwidth_, textual_, asyncssh_, websockets_.
+Telix is primarily a TUI interface for MUDs and BBSs over Telnet, WebSocket and SSH.  For MUDs,
+Telix provides a nice TUI for automations and GMCP data, and "line mode" appropriate for those.  For
+BBSs, it provides color correction, automatic encoding translations, and era-accurate retrocomputing
+colors and fonts using modern terminal graphics protocols like kitty or sixel.
 
-wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_.  wcwidth_ is used to
-measure the width of strings containing sequences and complex unicode. blessed_ is depended on for
-general terminal support for access to terminal sequence, feature detection, and keyboard handling,
-and to provide the REPL for MUD connections. telnetlib3_ also requires blessed, and, textual_ is
-used for all complex TUIs, which depends on its core library rich_.  For Windows systems, jinxed_ is
-used by both Telix and telnetlib3_ for msvcrt keyboard routines.
+Telix uses sub-processes to launch sessions, and further, uses subprocesses to launch TUI's from the
+MUD/linemode REPL. Inter-process communication is achieved by modification of shared files, like
+``.current-room-<hash>`` and ``.fasttravel-<hash>``. This is a complication for developer
+convenience, by launching new sub-processes, the latest code is automatically loaded without
+requiring a full restart of Telix.
 
-Telix code file overview::
+Dependencies
+------------
 
-    telix/
-    ├── main.py                 CLI entry (TUI or direct connect)
-    ├── session_context.py      Per-connection mutable state
-    ├── client_shell.py         Shell callback (drop-in for telnetlib3)
-    │
-    ├── ws_transport.py         WebSocket reader/writer adapters
-    ├── ws_client.py            WebSocket connection core (run_ws_client, build_parser)
-    │
-    ├── ssh_transport.py        SSH reader/writer adapters
-    ├── ssh_client.py           SSH connection core (run_ssh_client)
-    │
-    ├── scripts.py              Async Python scripting engine
-    │
-    ├── client_repl.py          blessed LineEditor REPL event loop
-    ├── client_repl_render.py   Toolbar / status line rendering
-    ├── client_repl_commands.py Command expansion and backtick dispatch
-    ├── client_repl_dialogs.py  Interactive dialogs (confirm, input)
-    ├── client_repl_travel.py   Room graph navigation
-    ├── repl_theme.py           Textual theme to REPL palette resolution
-    │
-    ├── client_tui.py           Re-export hub (backwards compat)
-    ├── client_tui_base.py      TUI foundation: sessions, base editors, app
-    ├── client_tui_editors.py   Re-export hub (backwards compat)
-    ├── client_tui_app.py       Textual app entry point and session launcher
-    ├── client_tui_macros.py    Macro editor
-    ├── client_tui_triggers.py  Trigger editor
-    ├── client_tui_highlights.py Highlight editor
-    ├── client_tui_bars.py      Progress bar editor
-    ├── client_tui_rooms.py     Room browser TUI
-    ├── client_tui_captures.py  Capture window (Alt+C)
-    ├── client_tui_dialogs.py   Confirmation dialogs, walk dialogs, tabbed editor
-    │
-    ├── trigger.py              Pattern-triggered automatic responses
-    ├── macros.py               Key-bound macro definitions
-    ├── highlighter.py          Regex-based output highlighting + captures
-    ├── rooms.py                GMCP Room.Info graph store (SQLite)
-    ├── chat.py                 GMCP Comm.Channel.Text persistence
-    ├── directory.py            Bundled MUD/BBS directory loader
-    ├── progressbars.py         Progress bar config loading/saving
-    ├── gmcp_snapshot.py        GMCP snapshot persistence
-    │
-    ├── color_filter.py         ANSI/PETSCII/ATASCII color palette translation
-    ├── terminal.py             Terminal abstraction (Unix/Win32 dispatch)
-    ├── terminal_unix.py        Unix terminal operations (termios, PTY)
-    ├── terminal_win32.py       Windows terminal operations (msvcrt)
-    ├── mtts.py                 MTTS terminal type standard bitvector
-    ├── mslp.py                 MSLP multiline softlink parser
-    │
-    ├── paths.py                XDG base directory resolution
-    ├── util.py                 Small internal helpers
-    └── help/                   Markdown help files loaded at runtime
+textual_, blessed_, and wcwidth_ is used for the User Interface.  telnetlib3_, asyncssh_,
+websockets_ for networking.
+
+wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_ for string operations
+related to measuring the width of strings containing sequences and complex unicode like emojis.
+
+blessed_ is depended on for general terminal support for access to terminal sequence, feature
+detection, and keyboard handling, and to provide the REPL for MUD connections. telnetlib3_ also
+requires blessed on windows for keyboard support in its win32 client shell, the same client shell
+integrated with by Telix.
+
+textual_ is used for all complex TUIs, which depends on its core library rich_.  For Windows
+systems, jinxed_ is used by both Telix and telnetlib3_ for msvcrt keyboard routines.  numpy_
+provides vectorized image processing for the sixel and kitty graphics renderers.
+
+numpy_ and pyte_ is used for graphics rendering of retrocomputing fonts.
+
+File overview
+-------------
+
+The following is auto-generated as a convenience, of the first line of python docstring of each file.
+
+.. begin-file-overview
+.. code-block:: text
+
+    __init__.py                    Telix: a TUI telnet and MUD client.
+    chat.py                        Chat message persistence for GMCP ``Comm.Channel.Text``.
+    client_repl.py                 REPL and TUI components for linemode telnet client sessions.
+    client_repl_color.py           HSV/RGB colour math and vital-bar flash animation helpers.
+    client_repl_commands.py        Command expansion, queuing, chained command sending, and macro execution.
+    client_repl_dialogs.py         TUI thread-based management: confirmation dialogs, help screen, editor launchers.
+    client_repl_render.py          Vital-bar rendering, toolbar layout, and display helpers.
+    client_repl_sextant.py         Sextant block character table and password scrambling.
+    client_repl_travel.py          Movement and pathfinding: travel, autodiscover, randomwalk.
+    client_shell.py                Telix client shell -- wraps telnetlib3's terminal handling with REPL support.
+    client_tui.py                  Textual TUI session manager for telix -- re-export hub.
+    client_tui_app.py              Main Textual application and entry point for the telix TUI.
+    client_tui_bars.py             Progress bar and theme editor panes and screens for the telix TUI.
+    client_tui_base.py             Foundation layer for the Textual TUI editor infrastructure.
+    client_tui_captures.py         Highlight captures and chat viewer screens for the telix TUI.
+    client_tui_dialogs.py          Confirmation dialogs, walk dialogs, and the tabbed editor screen.
+    client_tui_editors.py          Standalone entry points for the Textual TUI editor panes.
+    client_tui_highlights.py       Highlight editor pane and screen for the telix TUI.
+    client_tui_macros.py           Macro editor pane and screen for the telix TUI.
+    client_tui_rooms.py            Room browser, picker, and graph editor screens for the telix TUI.
+    client_tui_session_manager.py  Session management layer for the Textual TUI.
+    client_tui_triggers.py         Trigger editor pane and screen for the telix TUI.
+    color_filter.py                ANSI color palette translation for MUD/BBS client output.
+    directory.py                   Load the bundled MUD/BBS directory and convert to session configs.
+    fonts/font_registry.py         Bitmap font registry -- auto-generated by tools/build_fonts.py.
+    gmcp_snapshot.py               Rolling GMCP data snapshot persistence.
+    graphics_renderer.py           Sixel and Kitty graphics protocol encoders.
+    graphics_writer.py             Graphics writer: pyte virtual terminal rendered via sixel/kitty graphics.
+    highlighter.py                 Output text highlighting engine for MUD client sessions.
+    macros.py                      Macro key binding support for the REPL client.
+    main.py                        Entry point for the telix CLI.
+    mslp.py                        MSLP (Mud Server Link Protocol) keyboard navigation.
+    mtts.py                        MTTS and MNES protocol support.
+    paths.py                       Consolidated XDG Base Directory paths for telix.
+    progressbars.py                Progress bar configuration model for the GMCP vitals toolbar.
+    repl_theme.py                  Resolve the user's Textual theme into concrete hex colors for the blessed REPL.
+    rooms.py                       Room graph tracking, BFS pathfinding, and SQLite persistence for GMCP Room.Info data.
+    scripts.py                     Async Python scripting engine for telix.
+    session_context.py             Per-connection session state for MUD client sessions.
+    ssh_client.py                  SSH client for telix.
+    ssh_transport.py               SSH reader/writer adapters for telix sessions.
+    terminal.py                    Platform dispatcher for terminal operations.
+    terminal_unix.py               Unix-specific terminal operations for the telix REPL.
+    terminal_win32.py              Windows terminal operations for the telix REPL (stubs).
+    trigger.py                     Server output pattern matching and automatic reply engine.
+    util.py                        Small shared utility functions.
+    ws_client.py                   WebSocket client for telix.
+    ws_transport.py                WebSocket reader/writer adapters for MUD client sessions.
+
+.. end-file-overview
 
 Developing
 ----------
@@ -357,14 +382,127 @@ Data arriving **before** the REPL event loop starts is buffered in
 the telnet reader's internal buffer and consumed by the first
 ``read()`` call in ``read_server``.
 
+Graphics rendering pipeline
+---------------------------
+
+When ``--graphics-font auto`` is active and the terminal supports kitty or sixel, the raw-mode output
+path uses ``GraphicsWriter`` (``graphics_writer.py``) instead of ``ColorFilteredWriter``.
+
+``GraphicsWriter`` decodes server output, feeds it through a pyte_ virtual terminal, and renders the
+result **as a pixel image** encoded in the terminal's native graphics protocol (kitty or sixel).
+This can be thought of as "tmux for retrocomputing".
+
+Input stage
+~~~~~~~~~~~
+
+1. **Raw bytes** from the server arrive via ``write(data: bytes)``, called synchronously by
+   telnetlib3's ``_raw_event_loop``.
+
+2. **Pre-processing**: Form Feed bytes (``0x0C``) are replaced with clear-screen sequences if the
+   ``ff-clears-screen`` option is on.  A cursor-home sequence is injected before clear-screen if
+   ``clear-homes-cursor`` is on (CTerm compatibility).
+
+3. **Decoding**: bytes are re-encoded per the active font's wire encoding (e.g. ``cp437``,
+   ``iso-8859-1``) to map server bytes to font glyph indices.
+
+4. **Font switching**: SyncTERM ``CSI Ps1 ; Ps2 SP D`` sequences are intercepted.
+
+   The font and wire encoding switch to the requested font ID. ``CSI`` sequences with intermediate
+   bytes that pyte_ cannot handle are stripped, like DCS terminal queries (``XTGETTCAP``).
+
+5. **Color filter**: ANSI SGR color codes are translated through the configured hardware palette
+   (VGA, xterm, etc.) into 24-bit RGB values using ``color_filter.py``.  This ensures the colors
+   displayed match the era-accurate palette the BBS artist intended, regardless of the terminal's
+   color palette, which is very often customized as something else.
+
+Virtual terminal
+~~~~~~~~~~~~~~~~
+
+6. pyte_: the cleaned text is fed to an in-memory ``pyte.Screen`` (80x25 by default, or forced
+   size via ``--graphics-columns`` / ``--graphics-rows``).  The screen maintains per-cell character
+   and color attributes with full DEC VT100/VT220 emulation.
+
+   ``BBSScreen`` (a ``pyte.Screen`` subclass) applies two BBS compatibility adjustments: DECAWM
+   (auto-wrap) is permanently disabled to match raw BBS connections sends ``CR+LF`` as line endings.
+   With DECAWM on, pyte injects extra line breaks causing doubled spacing.  ``ED 2`` (Erase in
+   Display) also homes the cursor, matching SyncTERM/CTerm behavior of BBS software.
+
+Rendering
+~~~~~~~~~
+
+The rendering pipeline contains many performance enhancements to improve latency and reduce CPU
+usage. It is also required to create a "software cursor" when using the graphics pipeline, and,
+special attention to preference of *integer* ("non-blurry") scaling.
+
+7. **Diff**: only cells in pyte's ``screen.dirty`` set are re-rendered.  A full redraw is forced
+   when the font changes, the terminal resizes, or ``_needs_full_redraw`` is set.
+
+8. **Glyph cache**: each font's bitmap data is pre-rasterized into a ``(nglyphs, height, width)``
+   numpy boolean array.  The cache is built once per font switch.
+
+9. **Pixel buffer**: for each changed cell, the character's glyph index is resolved via
+   ``_char_to_code()`` (mapping from the font's encoding back to a byte index).  The glyph bitmap
+   is stamped into a ``(rows * fh, columns * fw, 3)`` numpy float32 array using the cell's
+   foreground and background RGB colors.  Colors are resolved through ``pyte_color_to_rgb()`` which
+   handles named colors, xterm-256, and #RRGGBB values.
+
+10. **Cursor** -- the block cursor is drawn by inverting (``1.0 - color``) the pixel region at the
+    screen cursor position.  The cursor shape (block, underline, I-beam) is parsed from DECSCUSR
+    sequences stripped from the text stream.  Blink timing is managed by a repeating 500ms timer;
+    the cursor is visible during the first half of each cycle and hidden during the second half.
+
+11. **Scaling** -- if ``--graphics-columns`` / ``--graphics-rows`` specify a cell pixel size larger
+    than the font's native dimensions, the pixel buffer is integer-scaled via ``np.repeat``.
+
+Protocol encoding
+~~~~~~~~~~~~~~~~~
+
+Kitty graphics is preferred when a terminal supports both Kitty and Sixel. Although C bindings to
+"libsixel" could significantly reduce CPU usage, a numpy-based solution is used for sixel to
+maximize compatibility and compilation troubles. kitty graphics has less overhead because the
+encoding is very straight-forward.
+
+12. **Kitty** -- the pixel array is encoded as an APC sequence (``ESC _ G``).  RGBA data is
+    deflate-compressed and base64-encoded in 4096-byte chunks.  The frame specifies
+    ``a=T,f=32,s=<w>,v=<h>`` (RGBA transmission, 32-bit format).  The entire frame is wrapped in
+    DEC 2026 synchronized output brackets (``ESC [?2026h`` / ``ESC [?2026l``) for tear-free
+    display.
+
+13. **Sixel** -- the pixel array is quantized per-row into color registers and transmitted as a
+    DCS sequence (``ESC P q``).  Each sixel band encodes a row of pixels; repeated pixels use
+    run-length encoding.  DEC 2026 sync brackets are NOT used with sixel because they produce
+    blank output in foot and xterm.  Instead, each frame is preceded by a clear-screen sequence
+    (``ESC [H ESC [2J``).
+
+Output bridge
+~~~~~~~~~~~~~
+
+14. **Sync-to-async** -- ``write()`` runs in telnetlib3's synchronous ``_raw_event_loop``.  Rendering
+    is dispatched to the asyncio event loop via ``loop.create_task(self._render_frame())``.
+    ``_render_frame()`` calls ``_do_render()`` (builds the pixel buffer and encodes the protocol
+    sequence) then ``await self.inner.drain()`` to flush output atomically.
+
+15. **Rate limiting** -- renders are capped at ~30 fps (``MIN_RENDER_INTERVAL = 0.033``).  Multiple
+    ``write()`` calls within the interval coalesce dirty cells into a single frame.  If the
+    ``_rendering`` guard is already set, subsequent writes skip scheduling and let the inflight
+    render complete.
+
+Encoding-only path
+~~~~~~~~~~~~~~~~~~
+
+When graphics font is not active but a color palette is configured, raw-mode output uses
+``ColorFilteredWriter`` -- a simpler writer that applies the color filter and encoding translation
+directly to server bytes without the pyte virtual terminal or graphics rendering stages.
 
 .. _telnetlib3: https://github.com/jquast/telnetlib3
 .. _blessed: https://github.com/jquast/blessed
 .. _wcwidth: https://github.com/jquast/wcwidth
 .. _textual: https://github.com/Textualize/textual
+.. _pyte: https://github.com/selectel/pyte
 .. _rich: https://github.com/Textualize/rich
 .. _pytest: https://pytest.org
 .. _ruff: https://docs.astral.sh/ruff/
 .. _asyncssh: https://asyncssh.readthedocs.io/
 .. _websockets: https://websockets.readthedocs.io/
+.. _numpy: https://numpy.org/
 .. _jinxed: https://github.com/rockhopper-Technologies/jinxed

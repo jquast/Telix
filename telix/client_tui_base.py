@@ -1,11 +1,9 @@
 """
 Foundation layer for the Textual TUI editor infrastructure.
 
-Provides help panes, the abstract list-editor base classes, and the editor
-app infrastructure used by all standalone editor entry points.  Session
-management (SessionConfig, SessionListScreen, etc.) lives in
-``client_tui_session_manager``.  No imports from other ``client_tui_*`` files
-except ``client_tui_session_manager``.
+Provides help panes, the abstract list-editor base classes, and the editor app infrastructure used by all standalone
+editor entry points.  Session management (SessionConfig, SessionListScreen, etc.) lives in
+``client_tui_session_manager``.  No imports from other ``client_tui_*`` files except ``client_tui_session_manager``.
 """
 
 # std imports
@@ -105,7 +103,7 @@ class HelpPane(textual.containers.Vertical):
         """
         Replace help content with a different topic.
 
-        :param topic: Help topic key (e.g. ``"macro"``, ``"keybindings"``).
+        :param topic: Help topic key (e.g. "macro", "keybindings").
         """
         if topic == self.topic:
             return
@@ -610,10 +608,9 @@ class EditorApp(textual.app.App[None]):
         """
         Disable pointer shape changes to prevent WriterThread deadlock.
 
-        Textual writes escape sequences to set cursor shape on mouse move.
-        When the PTY output buffer is full, ``WriterThread.write()`` blocks,
-        and the bounded queue causes ``queue.put()`` to block the main
-        asyncio thread, freezing the entire app.
+        Textual writes escape sequences to set cursor shape on mouse move. When the PTY output buffer is full,
+        ``WriterThread.write()`` blocks, and the bounded queue causes ``queue.put()`` to block the main asyncio thread,
+        freezing the entire app.
         """
 
     def on_mount(self) -> None:
@@ -644,12 +641,9 @@ def patch_writer_thread_queue() -> None:
     """
     Make Textual's WriterThread queue unbounded.
 
-    Textual's ``WriterThread`` uses a bounded queue (``maxsize=30``).
-    When terminal output processing lags behind rapid re-renders
-    (e.g. clicking between widgets), ``queue.put()`` blocks the main
-    asyncio thread, freezing the entire app.  Setting the constant
-    to 0 (unbounded) before the ``WriterThread`` is instantiated
-    prevents the deadlock.
+    Textual's ``WriterThread`` uses a bounded queue (``maxsize=30``). When terminal output processing lags behind rapid
+    re-renders (e.g. clicking between widgets), ``queue.put()`` blocks the main asyncio thread, freezing the entire app.
+    Setting the constant to 0 (unbounded) before the ``WriterThread`` is instantiated prevents the deadlock.
     """
     import textual.drivers._writer_thread as wt
 
@@ -660,13 +654,10 @@ def restore_blocking_fds(logfile: str = "") -> None:
     """
     Restore blocking mode on stdin/stdout/stderr.
 
-    The parent process may set ``O_NONBLOCK`` on the shared PTY file
-    description (via asyncio ``connect_read_pipe``).
-    Since stdin, stdout, and stderr all reference the same kernel file
-    description, the child subprocess inherits non-blocking mode.
-    Textual's ``WriterThread`` does not handle ``BlockingIOError``,
-    so a non-blocking stderr causes the thread to die silently,
-    freezing the app.
+    The parent process may set ``O_NONBLOCK`` on the shared PTY file description (via asyncio ``connect_read_pipe``).
+    Since stdin, stdout, and stderr all reference the same kernel file description, the child subprocess inherits non-
+    blocking mode. Textual's ``WriterThread`` does not handle ``BlockingIOError``, so a non-blocking stderr causes the
+    thread to die silently, freezing the app.
 
     :param logfile: Optional path to the parent's logfile for child logging.
     """
@@ -708,10 +699,9 @@ def launch_editor_in_thread(screen: textual.screen.Screen[typing.Any], session_k
     """
     Bootstrap for editor launch from an in-process worker thread.
 
-    The calling thread's :func:`~telix.terminal_unix.blocking_fds` context manager already
-    ensures blocking FDs, so :func:`restore_blocking_fds` is not called here.  Exceptions
-    propagate naturally to the thread wrapper in the REPL; crash-hook installation is omitted.
-    On non-zero exit the return code is logged instead of calling :func:`sys.exit`.
+    The calling thread's :func:`~telix.terminal_unix.blocking_fds` context manager already ensures blocking FDs, so
+    :func:`restore_blocking_fds` is not called here.  Exceptions propagate naturally to the thread wrapper in the REPL;
+    crash-hook installation is omitted. On non-zero exit the return code is logged instead of calling :func:`sys.exit`.
 
     :param screen: Textual screen to wrap in an :class:`EditorApp`.
     :param session_key: Session key forwarded to :class:`EditorApp`.

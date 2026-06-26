@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def _safe_get_blocking(fd: int) -> "bool | None":
+def safe_get_blocking(fd: int) -> "bool | None":
     """Return ``os.get_blocking(fd)`` or ``None`` when unavailable or invalid."""
     try:
         return os.get_blocking(fd)
@@ -45,25 +45,24 @@ def _safe_get_blocking(fd: int) -> "bool | None":
 
 
 @contextlib.contextmanager
-def _patch_signal_for_thread() -> Iterator[None]:
+def patch_signal_for_thread() -> Iterator[None]:
     """
     Forward ``signal.signal()`` calls from the TUI worker thread to the main thread.
 
-    Textual's ``LinuxDriver`` calls ``signal.signal(SIGWINCH/SIGTSTP/SIGCONT, ...)``
-    during startup.  ``signal.signal()`` raises ``ValueError`` when called from any
-    thread other than the main thread, so those registrations are intercepted here.
+    Textual's ``LinuxDriver`` calls ``signal.signal(SIGWINCH/SIGTSTP/SIGCONT, ...)`` during startup. ``signal.signal()``
+    raises ``ValueError`` when called from any thread other than the main thread, so those registrations are intercepted
+    here.
 
-    For SIGWINCH specifically, the worker thread's handler is captured and installed in
-    the main thread via a forwarding wrapper so that terminal resize events still work.
-    The SIGWINCH handler Textual installs uses ``loop.call_soon_threadsafe()`` internally,
-    so calling it from the main thread correctly posts the resize event to the worker
-    thread's asyncio event loop.
+    For SIGWINCH specifically, the worker thread's handler is captured and installed in the main thread via a forwarding
+    wrapper so that terminal resize events still work. The SIGWINCH handler Textual installs uses
+    ``loop.call_soon_threadsafe()`` internally, so calling it from the main thread correctly posts the resize event to
+    the worker thread's asyncio event loop.
 
-    The main thread is blocked in ``t.join()`` for the duration of the TUI, so replacing
-    the module-level ``signal.signal`` reference here is race-free.
+    The main thread is blocked in ``t.join()`` for the duration of the TUI, so replacing the module-level
+    ``signal.signal`` reference here is race-free.
 
-    On Windows, SIGWINCH does not exist so only the ``safe_signal`` interceptor is
-    installed; the SIGWINCH forwarding is skipped.
+    On Windows, SIGWINCH does not exist so only the ``safe_signal`` interceptor is installed; the SIGWINCH forwarding is
+    skipped.
     """
     original = signal.signal
     tui_handlers: dict[int, typing.Any] = {}
@@ -91,7 +90,7 @@ def _patch_signal_for_thread() -> Iterator[None]:
             original(signal.SIGWINCH, old_winch)
 
 
-def _prepare_terminal() -> None:
+def prepare_terminal() -> None:
     """Reset the terminal for a TUI: clear screen and flush buffers."""
     from .client_repl import get_term, terminal_cleanup
 
@@ -103,17 +102,16 @@ def _prepare_terminal() -> None:
     sys.__stderr__.flush()
 
 
-def _run_in_thread(
+def run_in_thread(
     target: Callable[[], None], replay_buf: typing.Any | None = None, cleanup_files: list[str] | None = None
 ) -> None:
     """
     Run a TUI callable in a worker thread with terminal and editor-active flag management.
 
-    The worker thread has no existing asyncio event loop so Textual's ``app.run()``
-    (which calls :func:`asyncio.run` internally) is legal.  FD blocking is managed by
-    the :func:`~telix.terminal_unix.blocking_fds` context manager in the calling thread;
-    the worker inherits the blocking state.  Unhandled exceptions propagate via Python's
-    default thread exception handler.
+    The worker thread has no existing asyncio event loop so Textual's ``app.run()`` (which calls :func:`asyncio.run`
+    internally) is legal.  FD blocking is managed by the :func:`~telix.terminal_unix.blocking_fds` context manager in
+    the calling thread; the worker inherits the blocking state.  Unhandled exceptions propagate via Python's default
+    thread exception handler.
 
     :param target: Callable that creates and runs a Textual :class:`~textual.app.App`.
     :param replay_buf: Optional replay buffer for screen repaint on return.
@@ -122,7 +120,7 @@ def _run_in_thread(
     from .client_repl import blocking_fds, restore_after_subprocess
 
     global subprocess_is_active
-    log.debug("_run_in_thread: starting worker thread")
+    log.debug("run_in_thread: starting worker thread")
     subprocess_is_active = True
     thread_exc: BaseException | None = None
 
@@ -135,7 +133,7 @@ def _run_in_thread(
             raise
 
     try:
-        with _patch_signal_for_thread(), blocking_fds():
+        with patch_signal_for_thread(), blocking_fds():
             t = threading.Thread(target=wrapped_target, daemon=True)
             t.start()
             t.join()
@@ -182,17 +180,17 @@ def confirm_dialog(title: str, body: str, warning: str = "", replay_buf: typing.
         "confirm_dialog: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_confirm_dialog(title, body, warning or "", result_path), replay_buf=replay_buf
     )
 
@@ -212,13 +210,12 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
     """
     Show the random walk dialog with visit-level parameter.
 
-    Loads saved preferences from *session_key* (if provided) as defaults,
-    and saves the user's choices back on confirmation.
+    Loads saved preferences from *session_key* (if provided) as defaults, and saves the user's choices back on
+    confirmation.
 
     :param replay_buf: Optional replay buffer for screen repaint.
     :param session_key: Session key for loading/saving preferences.
-    :returns: Command string (e.g. ``"`randomwalk 2 autosearch`"``) on
-        confirm, or ``None`` on cancel.
+    :returns: Command string (e.g. "`randomwalk 2 autosearch`") on confirm, or None on cancel.
     """
     default_visit_level = 2
     default_room_change_cmd = ""
@@ -237,8 +234,8 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
     os.close(fd)
 
     log.debug("randomwalk_dialog: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_randomwalk_dialog(
             result_path, default_visit_level, default_room_change_cmd, default_triggers, default_command_delay
         ),
@@ -271,13 +268,12 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
     """
     Show the autodiscover dialog with BFS/DFS strategy selection.
 
-    Loads saved strategy preference from *session_key* (if provided) as
-    default, and saves the user's choice back on confirmation.
+    Loads saved strategy preference from *session_key* (if provided) as default, and saves the user's choice back on
+    confirmation.
 
     :param replay_buf: Optional replay buffer for screen repaint.
     :param session_key: Session key for loading/saving preferences.
-    :returns: Command string (e.g. ``"`autodiscover bfs`"``) on
-        confirm, or ``None`` on cancel.
+    :returns: Command string (e.g. "`autodiscover bfs`") on confirm, or None on cancel.
     """
     default_strategy = "bfs"
     default_room_change_cmd = ""
@@ -298,8 +294,8 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
     os.close(fd)
 
     log.debug("autodiscover_dialog: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_autodiscover_dialog(
             result_path, default_strategy, default_room_change_cmd, default_triggers, default_command_delay
         ),
@@ -382,8 +378,8 @@ def show_help(macro_defs: "typing.Any" = None, replay_buf: typing.Any | None = N
     """
     from . import client_tui_base
 
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_base.launch_editor_in_thread(client_tui_base.CommandHelpScreen(topic="keybindings")),
         replay_buf=replay_buf,
     )
@@ -413,7 +409,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     Gathers parameters for all panes, runs :func:`~telix.client_tui_dialogs.run_unified_editor`
     in a worker thread, and reloads all potentially-modified configs on return.
 
-    :param initial_tab: Tab to open initially (e.g. ``"help"``, ``"macros"``).
+    :param initial_tab: Tab to open initially (e.g. "help", "macros").
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """
@@ -478,8 +474,8 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_dialogs.run_unified_editor(params),
         replay_buf=replay_buf,
         cleanup_files=[capture_file] if capture_file else None,
@@ -520,7 +516,7 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
     """
     Launch a TUI editor for macros or triggers in a subprocess.
 
-    :param editor_type: ``"macros"``, ``"triggers"``, or ``"highlights"``.
+    :param editor_type: "macros", "triggers", or "highlights".
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """
@@ -572,9 +568,9 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         "tui_editor: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s editor_type=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         editor_type,
@@ -582,8 +578,8 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(target, replay_buf=replay_buf)
+    prepare_terminal()
+    run_in_thread(target, replay_buf=replay_buf)
 
     if editor_type == "macros":
         reload_macros(ctx, path, session_key, log)
@@ -654,8 +650,8 @@ def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: typing.Any | None
     """
     Launch the Capture Window TUI in a worker thread.
 
-    Writes capture data (``ctx.captures`` and ``ctx.capture_log``) to a
-    temporary JSON file and passes its path to the worker thread.
+    Writes capture data (``ctx.captures`` and ``ctx.capture_log``) to a temporary JSON file and passes its path to the
+    worker thread.
 
     :param ctx: Session context with chat and capture state.
     :param replay_buf: Optional replay buffer for screen repaint on return.
@@ -680,8 +676,8 @@ def launch_chat_viewer(ctx: "TelixSessionContext", replay_buf: typing.Any | None
             json.dump({"captures": captures, "capture_log": capture_log}, fh)
 
     log.debug("chat_viewer: launching thread")
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_captures.run_chat_viewer(chat_file, session_key, initial_channel, capture_file),
         replay_buf=replay_buf,
         cleanup_files=[capture_file] if capture_file else None,
@@ -711,17 +707,17 @@ def launch_room_browser(ctx: "TelixSessionContext", replay_buf: typing.Any | Non
         "room_browser: pre-thread fd0_blocking=%s fd1=%s fd2=%s "
         "stdin_isatty=%s stderr_isatty=%s "
         "TERM=%s COLORTERM=%s terminal_size=%s",
-        _safe_get_blocking(0),
-        _safe_get_blocking(1),
-        _safe_get_blocking(2),
+        safe_get_blocking(0),
+        safe_get_blocking(1),
+        safe_get_blocking(2),
         sys.stdin.isatty(),
         sys.__stderr__.isatty(),
         os.environ.get("TERM", ""),
         os.environ.get("COLORTERM", ""),
         paths.safe_terminal_size(),
     )
-    _prepare_terminal()
-    _run_in_thread(
+    prepare_terminal()
+    run_in_thread(
         lambda: client_tui_base.launch_editor_in_thread(
             client_tui_rooms.RoomBrowserScreen(
                 rooms_path=rp, session_key=session_key, current_room_file=crp, fasttravel_file=ftp

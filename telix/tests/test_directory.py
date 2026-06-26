@@ -72,10 +72,10 @@ class TestLoadFavorites:
             assert "name" in entry
             assert "type" in entry
 
-    def test_topaz_alias(self) -> None:
+    def test_topaz_no_alias(self) -> None:
         from telix.directory import _ENCODING_ALIASES
 
-        assert _ENCODING_ALIASES["topaz"] == "latin1"
+        assert "topaz" not in _ENCODING_ALIASES
 
     def test_port_is_int(self) -> None:
         entries = load_favorites()
@@ -99,6 +99,14 @@ class TestLoadFavorites:
         assert cryosphere["protocol"] == "websocket"
         assert cryosphere["ws_path"] == "/telnet/"
         assert cryosphere["ssl"] is True
+
+    def test_echo_mode_parsing(self) -> None:
+        entries = load_favorites()
+        by_name = {e["name"]: e for e in entries}
+        boot_factory = by_name["Boot Factory BBS"]
+        assert boot_factory.get("echo_mode") is None
+        area52 = by_name["Area 52 BBS"]
+        assert area52.get("echo_mode") is None
 
 
 class TestDirectoryToSessions:
@@ -159,8 +167,13 @@ class TestDirectoryToSessions:
         sessions = directory_to_sessions()
         bbs = next(v for v in sessions.values() if v.server_type == "bbs")
         assert bbs.colormatch == "vga"
-        assert bbs.ice_colors is True
-        assert bbs.compression is None
+
+    def test_favorites_echo_mode_flows_to_config(self) -> None:
+        sessions = directory_to_sessions()
+        cfg = sessions["bfbbs.no-ip.com:8888"]
+        assert cfg.echo_mode == "auto"
+        area52 = sessions["area52.tk:5200"]
+        assert area52.echo_mode == "auto"
 
     def test_mud_presets_applied(self) -> None:
         sessions = directory_to_sessions()
@@ -209,6 +222,17 @@ class TestParseLine:
         assert entry["columns"] == 100
         assert "encoding" not in entry  # utf-8 is default, omitted
 
+    def test_ascii_encoding_omitted(self) -> None:
+        entry = _parse_line("example.org 4000 ascii", "mud")
+        assert entry is not None
+        assert "encoding" not in entry  # ascii is a utf-8 subset, omitted
+
+    def test_ascii_encoding_omitted_with_columns(self) -> None:
+        entry = _parse_line("example.org 4000 ascii 132", "mud")
+        assert entry is not None
+        assert "encoding" not in entry
+        assert entry["columns"] == 132
+
     def test_ssl_flag(self) -> None:
         entry = _parse_line("example.org 2000 ssl", "mud")
         assert entry is not None
@@ -224,8 +248,8 @@ class TestParseLine:
     def test_tall_flag(self) -> None:
         entry = _parse_line("example.org 23 cp437 80 tall", "bbs")
         assert entry is not None
-        assert entry["rows"] == 1
-        assert entry["columns"] == 80
+        assert "rows" not in entry
+        assert "columns" not in entry
         assert entry["encoding"] == "cp437"
 
     @pytest.mark.parametrize("encoding", ["gbk", "big5", "cp437", "latin-1", "atascii", "petscii"])
@@ -234,10 +258,10 @@ class TestParseLine:
         assert entry is not None
         assert entry["encoding"] == encoding
 
-    def test_topaz_becomes_latin1(self) -> None:
+    def test_topaz_preserved(self) -> None:
         entry = _parse_line("host.example 1234 topaz", "bbs")
         assert entry is not None
-        assert entry["encoding"] == "latin1"
+        assert entry["encoding"] == "topaz"
 
 
 class TestParseFile:

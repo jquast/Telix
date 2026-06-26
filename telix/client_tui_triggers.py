@@ -44,18 +44,12 @@ class TriggerEditPane(client_tui_base.EditListPane):
 
     DEFAULT_CSS = (
         client_tui_base.EditListPane.DEFAULT_CSS
-        + """
-    #trigger-form { padding: 0 0 0 4; }
-    #trigger-form .form-label { width: 12; }
-    #trigger-form .form-label-mid { width: 9; }
-    #trigger-form .insert-btn { margin: 0; padding: 0 1; }
-    #trigger-cond-source { width: 22; }
-    #trigger-cond-vital { width: 23; }
-    #trigger-cond-op { width: 8; }
-    #trigger-cond-val { width: 9; border: tall grey; }
-    #trigger-cond-val:focus { border: tall $accent; }
-    .command-text-area { height: 1fr; min-height: 3; }
-    """
+        + """#trigger-form { padding: 0 0 0 4; } #trigger-form .form-label { width: 12; } #trigger-form .form-label-mid
+          { width: 9; } #trigger-form .insert-btn { margin: 0; padding: 0 1; } #trigger-cond-source { width: 22; }
+          #trigger-cond-vital { width: 23; } #trigger-cond-op { width: 8; } #trigger-cond-val { width: 9; border: tall
+          grey; } #trigger-cond-val:focus { border: tall $accent; } .command-text-area { height: 1fr; min-height: 3;
+          }"""
+
     )
 
     def __init__(

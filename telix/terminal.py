@@ -1,9 +1,8 @@
 """
 Platform dispatcher for terminal operations.
 
-Imports all public functions from :mod:`telix.terminal_unix` on POSIX
-systems and from :mod:`telix.terminal_win32` on Windows.  All call sites
-import this module rather than the platform-specific modules.
+Imports all public functions from :mod:`telix.terminal_unix` on POSIX systems and from :mod:`telix.terminal_win32` on
+Windows.  All call sites import this module rather than the platform-specific modules.
 """
 
 import sys

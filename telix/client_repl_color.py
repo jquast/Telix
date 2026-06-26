@@ -52,9 +52,9 @@ def flash_color(base_hex: str, elapsed: float) -> str:
     """
     Compute the flash-animated color for *base_hex* at *elapsed* seconds.
 
-    :param base_hex: Original ``#rrggbb`` hex color.
+    :param base_hex: Original #rrggbb hex color.
     :param elapsed: Seconds since flash started; negative means no flash.
-    :returns: Interpolated ``#rrggbb`` hex color.
+    :returns: Interpolated #rrggbb hex color.
     """
     if elapsed < 0.0 or elapsed >= FLASH.DURATION:
         return base_hex

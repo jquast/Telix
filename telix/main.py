@@ -17,7 +17,7 @@ import telnetlib3.client
 from . import mtts, directory, ws_client, ssh_client, client_tui_dialogs, client_tui_session_manager
 
 
-def _parse_option_list(values: list[str]) -> set[bytes]:
+def parse_option_list(values: list[str]) -> set[bytes]:
     """
     Parse a list of option arguments, splitting comma-separated values.
 
@@ -34,7 +34,7 @@ def _parse_option_list(values: list[str]) -> set[bytes]:
 
 
 # Module-level store for telix-specific args, set by main() before
-# telnetlib3 starts the shell.  Read by client_shell._setup_color_filter().
+# telnetlib3 starts the shell.  Read by client_shell.setup_color_filter().
 _color_args: argparse.Namespace | None = None
 
 
@@ -42,13 +42,11 @@ def _detect_terminal_colors() -> "str | None":
     """
     Query the terminal for background/foreground colors and software name.
 
-    Must be called before Textual or telnetlib3 takes over stdin,
-    otherwise the OSC/XTVERSION responses are consumed by the framework.
-    Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and
-    :envvar:`TELIX_DETECTED_FG` (format ``R,G,B``) so subprocess connections
-    inherit them without re-querying.
+    Must be called before Textual or telnetlib3 takes over stdin, otherwise the OSC/XTVERSION responses are consumed by
+    the framework. Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and :envvar:`TELIX_DETECTED_FG`
+    (format ``R,G,B``) so subprocess connections inherit them without re-querying.
 
-    :returns: Detected terminal software name, or ``None`` if not detected.
+    :returns: Detected terminal software name, or None if not detected.
     """
     import blessed
 
@@ -57,6 +55,8 @@ def _detect_terminal_colors() -> "str | None":
         bg = term.get_bgcolor(timeout=0.5, bits=8)
         fg = term.get_fgcolor(timeout=0.5, bits=8)
         sw = term.get_software_version(timeout=0.5)
+        has_kitty = bool(term.does_kitty_graphics(timeout=0.3))
+        has_sixel = bool(term.does_sixel(timeout=0.3))
     if bg != (-1, -1, -1):
         os.environ["TELIX_DETECTED_BG"] = f"{bg[0]},{bg[1]},{bg[2]}"
     else:
@@ -65,15 +65,16 @@ def _detect_terminal_colors() -> "str | None":
         os.environ["TELIX_DETECTED_FG"] = f"{fg[0]},{fg[1]},{fg[2]}"
     else:
         os.environ.pop("TELIX_DETECTED_FG", None)
+    os.environ["TELIX_HAS_KITTY"] = "1" if has_kitty else "0"
+    os.environ["TELIX_HAS_SIXEL"] = "1" if has_sixel else "0"
     return sw.name if sw is not None else None
 
 
-def _build_telix_parser() -> argparse.ArgumentParser:
+def build_telix_parser() -> argparse.ArgumentParser:
     """
     Build argument parser for telix-specific CLI flags.
 
-    These flags are consumed by telix and stripped from ``sys.argv``
-    before telnetlib3 parses its own arguments.
+    These flags are consumed by telix and stripped from ``sys.argv`` before telnetlib3 parses its own arguments.
     """
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--colormatch", default="vga")
@@ -81,23 +82,45 @@ def _build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--color-contrast", type=float, default=1.0, dest="color_contrast")
     parser.add_argument("--background-color", default="#000000", dest="background_color")
     parser.add_argument("--no-ice-colors", action="store_true", default=False, dest="no_ice_colors")
+    parser.add_argument("--ansi-keys", action="store_true", default=False, dest="ansi_keys")
     parser.add_argument("--no-repl", action="store_true", default=False, dest="no_repl")
+    parser.add_argument("--clear-homes-cursor", action="store_true", default=False, dest="clear_homes_cursor")
+    parser.add_argument("--ff-clears-screen", action="store_true", default=False, dest="ff_clears_screen")
+    parser.add_argument("--graphics-font", nargs="?", const="auto", default="", dest="graphics_font")
+    parser.add_argument("--graphics-columns", type=int, default=None, dest="graphics_columns")
+    parser.add_argument("--graphics-rows", type=int, default=None, dest="graphics_rows")
+    parser.add_argument("--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering")
+    parser.add_argument("--local-echo", action="store_true", default=False, dest="local_echo")
+    parser.add_argument("--remote-echo", action="store_true", default=False, dest="remote_echo")
     return parser
 
 
-def _strip_telix_args() -> argparse.Namespace:
+def resolve_echo_mode(args: argparse.Namespace) -> str:
+    """Return ``"local"``, ``"remote"``, or ``"auto"`` from CLI flags."""
+    local = getattr(args, "local_echo", False)
+    remote = getattr(args, "remote_echo", False)
+    if local and remote:
+        raise argparse.ArgumentError(None, "--local-echo and --remote-echo are mutually exclusive")
+    if local:
+        return "local"
+    if remote:
+        return "remote"
+    return "auto"
+
+
+def strip_telix_args() -> argparse.Namespace:
     """
     Parse and remove telix-specific flags from ``sys.argv``.
 
     :returns: Namespace with the parsed telix-specific values.
     """
-    parser = _build_telix_parser()
+    parser = build_telix_parser()
     telix_args, remaining = parser.parse_known_args(sys.argv[1:])
     sys.argv[1:] = remaining
     return telix_args
 
 
-def _build_help_parser() -> argparse.ArgumentParser:
+def build_help_parser() -> argparse.ArgumentParser:
     """
     Build a unified help-only parser showing all telix options.
 
@@ -181,8 +204,34 @@ def _build_help_parser() -> argparse.ArgumentParser:
     )
     telix.add_argument("--mud", action="store_true", help="apply MUD connection presets")
     telix.add_argument(
+        "--clear-homes-cursor",
+        action="store_true",
+        help="inject cursor home before clear screen (BBS/CTerm compatibility)",
+    )
+    telix.add_argument(
+        "--ff-clears-screen",
+        action="store_true",
+        help="treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)",
+    )
+    telix.add_argument(
+        "--graphics-font",
+        nargs="?",
+        const="auto",
+        default="",
+        metavar="MODE",
+        help="font graphics mode: auto (default)",
+    )
+    telix.add_argument(
+        "--graphics-columns", metavar="N", type=int, help="force virtual terminal columns for graphics font (e.g. 40)"
+    )
+    telix.add_argument(
+        "--graphics-rows", metavar="N", type=int, help="force virtual terminal rows for graphics font (default: 25)"
+    )
+    telix.add_argument(
         "--no-ice-colors", action="store_true", help="disable iCE color (blink as bright background) support"
     )
+    telix.add_argument("--local-echo", action="store_true", help="force local echo (client echoes input)")
+    telix.add_argument("--remote-echo", action="store_true", help="force remote echo (server echoes input)")
 
     return parser
 
@@ -194,7 +243,7 @@ def reinit() -> None:
     print(f"Loaded {len(sessions)} sessions from directory.")
 
 
-BBS_TELNET_FLAGS = ["--raw-mode", "--colormatch", "vga"]
+BBS_TELNET_FLAGS = ["--raw-mode", "--remote-echo", "--colormatch", "vga", "--clear-homes-cursor", "--ff-clears-screen"]
 
 MUD_TELNET_FLAGS = ["--line-mode", "--compression", "--colormatch", "none", "--no-ice-colors"]
 
@@ -203,7 +252,7 @@ def pop_server_type() -> str:
     """
     Remove ``--bbs`` or ``--mud`` from ``sys.argv`` and return the type.
 
-    :returns: ``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
+    :returns: "bbs", "mud", or "" if neither flag was given.
     """
     for flag, value in (("--bbs", "bbs"), ("--mud", "mud")):
         if flag in sys.argv[1:]:
@@ -212,13 +261,13 @@ def pop_server_type() -> str:
     return ""
 
 
-def _get_argv_value(flag: str, default: str) -> str:
+def get_argv_value(flag: str, default: str) -> str:
     """
     Return the value of a ``--flag`` argument from ``sys.argv``.
 
     Supports both ``--flag=value`` and ``--flag value`` forms.
 
-    :param flag: The flag name including dashes (e.g. ``"--term"``).
+    :param flag: The flag name including dashes (e.g. "--term").
     :param default: Value to return if the flag is not found.
     """
     for i, arg in enumerate(sys.argv[1:], 1):
@@ -229,25 +278,24 @@ def _get_argv_value(flag: str, default: str) -> str:
     return default
 
 
-def _get_term_value() -> str:
+def get_term_value() -> str:
     """
     Return the terminal type for MTTS negotiation.
 
     Uses ``--term`` from ``sys.argv`` if present, otherwise ``$TERM``, or "ansi" when not present.
     """
-    return _get_argv_value("--term", os.environ.get("TERM", "ansi"))
+    return get_argv_value("--term", os.environ.get("TERM", "ansi"))
 
 
 def main() -> None:
     """
     Entry point for the ``telix`` command.
 
-    Without arguments, launches the TUI session manager.  With a ``ws://`` or
-    ``wss://`` URL, connects directly via WebSocket.  With a host argument,
-    connects directly via telnetlib3's client.
+    Without arguments, launches the TUI session manager.  With a ``ws://`` or ``wss://`` URL, connects directly via
+    WebSocket.  With a host argument, connects directly via telnetlib3's client.
 
-    The ``--bbs`` and ``--mud`` flags apply connection presets matching the TUI
-    session editor defaults for each server type.
+    The ``--bbs`` and ``--mud`` flags apply connection presets matching the TUI session editor defaults for each server
+    type.
     """
     global _color_args
 
@@ -257,7 +305,7 @@ def main() -> None:
 
     # Intercept --help early to show unified help output.
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
-        _build_help_parser().parse_args(["--help"])
+        build_help_parser().parse_args(["--help"])
         return
 
     detected_sw_name = _detect_terminal_colors()
@@ -293,12 +341,21 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
+            ansi_keys=False,
+            no_repl=no_repl,
+            echo_mode=resolve_echo_mode(args),
+            clear_homes_cursor=False,
+            ff_clears_screen=False,
+            graphics_font="",
+            graphics_columns=None,
+            graphics_rows=None,
+            font_id=None,
         )
         compression: bool | None = True if args.compression else (False if args.no_compression else None)
-        always_do = _parse_option_list(args.always_do)
-        always_will = _parse_option_list(args.always_will)
-        always_dont = _parse_option_list(args.always_dont)
-        always_wont = _parse_option_list(args.always_wont)
+        always_do = parse_option_list(args.always_do)
+        always_will = parse_option_list(args.always_will)
+        always_dont = parse_option_list(args.always_dont)
+        always_wont = parse_option_list(args.always_wont)
         gmcp_modules = [m.strip() for m in args.gmcp_modules.split(",") if m.strip()] if args.gmcp_modules else None
         send_environ = (
             tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
@@ -365,6 +422,15 @@ def main() -> None:
             color_contrast=args.color_contrast,
             background_color=args.background_color,
             no_ice_colors=args.no_ice_colors,
+            ansi_keys=False,
+            no_repl=False,
+            echo_mode=resolve_echo_mode(args),
+            clear_homes_cursor=False,
+            ff_clears_screen=False,
+            graphics_font="",
+            graphics_columns=None,
+            graphics_rows=None,
+            font_id=None,
         )
         try:
             asyncio.run(
@@ -398,8 +464,9 @@ def main() -> None:
         sys.argv.extend(MUD_TELNET_FLAGS)
 
     # Parse and strip telix-specific flags so telnetlib3 doesn't see them.
-    telix_args = _strip_telix_args()
+    telix_args = strip_telix_args()
     _color_args = telix_args
+    _color_args.echo_mode = resolve_echo_mode(_color_args)
 
     # Inject the telix shell so telnetlib3 uses our REPL-aware shell.
     # Our shell waits for echo negotiation before entering the raw event loop,
@@ -408,14 +475,14 @@ def main() -> None:
     # garbage on screen).  BBS connections also benefit from this fix since
     # gambatte-style servers negotiate WILL ECHO + SGA (kludge mode) and the
     # default telnetlib3 shell computes local_echo before negotiation completes.
-    if "--shell" not in sys.argv and not telix_args.no_repl:
+    if "--shell" not in sys.argv:
         sys.argv.insert(1, "--shell=telix.client_shell.telix_client_shell")
 
     # Install MTTS TTYPE cycling and MNES for MUD connections.
     if server_type != "bbs":
         is_ssl = "--ssl" in sys.argv or "--ssl-no-verify" in sys.argv
         mtts.install_mtts(
-            _get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=_get_argv_value("--encoding", "utf-8")
+            get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=get_argv_value("--encoding", "utf-8")
         )
 
     try:

@@ -26,8 +26,11 @@ Features
 - **BBS/Scene Art** support for `CP437`_, `PETSCII`_, `ATASCII`_, `iCE colors`_, by translation of
   ANSI color codes and legacy encodings to modern 24-bit color codes and terminal encoding (usually
   utf-8).
+- **Graphic Fonts** render BBS bitmap fonts (CP437, Topaz, MicroKnight, P0T NOoDLE, and all 45
+  `SyncTERM`_ fonts) using kitty/sixel graphics, providing perfect
+  retrocomputing bitmap font display on modern terminals.
 
-Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
+Built using Python libraries telnetlib3_, blessed_, textual_, wcwidth_, asyncssh_, websockets_, and numpy_.
 
 .. _telnetlib3: https://github.com/jquast/telnetlib3
 .. _blessed: https://github.com/jquast/blessed
@@ -43,6 +46,10 @@ Built using Python libraries telnetlib3_, blessed_, textual_, and wcwidth_.
 .. _iCE colors: https://forum.16colo.rs/t/ice-colors-or-blinking-text/27
 .. _`websocket subprotocols`: https://mudstandards.org/websocket/
 .. _TELNETS: https://www.micropolis.com/support/kb/micropolis-bbs-faq#Is_there_a_secure_Telnet
+.. _SyncTERM: https://syncterm.bbsdev.net/
+.. _asyncssh: https://asyncssh.readthedocs.io/
+.. _websockets: https://websockets.readthedocs.io/
+.. _numpy: https://numpy.org/
 
 Installation
 ------------
@@ -80,6 +87,8 @@ Connect directly via WebSocket::
 
     telix wss://dev.cryosphere.org:4443/telnet/
 
+For a full list of CLI options:
+
 .. begin-cli-help
 .. code-block:: text
 
@@ -95,7 +104,10 @@ Connect directly via WebSocket::
                  [--typescript-mode {append,rewrite}] [--key-file FILE]
                  [--username USER] [--background-color COLOR] [--bbs]
                  [--color-brightness N] [--color-contrast N]
-                 [--colormatch PALETTE] [--mud] [--no-ice-colors]
+                 [--colormatch PALETTE] [--mud] [--clear-homes-cursor]
+                 [--ff-clears-screen] [--graphics-font [MODE]]
+                 [--graphics-columns N] [--graphics-rows N] [--no-ice-colors]
+                 [--local-echo] [--remote-echo]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -163,7 +175,19 @@ Connect directly via WebSocket::
       --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
                             disable)
       --mud                 apply MUD connection presets
+      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm
+                            compatibility)
+      --ff-clears-screen    treat Form Feed (0x0C) as clear screen and home cursor
+                            (SyncTERM compatibility)
+      --graphics-font [MODE]
+                            font graphics mode: auto (default)
+      --graphics-columns N  force virtual terminal columns for graphics font (e.g.
+                            40)
+      --graphics-rows N     force virtual terminal rows for graphics font
+                            (default: 25)
       --no-ice-colors       disable iCE color (blink as bright background) support
+      --local-echo          force local echo (client echoes input)
+      --remote-echo         force remote echo (server echoes input)
 
 .. end-cli-help
 

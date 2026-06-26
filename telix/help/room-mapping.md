@@ -32,7 +32,7 @@ Room markers:
 
 ### Autodiscover (F4)
 
-**Default key:** F4 — **Command:** `` `autodiscover [limit] [bfs|dfs] [options]` ``
+**Default key:** F4 -- **Command:** `` `autodiscover [limit] [bfs|dfs] [options]` ``
 
 Autodiscover explores exits from nearby rooms that lead to unvisited
 places.  It travels to each frontier exit, checks the room, then returns
@@ -52,7 +52,7 @@ aggressive monsters.  Your character may die.
 
 ### Random Walk (F3)
 
-**Default key:** F3 — **Command:** `` `randomwalk [limit] [visit_level] [options]` ``
+**Default key:** F3 -- **Command:** `` `randomwalk [limit] [visit_level] [options]` ``
 
 Random walk explores rooms by picking random exits, preferring unvisited
 rooms.  It never returns through the entrance you came from.  Triggers
@@ -69,7 +69,7 @@ required number of times.
 
 ### Resume (F5)
 
-**Default key:** F5 — **Command:** `` `resume [limit] [noreply]` ``
+**Default key:** F5 -- **Command:** `` `resume [limit] [noreply]` ``
 
 Resume the last autodiscover or random walk from where it stopped,
 carrying over the visited/tried state.  Only works if still in the

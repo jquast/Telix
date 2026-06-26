@@ -52,6 +52,7 @@ disable a builtin, but you cannot delete it.
 | **Delete** | Delete the selected macro (builtins cannot be deleted) |
 | **Save** | Save all changes to disk and close |
 | **Cancel** | Discard changes and close |
+| **Help** | Open this help screen |
 
 ### Form Fields
 

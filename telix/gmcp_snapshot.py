@@ -21,13 +21,12 @@ def save_gmcp_snapshot(path: str, session_key: str, gmcp_data: dict[str, typing.
     """
     Merge current GMCP data into the on-disk snapshot.
 
-    Each top-level key in *gmcp_data* becomes a package entry with its
-    own ``last_updated`` timestamp.  Existing packages not present in
-    *gmcp_data* are preserved.
+    Each top-level key in *gmcp_data* becomes a package entry with its own ``last_updated`` timestamp.  Existing
+    packages not present in *gmcp_data* are preserved.
 
     :param path: Path to the snapshot JSON file.
-    :param session_key: Session identifier (``host:port``).
-    :param gmcp_data: Current ``ctx.gmcp_data`` dict.
+    :param session_key: Session identifier (host:port).
+    :param gmcp_data: Current ctx.gmcp_data dict.
     """
     if not gmcp_data:
         return
@@ -46,7 +45,7 @@ def load_gmcp_snapshot(path: str) -> dict[str, typing.Any]:
     Read a GMCP snapshot from disk.
 
     :param path: Path to the snapshot JSON file.
-    :returns: The ``packages`` dict, or empty dict if file is missing.
+    :returns: The packages dict, or empty dict if file is missing.
     """
     data = load_raw(path)
     return data.get("packages", {})  # type: ignore[no-any-return]

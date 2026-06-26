@@ -440,7 +440,6 @@ async def test_scaffold_resize_handler_updates_scroll() -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 def test_resize_pending_flag_is_threading_event() -> None:
     """Terminal._resize_pending is a threading.Event (signal-safe)."""
-
     writer = mock_writer()
     writer.client = True
     writer.remote_option = types.SimpleNamespace(enabled=lambda _: False)
@@ -584,7 +583,6 @@ class WalkWriter:
 @pytest.mark.asyncio
 async def test_randomwalk_stuck_room_stops(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """After 3 consecutive failed moves, randomwalk marks exits exhausted and stops."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
@@ -601,7 +599,6 @@ async def test_randomwalk_stuck_room_stops(monkeypatch: pytest.MonkeyPatch, fast
 @pytest.mark.asyncio
 async def test_randomwalk_retries_when_temporarily_stuck(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Walker retries after temporary block and continues when exit clears."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     seq = (
         ["room1"] * 3  # initial + step 1 fail (current, check)
@@ -625,7 +622,6 @@ async def test_randomwalk_retries_when_temporarily_stuck(monkeypatch: pytest.Mon
 @pytest.mark.asyncio
 async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """A successful move after a blocked exit continues walking."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2", "south": "room3"},
         "room2": {"south": "room1"},
@@ -651,7 +647,6 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 async def test_autodiscover_stuck_gateway_stops(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """After 3 failures from the same room, autodiscover stops."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "gw1"},
         "gw1": {"east": "target1"},
@@ -682,7 +677,6 @@ async def test_autodiscover_stuck_gateway_stops(monkeypatch: pytest.MonkeyPatch,
 @pytest.mark.asyncio
 async def test_autodiscover_blocked_edge_avoids_retrying(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """When a path edge is impassable, subsequent gateways behind it are skipped."""
-
     adj: dict[str, dict[str, str]] = {
         "start": {"portal": "island"},
         "island": {"east": "gw1", "west": "gw2"},
@@ -727,7 +721,6 @@ async def test_autodiscover_blocked_edge_avoids_retrying(monkeypatch: pytest.Mon
 @pytest.mark.asyncio
 async def test_send_chained_mixed_uses_move_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Consecutive identical commands in a mixed list get movement delay pacing."""
-
     sleep_args: list[float] = []
     real_sleep = asyncio.sleep
 
@@ -756,7 +749,6 @@ async def test_send_chained_mixed_uses_move_pacing(monkeypatch: pytest.MonkeyPat
 @pytest.mark.asyncio
 async def test_send_chained_repeated_non_move(monkeypatch: pytest.MonkeyPatch) -> None:
     """Repeated non-movement commands all execute with delay pacing."""
-
     sleep_args: list[float] = []
     real_sleep = asyncio.sleep
 
@@ -798,7 +790,6 @@ def test_collapse_runs(commands, start, expected) -> None:
 @pytest.mark.asyncio
 async def test_send_chained_queue_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Setting cancelled on a CommandQueue stops send_chained early."""
-
     real_sleep = asyncio.sleep
 
     async def fast_sleep(duration: float) -> None:
@@ -838,7 +829,6 @@ async def test_send_chained_queue_cancellation(monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.asyncio
 async def test_send_chained_delay_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
     """Backtick delay commands in a chained sequence pause without sending."""
-
     sleep_args: list[float] = []
     real_sleep = asyncio.sleep
 
@@ -864,7 +854,6 @@ async def test_send_chained_delay_pauses(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def dispatch_hooks(**overrides: Any) -> tuple[Any, list[str], list[str]]:
     """Build a DispatchHooks with recording send/echo and return (hooks, sent, echoed)."""
-
     sent: list[str] = []
     echoed: list[str] = []
     status: list[str] = []
@@ -889,7 +878,6 @@ def dispatch_hooks(**overrides: Any) -> tuple[Any, list[str], list[str]]:
 )
 async def test_dispatch_one_delay(monkeypatch: pytest.MonkeyPatch, cmd: str, expected_result: str) -> None:
     """Delay commands return HANDLED."""
-
     sleep_args: list[float] = []
     real_sleep = asyncio.sleep
 
@@ -908,7 +896,6 @@ async def test_dispatch_one_delay(monkeypatch: pytest.MonkeyPatch, cmd: str, exp
 @pytest.mark.asyncio
 async def test_dispatch_one_delay_calls_progress(monkeypatch: pytest.MonkeyPatch) -> None:
     """Delay command calls on_progress and on_progress_clear."""
-
     real_sleep = asyncio.sleep
     monkeypatch.setattr(asyncio, "sleep", lambda d: real_sleep(0))
     progress_calls: list[tuple[float, float]] = []
@@ -926,7 +913,6 @@ async def test_dispatch_one_delay_calls_progress(monkeypatch: pytest.MonkeyPatch
 @pytest.mark.asyncio
 async def test_dispatch_one_when_pass() -> None:
     """When condition that passes returns HANDLED."""
-
     hooks, sent, _ = dispatch_hooks(
         ctx=types.SimpleNamespace(
             gmcp_data={"Char.Vitals": {"hp": "80", "maxhp": "100"}}, captures={}, trigger_engine=None
@@ -941,7 +927,6 @@ async def test_dispatch_one_when_pass() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_when_fail() -> None:
     """When condition that fails returns ABORT."""
-
     hooks, sent, _ = dispatch_hooks(
         ctx=types.SimpleNamespace(
             gmcp_data={"Char.Vitals": {"hp": "20", "maxhp": "100"}}, captures={}, trigger_engine=None
@@ -956,7 +941,6 @@ async def test_dispatch_one_when_fail() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_plain_send_first_skips_wait() -> None:
     """First plain send (sent_count=0) does not call wait_fn."""
-
     wait_calls: list[int] = []
 
     async def wait() -> None:
@@ -974,7 +958,6 @@ async def test_dispatch_one_plain_send_first_skips_wait() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_plain_send_subsequent_waits() -> None:
     """Subsequent plain sends (sent_count>0) call wait_fn."""
-
     wait_calls: list[int] = []
 
     async def wait() -> None:
@@ -991,7 +974,6 @@ async def test_dispatch_one_plain_send_subsequent_waits() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_immediate_skips_wait() -> None:
     """Commands in the immediate set skip wait_fn even when sent_count>0."""
-
     wait_calls: list[int] = []
 
     async def wait() -> None:
@@ -1008,7 +990,6 @@ async def test_dispatch_one_immediate_skips_wait() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_until_timeout_aborts() -> None:
     """Until command that times out returns ABORT."""
-
     buf = SearchBuffer(max_lines=100)
     hooks, sent, _ = dispatch_hooks(search_buffer=buf)
     result = await dispatch_one("`until 0.01 nope`", 0, 0, frozenset(), hooks)
@@ -1020,7 +1001,6 @@ async def test_dispatch_one_until_timeout_aborts() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_until_matches() -> None:
     """Until command returns HANDLED when pattern appears."""
-
     buf = SearchBuffer(max_lines=100)
     hooks, sent, _ = dispatch_hooks(search_buffer=buf)
 
@@ -1038,7 +1018,6 @@ async def test_dispatch_one_until_matches() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_untils_case_sensitive_no_match() -> None:
     """Untils (case-sensitive) times out when casing doesn't match."""
-
     buf = SearchBuffer(max_lines=100)
     hooks, sent, _ = dispatch_hooks(search_buffer=buf)
 
@@ -1055,7 +1034,6 @@ async def test_dispatch_one_untils_case_sensitive_no_match() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_one_mask_send() -> None:
     """When mask_send=True, status shows (masked) instead of command."""
-
     status_log: list[str] = []
     hooks, sent, _ = dispatch_hooks(on_status=status_log.append)
     result = await dispatch_one("secret", 0, 0, frozenset(), hooks, mask_send=True)
@@ -1200,7 +1178,6 @@ class TrackingWalkWriter(WalkWriter):
 @pytest.mark.asyncio
 async def test_randomwalk_blocked_exit_tries_other_direction(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """When one exit is blocked, randomwalk marks it and uses the other."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2", "south": "room3"},
         "room2": {"south": "room1"},
@@ -1219,7 +1196,6 @@ async def test_randomwalk_blocked_exit_tries_other_direction(monkeypatch: pytest
 @pytest.mark.asyncio
 async def test_autodiscover_skips_persistently_blocked_exits(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Pre-seeded blocked_exits are never attempted by autodiscover."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"east": "room2", "west": "room3"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
@@ -1247,7 +1223,6 @@ async def test_autodiscover_skips_persistently_blocked_exits(monkeypatch: pytest
 @pytest.mark.asyncio
 async def test_resume_randomwalk_from_same_room(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Resume carries over visited set from the previous randomwalk."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
@@ -1269,7 +1244,6 @@ async def test_resume_randomwalk_from_same_room(monkeypatch: pytest.MonkeyPatch,
 @pytest.mark.asyncio
 async def test_resume_not_used_on_room_change(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Resume state is NOT used when the room changed since last walk."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
@@ -1290,7 +1264,6 @@ async def test_resume_not_used_on_room_change(monkeypatch: pytest.MonkeyPatch, f
 @pytest.mark.asyncio
 async def test_randomwalk_bounce_detection(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Walker detects 2-room bounce and blocks the bouncing direction."""
-
     # Need enough rooms that reachable.issubset(visited) doesn't
     # trigger before the bounce is detected.  room3/room4 are
     # reachable but exits from room1/room2 are blocked, forcing
@@ -1315,7 +1288,6 @@ async def test_randomwalk_bounce_detection(monkeypatch: pytest.MonkeyPatch, fast
 @pytest.mark.asyncio
 async def test_randomwalk_bounce_blocks_reverse(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """After bounce-blocking dead-end south, also block the reverse (north into dead-end)."""
-
     # dead_end has only south → junction; junction has north → dead_end and south → room3.
     # The walker should not get stuck re-entering dead_end after blocking its south exit.
     adj: dict[str, dict[str, str]] = {
@@ -1337,7 +1309,6 @@ async def test_randomwalk_bounce_blocks_reverse(monkeypatch: pytest.MonkeyPatch,
 @pytest.mark.asyncio
 async def test_randomwalk_corridor_no_false_bounce(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Corridor with exits on both ends must not trigger bounce-blocking."""
-
     adj: dict[str, dict[str, str]] = {
         "hub": {"southeast": "corridor_a", "east": "market"},
         "corridor_a": {"northwest": "hub", "southeast": "corridor_b"},
@@ -1358,7 +1329,6 @@ async def test_randomwalk_corridor_no_false_bounce(monkeypatch: pytest.MonkeyPat
 @pytest.mark.asyncio
 async def test_randomwalk_blocked_exit_not_global(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """A blocked exit (A->east->B) must not prevent reaching B from C->north->B."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"east": "room2", "south": "room3"},
         "room2": {"west": "room1"},
@@ -1378,7 +1348,6 @@ async def test_randomwalk_blocked_exit_not_global(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 async def test_randomwalk_noncardinal_deprioritized(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """Non-cardinal exits (up, enter, etc.) are tried after cardinal ones."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2", "up": "room3"},
         "room2": {"south": "room1"},
@@ -1397,7 +1366,6 @@ async def test_randomwalk_noncardinal_deprioritized(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """With visit_level=2 the walk continues until every room is visited twice."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1419,7 +1387,6 @@ async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_slee
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level_1(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """With visit_level=1 the walk stops after visiting each room once."""
-
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1620,7 +1587,6 @@ class TestLineHoldBuffer:
 
 def test_typescript_file_default_none() -> None:
     """SessionContext.typescript_file defaults to None."""
-
     ctx = TelixSessionContext()
     assert ctx.typescript_file is None
 
@@ -1629,7 +1595,6 @@ def test_typescript_file_default_none() -> None:
 @pytest.mark.asyncio
 async def test_send_chained_typescript_no_echo(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """When echo is off, send_chained records commands to typescript."""
-
     real_sleep = asyncio.sleep
 
     async def fast_sleep(duration: float) -> None:
@@ -1661,7 +1626,6 @@ async def test_send_chained_typescript_no_echo(tmp_path: Any, monkeypatch: pytes
 @pytest.mark.asyncio
 async def test_send_chained_typescript_echo_on(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """When echo is on, send_chained does not record to typescript."""
-
     real_sleep = asyncio.sleep
 
     async def fast_sleep(duration: float) -> None:
@@ -1818,7 +1782,6 @@ def test_typescript_will_echo_writes_bare_crlf(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``noreply`` keyword is parsed and passed to autodiscover."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
@@ -1840,7 +1803,6 @@ async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fas
 @pytest.mark.asyncio
 async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``noreply=True`` disables trigger engine during randomwalk and restores after."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     engine = TriggerEngine(rules=[], ctx=writer.ctx, log=logging.getLogger("test"))
@@ -1857,7 +1819,6 @@ async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 async def test_autodiscover_noreply_disables_engine(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``noreply=True`` disables trigger engine during autodiscover and restores after."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.room.graph.find_branches = lambda pos, **kw: [("room1", "north", "room2")]
@@ -1879,7 +1840,6 @@ async def test_autodiscover_noreply_disables_engine(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
     """``resume`` picks up ``noreply`` from saved walk state."""
-
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.walk.last_walk_mode = "randomwalk"
@@ -1903,7 +1863,6 @@ async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sle
 @pytest.mark.asyncio
 async def test_resume_inherits_room_change_cmd(monkeypatch, fast_sleep):
     """``resume`` restores room_change_cmd for autodiscover."""
-
     adj = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.walk.last_walk_mode = "autodiscover"
@@ -1927,7 +1886,6 @@ async def test_resume_inherits_room_change_cmd(monkeypatch, fast_sleep):
 @pytest.mark.asyncio
 async def test_resume_inherits_randomwalk_room_change_cmd(monkeypatch, fast_sleep):
     """``resume`` restores room_change_cmd for randomwalk."""
-
     adj = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.walk.last_walk_mode = "randomwalk"
@@ -1949,7 +1907,6 @@ async def test_resume_inherits_randomwalk_room_change_cmd(monkeypatch, fast_slee
 @pytest.mark.asyncio
 async def test_resume_inherits_visit_level(monkeypatch, fast_sleep):
     """``resume`` restores visit_level for randomwalk."""
-
     adj = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
     writer.ctx.walk.last_walk_mode = "randomwalk"

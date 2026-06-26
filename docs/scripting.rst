@@ -17,6 +17,9 @@ launched or in ``~/.config/telix/scripts/``::
 
     async def run(ctx: ScriptContext) -> None:
         room = ctx.room
+        if room is None:
+            ctx.print("[demo] No room data")
+            return
         ctx.print(f"[demo] You are in: {room.name} ({room.area})")
         ctx.print(f"[demo] Exits: {', '.join(room.exits)}")
 
@@ -35,7 +38,7 @@ Starting
 Telix looks for scripts in this order:
 
 1. Current working directory
-2. ``~/.config/telix/scripts/``
+2. ``$XDG_CONFIG_HOME/telix/scripts/`` (usually ``~/.config/telix/scripts/``)
 
 Scripts are started by the :samp:`\`async\`` or :samp:`\`await\`` commands.  Every time a script is
 launched, the last-modified time is checked and reloaded if necessary. Save a script file at any

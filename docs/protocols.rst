@@ -17,7 +17,6 @@ Telix supports the following relevant RFCs:
 * :rfc:`1073` Telnet Window Size Option (NAWS)
 * :rfc:`1079` Telnet Terminal Speed Option (TSPEED)
 * :rfc:`1091` Telnet Terminal-Type Option (TTYPE)
-* :rfc:`1408` Telnet Environment Option (ENVIRON)
 * :rfc:`1572` Telnet Environment Option (NEW_ENVIRON)
 * :rfc:`2066` Telnet Charset Option (CHARSET)
 
@@ -80,10 +79,40 @@ SSH
 
 Telix uses ``asyncssh`` for SSHv2 connections.  SSH connections run in
 BBS-style raw mode -- there is no telnet negotiation.  Password and
-keyboard-interactive authentication are supported.  Use the ``telix-ssh``
-command to connect::
+keyboard-interactive authentication are supported.  Connect using the
+``ssh://`` scheme::
 
-    telix-ssh bbs.example.com
+    telix ssh://bbs.example.com
 
 SSH is suitable for BBS systems that offer SSH alongside Telnet.
+
+SyncTERM Font Switching
+~~~~~~~~~~~~~~~~~~~~~~~
+
+BBS software can request a bitmap font change using the SyncTERM CTerm
+font selection sequence::
+
+    CSI Ps1 ; Ps2 SP D
+
+where *Ps1* is the font slot (0--3) and *Ps2* is the font ID (0--44).
+Telix recognises all 45 SyncTERM fonts:
+
+* **0** CP437 English, **26** CP437 (thin)
+* **17--18** CP850 Latin I, **19/28** CP865 Norwegian
+* **1/20** CP1251 Cyrillic, **2/12/22** KOI8-R, **9** KOI8-U
+* **3** ISO-8859-2, **4/11/13/23** ISO-8859-4, **14** ISO-8859-5
+* **21** ISO-8859-7, **8** ISO-8859-8, **6** ISO-8859-9, **10/16** ISO-8859-15
+* **24/30** ISO-8859-1, **5/25/27** CP866, **29** CP866U, **31** CP1131
+* **32--33** Commodore 64 (PETSCII), **34--35** Commodore 128
+* **36** Atari (ATASCII), **44** Atari ST
+* **37** P0T NOoDLE, **38** mO'sOul, **39/41** MicroKnight, **40/42** Topaz (Amiga)
+* **43** Prestel
+
+When graphics font rendering is enabled (kitty/sixel), the font switch also selects
+the corresponding bitmap font for rendering.  The wire
+encoding is updated to match the font's character set (e.g. switching
+from CP437 to Topaz changes the encoding to ISO-8859-1).
+
+Without font graphics rendering, the CSI font switch sequence is
+ignored and text is displayed using the terminal's current encoding.
 

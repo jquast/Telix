@@ -44,12 +44,14 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "telnetlib3>=4.0.1,<5",
+    "telnetlib3>=4.0.5,<5",
     "blessed>=1.33,<2",
     "wcwidth>=0.6.0,<1",
     "textual>=0.44,<1",
     "websockets>=16,<17",
     "asyncssh>=2.14,<3",
+    "numpy>=1.20,<3",
+    "pyte>=0.8.2,<1",
 ]
 
 [project.optional-dependencies]

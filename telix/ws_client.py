@@ -1,23 +1,17 @@
 """
 WebSocket client for telix.
 
-Provides :func:`run_ws_client` and :func:`build_parser`, called by
-:func:`telix.main.main` when a ``ws://`` or ``wss://`` URL is given on the
-command line.  Connects via ``websockets.connect()`` using the
-``gmcp.mudstandards.org``, ``telnet.mudstandards.org``, or
-``terminal.mudstandards.org`` subprotocol.
+Provides :func:`run_ws_client` and :func:`build_parser`, called by :func:`telix.main.main` when a ``ws://`` or
+``wss://`` URL is given on the command line.  Connects via ``websockets.connect()`` using the ``gmcp.mudstandards.org``,
+``telnet.mudstandards.org``, or ``terminal.mudstandards.org`` subprotocol.
 
-For the ``telnet.mudstandards.org`` subprotocol, a real
-:class:`telnetlib3.client_base.TelnetClient` is run on top of a
-:class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC option
-negotiation and all telnet-specific CLI flags.
+For the ``telnet.mudstandards.org`` subprotocol, a real :class:`telnetlib3.client_base.TelnetClient` is run on top of a
+:class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC option negotiation and all telnet-specific CLI flags.
 
-For the ``gmcp.mudstandards.org`` and ``terminal.mudstandards.org``
-subprotocols, lightweight
-:class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter`
-adapters are used instead.  The ``terminal`` subprotocol carries only binary
-frames (UTF-8 encoded I/O and ANSI control codes); the ``gmcp`` subprotocol
-additionally delivers GMCP commands as text frames.
+For the ``gmcp.mudstandards.org`` and ``terminal.mudstandards.org`` subprotocols, lightweight
+:class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter` adapters are used instead.
+The ``terminal`` subprotocol carries only binary frames (UTF-8 encoded I/O and ANSI control codes); the ``gmcp``
+subprotocol additionally delivers GMCP commands as text frames.
 """
 
 import sys
@@ -91,36 +85,36 @@ async def run_ws_client(
     lightweight :class:`~telix.ws_transport.WebSocketReader` /
     :class:`~telix.ws_transport.WebSocketWriter` adapters are used.
 
-    :param url: WebSocket URL (e.g. ``wss://gel.monster:8443``).
+    :param url: WebSocket URL (e.g. wss://gel.monster:8443).
     :param shell: Dotted path to the GMCP-subprotocol shell coroutine.
-    :param no_repl: If ``True``, skip the interactive REPL (raw I/O only).
-    :param loglevel: Logging level name (default ``"warn"``).
+    :param no_repl: If True, skip the interactive REPL (raw I/O only).
+    :param loglevel: Logging level name (default "warn").
     :param logfile: Optional path to write log output.
     :param typescript: Optional path to record session transcript.
-    :param logfile_mode: ``"append"`` (default) or ``"rewrite"`` the log file.
-    :param typescript_mode: ``"append"`` (default) or ``"rewrite"`` the typescript file.
-    :param encoding: Character encoding name (default ``"utf-8"``).
-    :param encoding_errors: Error handler for encoding (default ``"replace"``).
-    :param raw_mode: ``True`` = force raw (BBS) mode, ``False`` = force line mode,
+    :param logfile_mode: "append" (default) or "rewrite" the log file.
+    :param typescript_mode: "append" (default) or "rewrite" the typescript file.
+    :param encoding: Character encoding name (default "utf-8").
+    :param encoding_errors: Error handler for encoding (default "replace").
+    :param raw_mode: True = force raw (BBS) mode, False = force line mode,
         ``None`` = auto-detect from server negotiation.
-    :param ansi_keys: If ``True``, transmit raw ANSI escape sequences for arrow/function
+    :param ansi_keys: If True, transmit raw ANSI escape sequences for arrow/function
         keys instead of translating them.
-    :param ascii_eol: If ``True``, use ASCII CR/LF instead of encoding-native EOL.
+    :param ascii_eol: If True, use ASCII CR/LF instead of encoding-native EOL.
     :param always_do: Telnet options to always send DO for.
     :param always_will: Telnet options to always send WILL for.
     :param always_dont: Telnet options to always send DONT for.
     :param always_wont: Telnet options to always send WONT for.
-    :param term: Terminal type string (default: ``$TERM``).
+    :param term: Terminal type string (default: $TERM).
     :param speed: Terminal speed (default: 38400).
     :param send_environ: Environment variable names to send via NEW-ENVIRON.
-    :param gmcp_modules: GMCP module names to request via ``Core.Supports.Set``.
+    :param gmcp_modules: GMCP module names to request via Core.Supports.Set.
     :param connect_minwait: Minimum wait (seconds) before declaring negotiation done.
     :param connect_maxwait: Maximum wait (seconds) for negotiation to complete.
     :param connect_timeout: WebSocket open timeout in seconds (default: 10).
     :param route_timeout: Seconds to wait for the first frame when choosing
         the telnet-vs-GMCP path (default: 1.0).
-    :param compression: ``True`` to request MCCP, ``False`` to refuse, ``None`` for auto.
-    :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
+    :param compression: True to request MCCP, False to refuse, None for auto.
+    :param color_args: Parsed color/palette CLI options, or None to skip color setup.
     """
     if logfile:
         telnetlib3.accessories.make_logger(
@@ -226,8 +220,8 @@ async def _run_telnet_over_ws(
     Run a telnet session over the ``telnet.mudstandards.org`` WebSocket subprotocol.
 
     Creates a real :class:`~telnetlib3.client_base.TelnetClient` on top of a
-    :class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC negotiation.
-    Uses :func:`~telix.client_shell.telix_client_shell` as the shell.
+    :class:`~telix.ws_transport.WSTelnetTransport`, giving full IAC negotiation. Uses
+    :func:`~telix.client_shell.telix_client_shell` as the shell.
     """
     shell_fn = telnetlib3.accessories.function_lookup(shell)
     raw_mode_val = True if no_repl else raw_mode
@@ -359,9 +353,8 @@ async def _run_gmcp_ws(
     """
     Run a session over the ``gmcp.mudstandards.org`` WebSocket subprotocol.
 
-    Uses lightweight :class:`~telix.ws_transport.WebSocketReader` /
-    :class:`~telix.ws_transport.WebSocketWriter` adapters and
-    :func:`~telix.client_shell.ws_client_shell`.
+    Uses lightweight :class:`~telix.ws_transport.WebSocketReader` / :class:`~telix.ws_transport.WebSocketWriter`
+    adapters and :func:`~telix.client_shell.ws_client_shell`.
     """
     reader = ws_transport.WebSocketReader(encoding=encoding, encoding_errors=encoding_errors)
     writer = ws_transport.WebSocketWriter(ws, peername=(host, port), encoding=encoding)
@@ -613,6 +606,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="no_ice_colors",
         help="disable iCE color (blink as bright background) support",
+    )
+    telix.add_argument("--local-echo", action="store_true", default=False, dest="local_echo", help="force local echo")
+    telix.add_argument(
+        "--remote-echo", action="store_true", default=False, dest="remote_echo", help="force remote echo"
     )
 
     return parser

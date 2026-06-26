@@ -1,10 +1,13 @@
 History
 =======
 
-0.1.8 -- unreleased
+0.1.8 -- 2026-06-26
 -------------------
 
-- bugfix: correct some kinds of VGA color filtering
+- enhcancement: add ``--local-echo`` or ``--remote-echo`` for retrocomputer BBS's that require it.
+- enhancement: add ``--graphics-font`` option, uses kitty or sixel for retrocomputer fonts.
+- enhancement: new "FF is Clear+Home" toggle (SyncTERM compatibility)
+- bugfix: backspace with ATASCII
 
 0.1.7 -- 2026-03-16
 -------------------

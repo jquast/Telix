@@ -31,10 +31,10 @@ def safe_session_slug(session_key: str) -> str:
     """
     Return a filesystem-safe slug for *session_key*.
 
-    Uses a SHA-256 hash (first 12 hex chars) to avoid path traversal
-    and special-character issues with arbitrary hostnames.
+    Uses a SHA-256 hash (first 12 hex chars) to avoid path traversal and special-character issues with arbitrary
+    hostnames.
 
-    :param session_key: Session identifier, typically ``host:port``.
+    :param session_key: Session identifier, typically host:port.
     :returns: 12-character hex string.
     """
     return hashlib.sha256(session_key.encode("utf-8")).hexdigest()[:12]
@@ -44,7 +44,7 @@ def history_path(session_key: str) -> str:
     """
     Return per-session history file path.
 
-    :param session_key: Session identifier, typically ``host:port``.
+    :param session_key: Session identifier, typically host:port.
     :returns: Absolute path under :data:`DATA_DIR`.
     """
     return os.path.join(DATA_DIR, f"history-{safe_session_slug(session_key)}")
@@ -54,7 +54,7 @@ def gmcp_snapshot_path(session_key: str) -> str:
     """
     Return per-session GMCP snapshot file path.
 
-    :param session_key: Session identifier, typically ``host:port``.
+    :param session_key: Session identifier, typically host:port.
     :returns: Absolute path under :data:`DATA_DIR`.
     """
     return os.path.join(DATA_DIR, f"gmcp-{safe_session_slug(session_key)}.json")
@@ -73,7 +73,7 @@ def chat_path(session_key: str) -> str:
     """
     Return per-session chat history file path.
 
-    :param session_key: Session identifier, typically ``host:port``.
+    :param session_key: Session identifier, typically host:port.
     :returns: Absolute path under :data:`DATA_DIR`.
     """
     return os.path.join(DATA_DIR, f"chat-{safe_session_slug(session_key)}.json")

@@ -67,8 +67,7 @@ def get_theme_colors() -> dict[str, str]:
     """
     Return all theme color names mapped to ``#rrggbb`` hex values.
 
-    Uses the running Textual app's theme when available, otherwise
-    falls back to ``textual-dark`` defaults.
+    Uses the running Textual app's theme when available, otherwise falls back to ``textual-dark`` defaults.
     """
     app = getattr(textual.app.App, "current", None)
     if app is not None:
@@ -145,7 +144,7 @@ def load_progressbars(path: str, session_key: str) -> list[BarConfig]:
     Load progress bar configs for a session from a JSON file.
 
     :param path: Path to the progressbars JSON file.
-    :param session_key: Session identifier (``host:port``).
+    :param session_key: Session identifier (host:port).
     :returns: List of :class:`BarConfig` instances.
     """
     if not os.path.exists(path):
@@ -164,7 +163,7 @@ def save_progressbars(path: str, session_key: str, bars: list[BarConfig]) -> Non
     Other sessions' data in the file is preserved.
 
     :param path: Path to the progressbars JSON file.
-    :param session_key: Session identifier (``host:port``).
+    :param session_key: Session identifier (host:port).
     :param bars: List of :class:`BarConfig` instances.
     """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -189,7 +188,7 @@ def detect_progressbars(gmcp_data: dict[str, typing.Any]) -> list[BarConfig]:
 
     HP, MP, and XP are enabled by default; all others are disabled.
 
-    :param gmcp_data: Current ``ctx.gmcp_data`` dict.
+    :param gmcp_data: Current ctx.gmcp_data dict.
     :returns: List of detected :class:`BarConfig` instances.
     """
     if not gmcp_data:
@@ -230,8 +229,8 @@ def get_theme_color_hex(name: str) -> str | None:
     """
     Resolve a Textual theme color name to ``#rrggbb``.
 
-    :param name: Theme color name (e.g. ``"success"``, ``"error-lighten-2"``).
-    :returns: Hex color string, or ``None`` if not a theme color.
+    :param name: Theme color name (e.g. "success", "error-lighten-2").
+    :returns: Hex color string, or None if not a theme color.
     """
     theme_colors = get_theme_colors()
     return theme_colors.get(name)
@@ -241,8 +240,8 @@ def resolve_text_color_hex(name: str) -> str | None:
     """
     Resolve a text color name to ``#rrggbb``, or ``None`` for ``"auto"``.
 
-    :param name: Color name or ``"auto"`` for default behavior.
-    :returns: Hex color string, or ``None`` if *name* is ``"auto"``.
+    :param name: Color name or "auto" for default behavior.
+    :returns: Hex color string, or None if *name* is "auto".
     """
     if name == "auto":
         return None
@@ -263,9 +262,8 @@ def bar_color_at(fraction: float, bar: BarConfig) -> str:
     """
     Return an ``#rrggbb`` hex color for a bar at *fraction* full.
 
-    Both theme and custom modes use ``color_name_min`` / ``color_name_max``
-    to define the gradient endpoints.  Theme mode resolves names from the
-    active Textual theme; custom mode uses Rich named colors.
+    Both theme and custom modes use ``color_name_min`` / ``color_name_max`` to define the gradient endpoints.  Theme
+    mode resolves names from the active Textual theme; custom mode uses Rich named colors.
 
     :param fraction: 0.0 (empty) to 1.0 (full).
     :param bar: Bar configuration.
@@ -389,9 +387,8 @@ def try_aliases(
     """
     Try known field aliases and add a bar if a matching pair is found.
 
-    :param alt_max_data: Optional secondary package dict to search for max
-        fields when they are absent from *pkg_data* (e.g. Aardwolf keeps max
-        values in ``Char.Maxstats``).
+    :param alt_max_data: Optional secondary package dict to search for max fields when they are absent from *pkg_data*
+        (e.g. Aardwolf keeps max values in ``Char.Maxstats``).
     :param alt_max_pkg: Package name for *alt_max_data*.
     """
     for val_field, max_fields in alias_map.items():

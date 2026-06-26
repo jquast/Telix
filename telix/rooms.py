@@ -1,9 +1,8 @@
 """
 Room graph tracking, BFS pathfinding, and SQLite persistence for GMCP Room.Info data.
 
-Incrementally builds a directed graph from GMCP ``Room.Info`` messages,
-supports shortest-path search via BFS, and persists per-session room
-data to ``~/.local/share/telix/rooms-{host}_{port}.db``.
+Incrementally builds a directed graph from GMCP ``Room.Info`` messages, supports shortest-path search via BFS, and
+persists per-session room data to ``~/.local/share/telix/rooms-{host}_{port}.db``.
 """
 
 import os
@@ -35,13 +34,12 @@ def room_id(info: dict[str, typing.Any]) -> str | None:
     """
     Extract the room identifier from a GMCP ``Room.Info`` payload.
 
-    Checks ``num``, ``vnum``, and ``id`` in priority order.  When none
-    of these keys are present, a 12-character SHA-1 hash is generated
-    from the room name and full exit data (direction + destination name
-    pairs) to produce a stable synthetic identifier.
+    Checks ``num``, ``vnum``, and ``id`` in priority order.  When none of these keys are present, a 12-character SHA-1
+    hash is generated from the room name and full exit data (direction + destination name pairs) to produce a stable
+    synthetic identifier.
 
     :param info: GMCP Room.Info dict.
-    :returns: Room identifier as a string, or ``None`` if no key is found.
+    :returns: Room identifier as a string, or None if no key is found.
     """
     for key in ROOM_ID_KEYS:
         if key in info:
@@ -72,8 +70,7 @@ class Room:
     """
     A single room in the GMCP room graph.
 
-    Accessible in scripts as ``ctx.room`` (current room) or via
-    :meth:`~telix.rooms.RoomStore.get_room`.
+    Accessible in scripts as ``ctx.room`` (current room) or via :meth:`~telix.rooms.RoomStore.get_room`.
     """
 
     num: str
@@ -100,9 +97,9 @@ class RoomStore:
         """
         Open or create an SQLite room database.
 
-        :param db_path: Path to the ``.db`` file.
+        :param db_path: Path to the .db file.
         :param read_only: Open in read-only mode (no table creation).
-        :param session_key: ``host:port`` identifier stored as metadata.
+        :param session_key: host:port identifier stored as metadata.
         """
         dir_path = os.path.dirname(db_path)
         if dir_path:
@@ -125,27 +122,17 @@ class RoomStore:
 
     def create_tables(self) -> None:
         """Create schema tables if they do not exist."""
-        self.conn.executescript("""
-            CREATE TABLE IF NOT EXISTS room (
-                num TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                area TEXT NOT NULL DEFAULT '',
-                environment TEXT NOT NULL DEFAULT '',
-                bookmarked INTEGER NOT NULL DEFAULT 0,
-                visit_count INTEGER NOT NULL DEFAULT 0,
-                last_visited TEXT NOT NULL DEFAULT ''
-            );
-            CREATE TABLE IF NOT EXISTS exit (
-                src_num TEXT NOT NULL,
-                direction TEXT NOT NULL,
-                dst_num TEXT NOT NULL,
-                PRIMARY KEY (src_num, direction)
-            );
-            CREATE TABLE IF NOT EXISTS meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-        """)
+        self.conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS room ( num TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', area TEXT NOT NULL
+            DEFAULT '', environment TEXT NOT NULL DEFAULT '', bookmarked INTEGER NOT NULL DEFAULT 0, visit_count INTEGER
+            NOT NULL DEFAULT 0,
+
+            last_visited TEXT NOT NULL DEFAULT '' ); CREATE TABLE IF NOT EXISTS exit ( src_num TEXT NOT NULL, direction
+            TEXT NOT NULL,     dst_num TEXT NOT NULL, PRIMARY KEY (src_num, direction) ); CREATE TABLE IF NOT EXISTS
+            meta (     key TEXT PRIMARY KEY,     value TEXT NOT NULL );
+            """
+        )
         for col in ("blocked", "home", "marked"):
             try:
                 self.conn.execute(f"ALTER TABLE room ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
@@ -229,7 +216,7 @@ class RoomStore:
         Get a single room by number.
 
         :param num: Room number.
-        :returns: :class:`Room` or ``None`` if not found.
+        :returns: :class:`Room` or None if not found.
         """
         row = self.conn.execute(f"SELECT {self.ROOM_COLS} FROM room WHERE num = ?", (num,)).fetchone()
         if row is None:
@@ -292,9 +279,9 @@ class RoomStore:
         For ``home``, the one-per-area constraint is also enforced.
 
         :param num: Room number.
-        :param marker: One of ``"bookmarked"``, ``"blocked"``, ``"home"``,
+        :param marker: One of "bookmarked", "blocked", "home",
             ``"marked"``.
-        :returns: New state of *marker*, or ``False`` if room not found.
+        :returns: New state of *marker*, or False if room not found.
         """
         if marker not in self.MARKER_COLS:
             raise ValueError(f"unknown marker: {marker!r}")
@@ -332,7 +319,7 @@ class RoomStore:
         Return the home room number for the given area.
 
         :param area: Area name.
-        :returns: Room number string, or ``None`` if no home is set.
+        :returns: Room number string, or None if no home is set.
         """
         row = self.conn.execute("SELECT num FROM room WHERE area = ? AND home = 1", (area,)).fetchone()
         return row[0] if row else None
@@ -351,7 +338,7 @@ class RoomStore:
 
         :param src: Source room number.
         :param blocked: Room numbers to treat as impassable.
-        :returns: ``{room_num: distance}`` for all reachable rooms.
+        :returns: dict {room_num: distance} for all reachable rooms.
         """
         known = self.room_nums()
         if src not in known:
@@ -372,7 +359,7 @@ class RoomStore:
         BFS shortest path from *src* to *dst*.
 
         :param blocked: Room numbers to treat as impassable.
-        :returns: List of direction names, or ``None`` if unreachable.
+        :returns: List of direction names, or None if unreachable.
         """
         if src == dst:
             return []
@@ -400,7 +387,7 @@ class RoomStore:
         BFS shortest path returning ``[(direction, target_room_num), ...]``.
 
         :param blocked: Room numbers to treat as impassable.
-        :returns: List of (direction, expected_room_num) pairs, or ``None``.
+        :returns: List of (direction, expected_room_num) pairs, or None.
         """
         if src == dst:
             return []
@@ -448,10 +435,8 @@ class RoomStore:
         :param src: Source room number to search from.
         :param limit: Maximum number of branches to return.
         :param blocked: Room numbers to treat as impassable.
-        :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for
-            deepest-first ordering.
-        :returns: ``[(gateway_room_num, direction, target_num), ...]``
-            sorted by BFS distance from *src*.
+        :param strategy: search order "bfs" for nearest-first, "dfs" for deepest-first ordering.
+        :returns: list [(gateway_room_num, direction, target_num), ...] sorted by BFS distance from *src*.
         """
         if not self.has_room(src):
             return []
@@ -544,7 +529,7 @@ def load_prefs(session_key: str) -> dict[str, bool | str]:
     """
     Load per-session preferences from disk.
 
-    :param session_key: Session identifier (``host:port``).
+    :param session_key: Session identifier (host:port).
     :returns: Dict of preference values (booleans and strings).
     """
     path = prefs_path(session_key)
@@ -568,7 +553,7 @@ def save_prefs(session_key: str, prefs: dict[str, bool | str]) -> None:
     """
     Atomically save per-session preferences to disk.
 
-    :param session_key: Session identifier (``host:port``).
+    :param session_key: Session identifier (host:port).
     :param prefs: Dict of preference values (booleans and strings).
     """
     path = prefs_path(session_key)
@@ -605,7 +590,7 @@ def write_fasttravel(path: str, steps: list[tuple[str, str]], noreply: bool = Fa
 
     :param path: File path.
     :param steps: List of (direction, expected_room_num) pairs.
-    :param noreply: If ``True``, disable triggers during travel.
+    :param noreply: If True, disable triggers during travel.
     """
     data = {"steps": steps, "noreply": noreply}
     paths.atomic_write(path, json.dumps(data))
@@ -616,9 +601,8 @@ def read_fasttravel(path: str) -> tuple[list[tuple[str, str]], bool]:
     Read and delete fast travel steps from disk.
 
     :param path: File path written by :func:`write_fasttravel`.
-    :returns: Tuple of ``(steps, noreply)`` where *steps* is a list of
-        ``(direction, expected_room_num)`` pairs and *noreply* indicates
-        whether triggers should be disabled.
+    :returns: Tuple of (steps, noreply) where *steps* is a list of (direction, expected_room_num) pairs and *noreply*
+        indicates whether triggers should be disabled.
     """
     try:
         with open(path, encoding="utf-8") as f:

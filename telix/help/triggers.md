@@ -101,9 +101,9 @@ String comparisons work with ``=`` and ``!=``.
 | `(\w+) attacks you` | `kill \1` | Auto-attack using capture group |
 | `^Corpse of` | `degland corpse;distill corpse;get solaris from corpse` | Auto-loot corpses (Always) |
 | `Corpse contains:.*(\d+ solaris)` | `get all solaris from corpse` | Grab currency from corpses (Always) |
-| `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation (When: hp% > 50) |
-| `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome (When: hp% > 50) |
-| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy -- long timeout (When: hp% > 99) |
+| `^Keycard` | `` get keycard;`until You get Keycard`;look `` | Pick up keycard, wait for confirmation |
+| `^A (slave\|doctor\|nurse)` | `` kill \1;`until 10 died\.\|You killed\|Kill what \?`;glance `` | Kill with capture group, wait for outcome |
+| `^Atreides Captain` | `` kill captain;`until 140 died\.\|You killed`;glance `` | Tough enemy, long timeout |
 | `Please enter your ship.` | `enter ship` | Board shuttle (Immediate) |
 | `(^You catch\|^You fail to catch)` | `bait hook;fish with rod` | Auto-fishing loop |
 | `Try searching\\.` | `search;gl` | Auto-search when prompted |

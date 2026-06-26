@@ -1,10 +1,9 @@
 """
 Session management layer for the Textual TUI.
 
-Provides session configuration, persistence, command building, the session
-list/edit/theme screens, and related helper functions.  No imports from other
-``client_tui_*`` files except ``client_tui_base`` (for base editor classes
-and help screen).
+Provides session configuration, persistence, command building, the session list/edit/theme screens, and related helper
+functions.  No imports from other ``client_tui_*`` files except ``client_tui_base`` (for base editor classes and help
+screen).
 """
 
 # std imports
@@ -44,10 +43,9 @@ class VerticalOnlyDataTable(textual.widgets.DataTable):
     """
     DataTable subclass that never scrolls horizontally.
 
-    Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region``
-    with ``force=True``, bypassing ``overflow-x: hidden``.  The built-in
-    ``action_scroll_end`` also sets ``scroll_x`` directly.  This subclass
-    clamps ``scroll_x`` to zero in all relevant code paths.
+    Textual's ``_scroll_cursor_into_view`` calls ``scroll_to_region`` with ``force=True``, bypassing ``overflow-x:
+    hidden``.  The built-in ``action_scroll_end`` also sets ``scroll_x`` directly.  This subclass clamps ``scroll_x`` to
+    zero in all relevant code paths.
     """
 
     def _scroll_cursor_into_view(self, animate: bool = False) -> None:
@@ -110,6 +108,12 @@ ENCODINGS = (
     "cp437",
     "latin-1",
     "ascii",
+    "topaz",
+    "topaz-plus",
+    "microknight",
+    "microknight-plus",
+    "p0t-noodle",
+    "mosoul",
     "iso-8859-1",
     "iso-8859-2",
     "iso-8859-15",
@@ -136,13 +140,98 @@ for _enc in reversed(ENCODINGS):
         pass
 
 
+# Font short names from ENCODINGS that resolve to bitmap font IDs.
+# Mapping built from ENCODINGS entries that are font names, not Python codecs.
+# keyed by short name (matching ENCODINGS entry) -> font_id.
+_FONT_SHORT_TO_ID: dict[str, int] = {
+    "topaz": 42,
+    "topaz-plus": 40,
+    "microknight": 41,
+    "microknight-plus": 39,
+    "p0t-noodle": 37,
+    "mosoul": 38,
+}
+
+# Maps font short name -> (wire encoding, font ID).
+_FONT_ENCODINGS: dict[str, tuple[str, int]] = {}
+
+
+def init_font_encodings() -> None:
+    if _FONT_ENCODINGS:
+        return
+    from .fonts import font_registry
+
+    by_id = {entry.font_id: entry for entry in font_registry.FONT_TABLE}
+    for short, font_id in _FONT_SHORT_TO_ID.items():
+        entry = by_id.get(font_id)
+        if entry is not None:
+            _FONT_ENCODINGS[short] = (entry.encoding, entry.font_id)
+
+
+def resolve_encoding_font(enc: str) -> tuple[str, int | None]:
+    """
+    Resolve an encoding/font name to (wire_encoding, font_id_or_None).
+
+    Font names like "topaz" resolve to their wire encoding (e.g. "iso-8859-1") and SyncTERM font ID.  Regular encodings
+    return themselves and ``None``.
+
+    :param enc: Encoding or font name from the session config.
+    :returns: Tuple of (wire_encoding, font_id).
+    """
+    init_font_encodings()
+    if enc in _FONT_ENCODINGS:
+        return _FONT_ENCODINGS[enc]
+    return (enc, None)
+
+
+_GRAPHICS_CAPS: tuple[bool, bool] | None = None
+
+
+def detect_graphics_caps() -> tuple[bool, bool]:
+    """
+    Detect terminal graphics capabilities (kitty, sixel).
+
+    Prefers the pre-detected values from :envvar:`TELIX_HAS_KITTY` and :envvar:`TELIX_HAS_SIXEL` (set by
+    :func:`~telix.main._detect_terminal_colors` before Textual takes over the terminal).  Falls back to querying
+    :mod:`blessed` directly.
+
+    Results are cached in the module-level ``_GRAPHICS_CAPS`` tuple.
+
+    :returns: (has_kitty, has_sixel) tuple.
+    """
+    global _GRAPHICS_CAPS
+    if _GRAPHICS_CAPS is not None:
+        return _GRAPHICS_CAPS
+    import os as _os
+
+    env_kitty = _os.environ.get("TELIX_HAS_KITTY")
+    env_sixel = _os.environ.get("TELIX_HAS_SIXEL")
+    if env_kitty is not None and env_sixel is not None:
+        _GRAPHICS_CAPS = (env_kitty == "1", env_sixel == "1")
+        return _GRAPHICS_CAPS
+    try:
+        import sys
+
+        import blessed
+
+        if not sys.stdout.isatty():
+            _GRAPHICS_CAPS = (False, False)
+            return _GRAPHICS_CAPS
+        term = blessed.Terminal()
+        has_kitty = bool(term.does_kitty_graphics(timeout=0.3))
+        has_sixel = bool(term.does_sixel(timeout=0.3))
+        _GRAPHICS_CAPS = (has_kitty, has_sixel)
+    except Exception:
+        _GRAPHICS_CAPS = (False, False)
+    return _GRAPHICS_CAPS
+
+
 def normalize_encoding(enc: str) -> str:
     """
     Return the ENCODINGS entry that best matches *enc*, or ``ENCODINGS[0]``.
 
-    Strips whitespace then resolves Python codec aliases so that e.g.
-    ``"utf-8"``, ``"latin1"``, or ``" cp437 "`` each map to the canonical
-    ENCODINGS label.
+    Strips whitespace then resolves Python codec aliases so that e.g. ``"utf-8"``, ``"latin1"``, or ``" cp437 "`` each
+    map to the canonical ENCODINGS label.
     """
     enc = enc.strip()
     if enc in ENCODINGS:
@@ -196,10 +285,10 @@ def navigate_from_button(
     """
     Handle arrow navigation when a button in the column is focused.
 
-    :param key: The key name (e.g. ``"up"``, ``"down"``, ``"right"``).
+    :param key: The key name (e.g. "up", "down", "right").
     :param focused: The currently focused widget.
     :param buttons: Ordered list of buttons in the column.
-    :param target: Widget to focus on ``"right"`` press.
+    :param target: Widget to focus on "right" press.
     :param screen: The screen owning the widgets.
     :param event: The key event to call :meth:`prevent_default` on.
     """
@@ -348,13 +437,15 @@ class SessionConfig:
     # Mode: "auto", "raw", or "line"
     mode: str = "auto"
 
+    # Echo mode: "auto", "local", or "remote"
+    echo_mode: str = "auto"
+
     # Display
     colormatch: str = "vga"
     color_brightness: float = 1.0
     color_contrast: float = 1.0
     background_color: str = "#000000"
     ice_colors: bool = True
-    force_black_bg: bool = False
 
     # Input
     ansi_keys: bool = False
@@ -383,6 +474,17 @@ class SessionConfig:
 
     # Developer
     coverage: bool = False
+
+    # BBS compatibility
+    clear_homes_cursor: bool = False
+    ff_clears_screen: bool = False
+
+    # Graphics: kitty/sixel terminal graphics
+    graphics_font: str = ""
+
+    # Virtual terminal size override for graphics font rendering
+    graphics_columns: int | None = None
+    graphics_rows: int | None = None
 
     # Server type: "bbs", "mud", or "" (unset)
     server_type: str = ""
@@ -455,6 +557,33 @@ TELIX_STR_FLAGS: list[tuple[str, str, object]] = [
 TELIX_NEG_BOOL_FLAGS: list[tuple[str, str, bool]] = [("ice_colors", "--no-ice-colors", True)]
 
 
+def append_clear_homes_flag(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--clear-homes-cursor`` and ``--ff-clears-screen`` to *cmd* when enabled."""
+    if config.clear_homes_cursor:
+        cmd.append("--clear-homes-cursor")
+    if config.ff_clears_screen:
+        cmd.append("--ff-clears-screen")
+
+
+def append_graphics_flags(cmd: list[str], config: SessionConfig) -> None:
+    """Append ``--graphics-font`` related flags to *cmd* when a graphics font is selected."""
+    gfx = config.graphics_font
+    if gfx and gfx is not True:
+        cmd.extend(["--graphics-font", gfx])
+    elif gfx is True:
+        cmd.append("--graphics-font")
+    if config.graphics_columns is not None:
+        cmd.extend(["--graphics-columns", str(config.graphics_columns)])
+    if config.graphics_rows is not None:
+        cmd.extend(["--graphics-rows", str(config.graphics_rows)])
+
+
+def resolve_wire_encoding(config: SessionConfig) -> str:
+    """Return the wire encoding for *config*, resolving font names."""
+    wire_enc, _ = resolve_encoding_font(config.encoding)
+    return wire_enc
+
+
 def build_command(config: SessionConfig) -> list[str]:
     """
     Build CLI arguments from *config*.
@@ -491,13 +620,23 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
 
     for attr, flag, default in CMD_STR_FLAGS:
         val = getattr(config, attr)
+        if attr == "encoding":
+            val = resolve_wire_encoding(config)
         if val != default:
             cmd.extend([flag, str(val)])
+
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
 
     if config.mode == "raw":
         cmd.append("--raw-mode")
     elif config.mode == "line":
         cmd.append("--line-mode")
+    if config.echo_mode == "local":
+        cmd.append("--local-echo")
+    elif config.echo_mode == "remote":
+        cmd.append("--remote-echo")
 
     for attr, flag, default in CMD_BOOL_FLAGS:
         if getattr(config, attr) != default:
@@ -520,6 +659,8 @@ def build_telnet_command(config: SessionConfig) -> list[str]:
             if opt := opt.strip():
                 cmd.extend([flag, opt])
 
+    append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     return cmd
 
 
@@ -560,6 +701,10 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         cmd.append("--raw-mode")
     elif config.mode == "line":
         cmd.append("--line-mode")
+    if config.echo_mode == "local":
+        cmd.append("--local-echo")
+    elif config.echo_mode == "remote":
+        cmd.append("--remote-echo")
     if config.ansi_keys:
         cmd.append("--ansi-keys")
     if config.ascii_eol:
@@ -587,6 +732,8 @@ def build_ws_command(config: SessionConfig) -> list[str]:
         ("background_color", "--background-color", "#000000"),
     ]:
         value = getattr(config, field)
+        if field == "encoding":
+            value = resolve_wire_encoding(config)
         if value != default:
             cmd += [flag, str(value)]
     if config.connect_timeout != 10.0:
@@ -597,6 +744,11 @@ def build_ws_command(config: SessionConfig) -> list[str]:
                 cmd.extend([flag, opt])
     if not config.ice_colors:
         cmd.append("--no-ice-colors")
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
+    append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     return cmd
 
 
@@ -604,8 +756,8 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
     """
     Build ``telix-ssh`` CLI arguments from *config*.
 
-    SSH connections always use BBS mode (raw, VGA palette, iCE colors);
-    those flags are applied automatically by :func:`~telix.ssh_client.main`.
+    SSH connections always use BBS mode (raw, VGA palette, iCE colors); those flags are applied automatically by
+    :func:`~telix.ssh_client.main`.
     """
     cmd = [sys.executable, "-c", "from telix.ssh_client import main; main()", config.host]
     if config.port != 22:
@@ -614,6 +766,13 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--username", config.ssh_username]
     if config.ssh_key_file:
         cmd += ["--key-file", config.ssh_key_file]
+    if config.encoding != "utf8":
+        cmd += ["--encoding", resolve_wire_encoding(config)]
+    if config.encoding_errors != "replace":
+        cmd += ["--encoding-errors", config.encoding_errors]
+    _wire_enc, font_id = resolve_encoding_font(config.encoding)
+    if font_id is not None:
+        cmd += ["--font-id", str(font_id)]
     if config.colormatch != "vga":
         cmd += ["--colormatch", config.colormatch]
     if not config.ice_colors:
@@ -624,12 +783,16 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--color-brightness", str(config.color_brightness)]
     if config.color_contrast != 1.0:
         cmd += ["--color-contrast", str(config.color_contrast)]
+    if config.ansi_keys:
+        cmd.append("--ansi-keys")
     if config.loglevel != "warn":
         cmd += ["--loglevel", config.loglevel]
     if config.logfile:
         cmd += ["--logfile", config.logfile]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+    append_clear_homes_flag(cmd, config)
+    append_graphics_flags(cmd, config)
     return cmd
 
 
@@ -648,9 +811,8 @@ def terminal_cleanup(clear_screen: bool = True) -> str:
     """
     Return the terminal cleanup sequence.
 
-    :param clear_screen: When ``True``, append cursor-home and clear-screen
-        sequences.  Set to ``False`` when the caller wants the previous
-        output (e.g. a disconnect message) to remain visible.
+    :param clear_screen: When True, append cursor-home and clear-screen sequences. Set to False when the caller wants
+        the previous output (e.g. a disconnect message) to remain visible.
     """
     if clear_screen:
         return TERMINAL_CLEANUP + "\x1b[H\x1b[2J"
@@ -795,7 +957,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         table.add_column("Port", width=6, key="port")
         table.add_column("Enc", width=5, key="enc")
         table.add_column("Last", width=8, key="last")
-        table.add_column("Flags", width=12, key="flags")
+        table.add_column("Flags", width=18, key="flags")
         self.resize_name_column()
         self.refresh_table()
         if table.row_count > 0:
@@ -811,6 +973,7 @@ class SessionListScreen(textual.screen.Screen[None]):
         col = table.columns.get("name")  # type: ignore[call-overload]
         if col is not None:
             col.width = name_w
+            table.refresh()
 
     def on_resize(self, event: textual.events.Resize) -> None:
         """Recalculate name column width on terminal resize."""
@@ -838,6 +1001,8 @@ class SessionListScreen(textual.screen.Screen[None]):
             parts.append("!repl")
         if cfg.typescript:
             parts.append("ts")
+        if cfg.graphics_font == "auto":
+            parts.append("gfx")
         return " ".join(parts)
 
     def add_rows(self, table: "textual.widgets.DataTable[object]", items: list[tuple[str, SessionConfig]]) -> None:
@@ -1132,8 +1297,6 @@ class SessionListScreen(textual.screen.Screen[None]):
                 proc = subprocess.Popen(cmd, env=env)
                 proc.wait()
                 _elapsed = time.monotonic() - _t0
-                if proc.returncode:
-                    os._exit(proc.returncode)
             except KeyboardInterrupt:
                 if proc is not None:
                     proc.terminate()
@@ -1152,10 +1315,11 @@ class SessionListScreen(textual.screen.Screen[None]):
                 # have left raw mode, SGR attributes, mouse tracking,
                 # or alternate screen active.
                 sys.stdout.write(terminal_cleanup(clear_screen=False))
-                sys.stdout.flush()
-                # Pause so the final output (disconnect message, error, etc.)
-                # is visible before the TUI redraws over it.
-                sys.stdout.write("\r\n[press Enter to return to session manager]\r\n")
+                # Move cursor to bottom of screen so the prompt sits
+                # below any error output from the child process.
+                tsize = os.get_terminal_size()
+                sys.stdout.write(f"\x1b[{tsize.lines};{tsize.columns}H\r\n\r\n")
+                sys.stdout.write("[press Enter to return to session manager]\r\n")
                 sys.stdout.flush()
                 sys.stdin.readline()
         self.refresh_table()
@@ -1246,7 +1410,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         height: 100%;
         border: round $surface-lighten-2;
         background: $surface;
-        padding: 1 1;
+        padding: 0 1;
     }
     #tab-bar {
         height: 1;
@@ -1304,8 +1468,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     .switch-row {
         height: 3;
     }
+    #font-graphics-row {
+        height: 5;
+    }
     .conn-label {
-        width: 8;
+        width: 4;
         text-align: right;
         padding-top: 1;
     }
@@ -1327,6 +1494,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         width: auto;
         height: auto;
         padding-right: 2;
+
+        & .conn-label {
+            width: 8;
+        }
     }
     #conn-details-col {
         width: 1fr;
@@ -1355,6 +1526,15 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     #compression-row {
         height: auto;
     }
+    #mccp-label {
+        width: 16;
+        text-align: right;
+        padding-top: 1;
+    }
+    #compression-radio {
+        width: auto;
+        height: auto;
+    }
     #server-type-col {
         width: 2fr;
         height: auto;
@@ -1363,10 +1543,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         width: 12;
         text-align: right;
         padding-top: 1;
-    }
-    #compression-col {
-        width: 22;
-        height: auto;
     }
     #connect-timeout {
         max-width: 13;
@@ -1401,16 +1577,16 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         color: $text-muted;
     }
     #enc-label {
-        width: 10;
+        width: 9;
         padding-top: 1;
     }
     #enc-errors-label {
-        width: 12;
+        width: 10;
         padding-top: 1;
         padding-left: 4;
     }
     #encoding {
-        max-width: 20;
+        max-width: 26;
     }
     #encoding-errors {
         max-width: 15;
@@ -1560,12 +1736,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     yield textual.widgets.RadioButton("BBS", value=cfg.server_type == "bbs", id="type-bbs")
                     yield textual.widgets.RadioButton("Mud", value=cfg.server_type == "mud", id="type-mud")
         with textual.containers.Horizontal(id="compression-row"):
-            with textual.containers.Vertical(id="compression-col"):
-                yield textual.widgets.Label("MCCP Compression")
-                with textual.widgets.RadioSet(id="compression-radio"):
-                    yield textual.widgets.RadioButton("Passive", value=cfg.compression is None, id="compress-passive")
-                    yield textual.widgets.RadioButton("Yes", value=cfg.compression is True, id="compress-yes")
-                    yield textual.widgets.RadioButton("No", value=cfg.compression is False, id="compress-no")
+            yield textual.widgets.Label("MCCP Compression", id="mccp-label", classes="conn-label")
+            with textual.widgets.RadioSet(id="compression-radio"):
+                yield textual.widgets.RadioButton("Passive", value=cfg.compression is None, id="compress-passive")
+                yield textual.widgets.RadioButton("Yes", value=cfg.compression is True, id="compress-yes")
+                yield textual.widgets.RadioButton("No", value=cfg.compression is False, id="compress-no")
 
     def compose_terminal_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Terminal tab pane."""
@@ -1587,29 +1762,32 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     yield textual.widgets.RadioButton(
                         "Line mode", value=not is_ssh and cfg.mode == "line", id="mode-line"
                     )
+                yield textual.widgets.Label("Echo Mode")
+                with textual.widgets.RadioSet(id="echo-mode-radio"):
+                    yield textual.widgets.RadioButton("Auto", value=cfg.echo_mode == "auto", id="echo-auto")
+                    yield textual.widgets.RadioButton("Local echo", value=cfg.echo_mode == "local", id="echo-local")
+                    yield textual.widgets.RadioButton("Remote echo", value=cfg.echo_mode == "remote", id="echo-remote")
             with textual.containers.Vertical(id="repl-col"), textual.containers.Horizontal(classes="switch-row"):
                 repl_dim = "" if cfg.mode != "raw" else " dimmed"
                 yield textual.widgets.Label("Advanced REPL", id="repl-label", classes=f"field-label{repl_dim}")
                 yield textual.widgets.Switch(value=not cfg.no_repl, id="use-repl", disabled=cfg.mode == "raw")
         enc = normalize_encoding(cfg.encoding or "utf8")
-        is_retro = enc.lower() in ("atascii", "petscii")
         with textual.containers.Horizontal(classes="field-row"):
-            yield textual.widgets.Label("Encoding", id="enc-label")
+            yield textual.widgets.Label("Encoding/Font", id="enc-label")
             yield textual.widgets.Select([(e, e) for e in ENCODINGS], value=enc, id="encoding", allow_blank=False)
             yield textual.widgets.Label("Errors", id="enc-errors-label")
             yield textual.widgets.Select(
                 [(v, v) for v in ("replace", "ignore", "strict")], value=cfg.encoding_errors, id="encoding-errors"
             )
-        dim = "" if is_retro else " dimmed"
         with textual.containers.Horizontal(id="keys-eol-row"):
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("ANSI Keys", id="ansi-keys-label", classes=f"field-label{dim}")
-                sw = textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys", disabled=not is_retro)
-                sw.tooltip = "Required for Windows"
+                yield textual.widgets.Label("ANSI Keys", id="ansi-keys-label", classes="field-label")
+                sw = textual.widgets.Switch(value=cfg.ansi_keys, id="ansi-keys")
+                sw.tooltip = "Send raw ANSI escape sequences for arrow/function keys"
                 yield sw
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("ASCII EOL", id="ascii-eol-label", classes=f"field-label{dim}")
-                yield textual.widgets.Switch(value=cfg.ascii_eol, id="ascii-eol", disabled=not is_retro)
+                yield textual.widgets.Label("ASCII EOL", id="ascii-eol-label", classes="field-label")
+                yield textual.widgets.Switch(value=cfg.ascii_eol, id="ascii-eol")
 
     def compose_display_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Display tab pane."""
@@ -1619,15 +1797,23 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             textual.widgets.Static("", id="palette-preview"),
             classes="field-row",
         )
-        has_detected = self.detected_bg is not None
         if self.detected_bg is not None:
             r, g, b = self.detected_bg
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
-            yield textual.containers.Horizontal(
-                textual.widgets.Label("Detected Background", classes="field-label-wide"),
-                textual.widgets.Static(f"[on rgb({r},{g},{b})]  [/] {hex_color}", id="detected-bg-color"),
-                classes="field-row",
+            is_black = (r, g, b) == (0, 0, 0)
+            indicator = "[green]\u2714[/]" if is_black else "[red]\u2718[/]"
+            maybe_not = "" if is_black else "NOT "
+            tt = (
+                f"Your background is {maybe_not}detected as black, "
+                f"which is required for correct artwork display on most BBS and MUDs."
             )
+            bg_label = textual.widgets.Label("Detected Background", classes="field-label-wide")
+            bg_label.tooltip = tt
+            bg_display = textual.widgets.Static(
+                f"[on rgb({r},{g},{b})]  [/] {hex_color} {indicator}", id="detected-bg-color"
+            )
+            bg_display.tooltip = tt
+            yield textual.containers.Horizontal(bg_label, bg_display, classes="field-row")
         yield textual.containers.Horizontal(
             textual.widgets.Label("Brightness %", classes="field-label"),
             textual.widgets.Input(
@@ -1639,17 +1825,78 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             ),
             classes="field-row",
         )
-        force_val = True if not has_detected else cfg.force_black_bg
-        with textual.containers.Horizontal():
+        with textual.containers.Horizontal(classes="switch-row"):
             with textual.containers.Horizontal(classes="switch-row"):
                 yield textual.widgets.Label("iCE Colors", classes="field-label")
-                yield textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
+                ice_switch = textual.widgets.Switch(value=cfg.ice_colors, id="ice-colors")
+                ice_switch.tooltip = "Interpret bright background colors in place of the rarely used blink attribute"
+                yield ice_switch
             with textual.containers.Horizontal(classes="switch-row"):
-                yield textual.widgets.Label("Force Black BG", classes=f"field-label{'' if has_detected else ' dimmed'}")
-                switch = textual.widgets.Switch(value=force_val, id="force-black-bg", disabled=not has_detected)
-                if not has_detected:
-                    switch.tooltip = "Could not detect background color of your terminal"
-                yield switch
+                yield textual.widgets.Label("Clear Homes Cursor", classes="field-label")
+                chc_switch = textual.widgets.Switch(value=cfg.clear_homes_cursor, id="clear-homes-cursor")
+                chc_switch.tooltip = "Compatibility with SyncTERM bug popularly depended on by BBS systems"
+                yield chc_switch
+            with textual.containers.Horizontal(classes="switch-row"):
+                yield textual.widgets.Label("FF is Clear+Home", classes="field-label")
+                ff_switch = textual.widgets.Switch(value=cfg.ff_clears_screen, id="ff-clears-screen")
+                ff_switch.tooltip = (
+                    "Treat Form Feed (0x0C) as clear screen and home cursor,"
+                    " a non-conforming terminal feature implemented in SyncTERM"
+                    " required by many BBS systems"
+                )
+                yield ff_switch
+        # Font Graphics radio group (mutually exclusive: none / kitty+sixel)
+        has_kitty, has_sixel = detect_graphics_caps()
+        if has_kitty:
+            gfx_radio_label = "Kitty Graphics"
+            gfx_supported = True
+        elif has_sixel:
+            gfx_radio_label = "Sixel Graphics"
+            gfx_supported = True
+        else:
+            gfx_radio_label = "Kitty/Sixel Graphics (unsupported)"
+            gfx_supported = False
+        # If graphics was previously selected but is now unsupported, fall back to None.
+        if cfg.graphics_font == "auto" and not gfx_supported:
+            active = "none"
+        elif cfg.graphics_font == "auto":
+            active = "gfx"
+        else:
+            active = "none"
+        cols_rows_enabled = active != "none"
+        mf_dim = "" if cols_rows_enabled else " dimmed"
+        with textual.containers.Horizontal(id="font-graphics-row"):
+            gfx_radio = textual.widgets.RadioSet(
+                textual.widgets.RadioButton("None", value=active == "none", id="gfx-none"),
+                textual.widgets.RadioButton(
+                    gfx_radio_label, value=active == "gfx", disabled=not gfx_supported, id="gfx-graphics"
+                ),
+                id="font-graphics",
+            )
+            gfx_radio.tooltip = "Kitty/Sixel: render using terminal inline graphics. Only one may be active."
+            yield textual.widgets.Label("Font Graphics", classes="field-label")
+            yield gfx_radio
+        with textual.containers.Horizontal(classes="switch-row"):
+            yield textual.widgets.Label("Columns", id="graphics-cols-label", classes=f"field-label-short{mf_dim}")
+            cols_input = textual.widgets.Input(
+                value=str(cfg.graphics_columns or ""),
+                placeholder="80",
+                id="graphics-columns",
+                classes="field-input-short",
+                disabled=not cols_rows_enabled,
+            )
+            cols_input.tooltip = "Virtual terminal columns (default 80)"
+            yield cols_input
+            yield textual.widgets.Label("Rows", id="graphics-rows-label", classes=f"field-label-short{mf_dim}")
+            rows_input = textual.widgets.Input(
+                value=str(cfg.graphics_rows or ""),
+                placeholder="25",
+                id="graphics-rows",
+                classes="field-input-short",
+                disabled=not cols_rows_enabled,
+            )
+            rows_input.tooltip = "Virtual terminal rows (default 25)"
+            yield rows_input
 
     def compose_advanced_tab(self, cfg: SessionConfig) -> textual.app.ComposeResult:
         """Yield widgets for the Advanced tab pane."""
@@ -1769,22 +2016,32 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             else:
                 repl_switch.value = True
             self.query_one("#repl-label", textual.widgets.Label).set_class(is_raw, "dimmed")
+        elif event.radio_set.id == "font-graphics":
+            pressed = event.pressed
+            enabled = pressed is not None and pressed.id != "gfx-none"
+            for widget_id in ("#graphics-columns", "#graphics-rows"):
+                self.query_one(widget_id, textual.widgets.Input).disabled = not enabled
+            for label_id in ("#graphics-cols-label", "#graphics-rows-label"):
+                self.query_one(label_id, textual.widgets.Label).set_class(not enabled, "dimmed")
 
     def select_radio(self, radio_set_id: str, button_id: str) -> None:
         """
-        Select a radio button by setting only the target button's value to ``True``.
+        Select a radio button programmatically.
 
-        RadioSet's ``_on_radio_button_changed`` uses ``prevent(RadioButton.Changed)`` when it deselects the
-        previously-pressed button, so only the target must be set to ``True`` -- setting other buttons to ``False``
-        directly causes RadioSet to fight the change and leaves multiple buttons appearing selected.
+        Delegates to :func:`telix.util.select_radio_button` which disables ``RadioButton.Changed`` message posting
+        during the change to prevent the RadioSet from fighting the selection.
 
         If the RadioSet was disabled, it is re-enabled for the value change and re-disabled after the next refresh so
         that the ``RadioButton.Changed`` event can be processed before the widget is locked again.
         """
         radio_set = self.query_one(f"#{radio_set_id}", textual.widgets.RadioSet)
         was_disabled = radio_set.disabled
-        radio_set.disabled = False
-        self.query_one(f"#{button_id}", textual.widgets.RadioButton).value = True
+        if was_disabled:
+            radio_set.disabled = False
+        target = self.query_one(f"#{button_id}", textual.widgets.RadioButton)
+        import telix.util
+
+        telix.util.select_radio_button(radio_set, target)
         if was_disabled:
             self.call_after_refresh(lambda rs=radio_set: setattr(rs, "disabled", True))
 
@@ -1800,6 +2057,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#colormatch", textual.widgets.Select).value = "vga"
             self.query_one("#ice-colors", textual.widgets.Switch).value = True
             self.select_radio("mode-radio", "mode-raw")
+            self.select_radio("echo-mode-radio", "echo-remote")
             self.query_one("#use-repl", textual.widgets.Switch).value = False
             self.query_one("#use-repl", textual.widgets.Switch).disabled = True
             self.query_one("#repl-label", textual.widgets.Label).set_class(True, "dimmed")
@@ -1807,18 +2065,21 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 self.select_radio("compression-radio", "compress-no")
             else:
                 self.select_radio("compression-radio", "compress-passive")
-            force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
-            if not force_bg.disabled:
-                force_bg.value = True
+            self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = True
+            self.query_one("#ff-clears-screen", textual.widgets.Switch).value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
-            self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, REPL off, MCCP Compression {compress_label}")
+            self.notify(
+                f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off,"
+                f" MCCP Compression {compress_label}"
+            )
         elif button_id == "type-mud":
             if ssl_on:
                 self.select_radio("compression-radio", "compress-no")
             else:
                 self.select_radio("compression-radio", "compress-yes")
             self.select_radio("mode-radio", "mode-line")
+            self.select_radio("echo-mode-radio", "echo-auto")
             self.query_one("#use-repl", textual.widgets.Switch).value = True
             self.query_one("#use-repl", textual.widgets.Switch).disabled = False
             self.query_one("#repl-label", textual.widgets.Label).set_class(False, "dimmed")
@@ -1827,9 +2088,8 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             term_input = self.query_one("#term", textual.widgets.Input)
             if not term_input.value.strip():
                 term_input.value = "XTERM-TRUECOLOR"
-            force_bg = self.query_one("#force-black-bg", textual.widgets.Switch)
-            if not force_bg.disabled:
-                force_bg.value = False
+            self.query_one("#clear-homes-cursor", textual.widgets.Switch).value = False
+            self.query_one("#ff-clears-screen", textual.widgets.Switch).value = False
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "yes"
             self.notify(
@@ -1855,6 +2115,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         self.query_one("#ssh-details-row").set_class(is_ssh, "visible")
         self.query_one("#compression-row").display = not is_ssh
         self.query_one("#mode-radio", textual.widgets.RadioSet).disabled = is_ssh
+        self.query_one("#echo-mode-radio", textual.widgets.RadioSet).disabled = is_ssh
+        if is_ssh:
+            self.select_radio("mode-radio", "mode-raw")
+            self.select_radio("echo-mode-radio", "echo-remote")
+            self.select_radio("server-type-radio", "type-bbs")
         compression_radio = self.query_one("#compression-radio", textual.widgets.RadioSet)
         if is_ssl:
             self.select_radio("compression-radio", "compress-no")
@@ -1884,13 +2149,6 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """React to Select widget changes."""
         if event.select.id == "colormatch":
             self.update_palette_preview()
-        elif event.select.id == "encoding":
-            is_retro = str(event.value).lower() in ("atascii", "petscii")
-            self.query_one("#ansi-keys", textual.widgets.Switch).disabled = not is_retro
-            self.query_one("#ascii-eol", textual.widgets.Switch).disabled = not is_retro
-            for label_id in ("#ansi-keys-label", "#ascii-eol-label"):
-                label = self.query_one(label_id, textual.widgets.Label)
-                label.set_class(not is_retro, "dimmed")
 
     def on_input_changed(self, event: textual.widgets.Input.Changed) -> None:
         """Update palette preview when brightness/contrast changes."""
@@ -1899,12 +2157,12 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
 
     def on_switch_changed(self, event: textual.widgets.Switch.Changed) -> None:
         """Handle switch changes for palette and other toggles."""
-        if event.switch.id in ("ice-colors", "force-black-bg"):
+        if event.switch.id in ("ice-colors",):
             self.update_palette_preview()
 
     def update_palette_preview(self) -> None:
         """Render CP437 full-block color preview for the selected palette."""
-        from telix.color_filter import PALETTES, _adjust_color
+        from telix.color_filter import PALETTES, adjust_color
 
         palette_name = self.query_one("#colormatch", textual.widgets.Select).value
         preview = self.query_one("#palette-preview", textual.widgets.Static)
@@ -1914,11 +2172,10 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         brightness = self._parse_pct("#color-brightness", 100) / 100.0
         contrast = self._parse_pct("#color-contrast", 100) / 100.0
         palette = [
-            _adjust_color(r, g, b, brightness, contrast)
+            adjust_color(r, g, b, brightness, contrast)
             for r, g, b in PALETTES[palette_name]  # type: ignore[index]
         ]
-        force_black = self.query_one("#force-black-bg", textual.widgets.Switch).value
-        if not force_black and self.detected_bg is not None:
+        if self.detected_bg is not None:
             palette[0] = self.detected_bg  # type: ignore[assignment]
         ice = self.query_one("#ice-colors", textual.widgets.Switch).value
         block = "\u2588"
@@ -2074,6 +2331,13 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         else:
             cfg.mode = "auto"
 
+        if self.query_one("#echo-local", textual.widgets.RadioButton).value:
+            cfg.echo_mode = "local"
+        elif self.query_one("#echo-remote", textual.widgets.RadioButton).value:
+            cfg.echo_mode = "remote"
+        else:
+            cfg.echo_mode = "auto"
+
         cfg.ansi_keys = self.query_one("#ansi-keys", textual.widgets.Switch).value
         cfg.ascii_eol = self.query_one("#ascii-eol", textual.widgets.Switch).value
 
@@ -2081,8 +2345,19 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.color_brightness = self._parse_pct("#color-brightness", 100) / 100.0
         cfg.color_contrast = self._parse_pct("#color-contrast", 100) / 100.0
         cfg.ice_colors = self.query_one("#ice-colors", textual.widgets.Switch).value
-        cfg.force_black_bg = self.query_one("#force-black-bg", textual.widgets.Switch).value
-        if not cfg.force_black_bg and self.detected_bg is not None:
+        cfg.clear_homes_cursor = self.query_one("#clear-homes-cursor", textual.widgets.Switch).value
+        cfg.ff_clears_screen = self.query_one("#ff-clears-screen", textual.widgets.Switch).value
+        font_gfx = self.query_one("#font-graphics", textual.widgets.RadioSet).pressed_button
+        if font_gfx is not None and font_gfx.id == "gfx-graphics":
+            cfg.graphics_font = "auto"
+        else:
+            cfg.graphics_font = ""
+        gf_cols = self.query_one("#graphics-columns", textual.widgets.Input).value.strip()
+        cfg.graphics_columns = int(gf_cols) if gf_cols.isdigit() and int(gf_cols) > 0 else None
+        gf_rows = self.query_one("#graphics-rows", textual.widgets.Input).value.strip()
+        cfg.graphics_rows = int(gf_rows) if gf_rows.isdigit() and int(gf_rows) > 0 else None
+
+        if self.detected_bg is not None:
             r, g, b = self.detected_bg
             cfg.background_color = f"#{r:02x}{g:02x}{b:02x}"
         else:
