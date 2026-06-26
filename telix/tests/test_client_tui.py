@@ -191,6 +191,28 @@ def test_build_command_default_encoding_omitted() -> None:
 
 
 @pytest.mark.parametrize(
+    "font_name,expected_wire,expected_font_id",
+    [
+        ("topaz", "iso-8859-1", 42),
+        ("topaz-plus", "iso-8859-1", 40),
+        ("microknight", "iso-8859-1", 41),
+        ("microknight-plus", "iso-8859-1", 39),
+        ("p0t-noodle", "iso-8859-1", 37),
+        ("mosoul", "iso-8859-1", 38),
+    ],
+)
+def test_build_command_font_encoding_resolves_to_wire_encoding(
+    font_name: str, expected_wire: str, expected_font_id: int
+) -> None:
+    cfg = SessionConfig(host="h", port=23, encoding=font_name)
+    cmd = build_command(cfg)
+    idx = cmd.index("--encoding")
+    assert cmd[idx + 1] == expected_wire
+    fidx = cmd.index("--font-id")
+    assert cmd[fidx + 1] == str(expected_font_id)
+
+
+@pytest.mark.parametrize(
     "raw, expected",
     [
         ("utf8", "utf8"),

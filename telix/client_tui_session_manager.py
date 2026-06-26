@@ -140,7 +140,18 @@ for _enc in reversed(ENCODINGS):
         pass
 
 
-# Font short names from the font registry that appear in the ENCODINGS list.
+# Font short names from ENCODINGS that resolve to bitmap font IDs.
+# Mapping built from ENCODINGS entries that are font names, not Python codecs.
+# keyed by short name (matching ENCODINGS entry) -> font_id.
+_FONT_SHORT_TO_ID: dict[str, int] = {
+    "topaz": 42,
+    "topaz-plus": 40,
+    "microknight": 41,
+    "microknight-plus": 39,
+    "p0t-noodle": 37,
+    "mosoul": 38,
+}
+
 # Maps font short name -> (wire encoding, font ID).
 _FONT_ENCODINGS: dict[str, tuple[str, int]] = {}
 
@@ -150,9 +161,10 @@ def init_font_encodings() -> None:
         return
     from .fonts import font_registry
 
-    for entry in font_registry.FONT_TABLE:
-        short = entry.name.lower()
-        if short in ENCODINGS:
+    by_id = {entry.font_id: entry for entry in font_registry.FONT_TABLE}
+    for short, font_id in _FONT_SHORT_TO_ID.items():
+        entry = by_id.get(font_id)
+        if entry is not None:
             _FONT_ENCODINGS[short] = (entry.encoding, entry.font_id)
 
 
