@@ -197,7 +197,7 @@ def detect_graphics_caps() -> tuple[bool, bool]:
 
     Results are cached in the module-level ``_GRAPHICS_CAPS`` tuple.
 
-    :returns:``(has_kitty, has_sixel)`` tuple.
+    :returns: ``(has_kitty, has_sixel)`` tuple.
     """
     global _GRAPHICS_CAPS
     if _GRAPHICS_CAPS is not None:

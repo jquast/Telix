@@ -516,7 +516,7 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
     """
     Launch a TUI editor for macros or triggers in a subprocess.
 
-    :param editor_type:``"macros"``, ``"triggers"``, or ``"highlights"``.
+    :param editor_type: ``"macros"``, ``"triggers"``, or ``"highlights"``.
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """

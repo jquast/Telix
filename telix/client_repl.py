@@ -207,7 +207,7 @@ def split_incomplete_esc(data: bytes) -> tuple[bytes, bytes]:
     more bytes arrive. Handles CSI (``ESC [``) with arbitrarily long parameter/intermediate bytes, OSC (``ESC ]``), DCS
     (``ESC P``), and plain two-byte ``ESC X`` sequences.
 
-    :returns:``(flush_now, hold_back)`` -- concatenation equals *data*.
+    :returns: ``(flush_now, hold_back)`` -- concatenation equals *data*.
     """
     n = len(data)
     if n == 0:
@@ -715,7 +715,7 @@ class ReplSession:
 
     :param telnet_reader: Server-side reader stream.
     :param telnet_writer: Server-side writer stream.
-    :param tty_shell:``Terminal`` instance from ``client_shell``.
+    :param tty_shell: ``Terminal`` instance from ``client_shell``.
     :param stdout: asyncio StreamWriter for local terminal output.
     :param history_file: Optional path for persistent line history.
     :param banner_lines: Lines to display after the scroll region is active.
@@ -1836,7 +1836,7 @@ class ReplSession:
         """
         Run the REPL event loop.
 
-        :returns:``True`` if the server switched to kludge mode, ``False`` if the connection closed normally.
+        :returns: ``True`` if the server switched to kludge mode, ``False`` if the connection closed normally.
         """
         self.init_terminal()
         self.init_editor()
@@ -1885,9 +1885,9 @@ async def repl_event_loop(
     Uses blessed ``async_inkey()`` for keystroke input and a headless :class:`~blessed.line_editor.LineEditor` for line
     editing with history and auto-suggest.
 
-    :param tty_shell:``Terminal`` instance from ``client_shell``.
+    :param tty_shell: ``Terminal`` instance from ``client_shell``.
     :param banner_lines: Lines to display after scroll region is active.
-    :returns:``True`` if the server switched to kludge mode (caller should fall through to the standard event loop),
+    :returns: ``True`` if the server switched to kludge mode (caller should fall through to the standard event loop),
         ``False`` if the connection closed normally.
     """
     session = ReplSession(

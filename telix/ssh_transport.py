@@ -116,7 +116,7 @@ class SSHWriter:
 
         :param process: The asyncssh process; may be ``None`` initially and set later once the connection is
             established.
-        :param peername:``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
         """
         self._process: asyncssh.SSHClientProcess[str] | None = process
         self._peername = peername

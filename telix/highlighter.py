@@ -56,7 +56,7 @@ class HighlightRule:
     :param highlight: Blessed compoundable name, e.g. ``"blink_black_on_yellow"``.
     :param enabled: Whether this rule is active.
     :param stop_movement: Cancel discover/randomwalk when matched.
-    :param builtin:``True`` for the trigger-pattern rule (undeletable).
+    :param builtin: ``True`` for the trigger-pattern rule (undeletable).
     """
 
     pattern: re.Pattern[str]
@@ -278,7 +278,7 @@ class HighlightEngine:
         Apply highlight rules to a single line of output.
 
         :param line: A single line of terminal output (may contain SGR sequences).
-        :returns:``(highlighted_line, had_matches)`` -- the original line is returned unchanged when no rules match.
+        :returns: ``(highlighted_line, had_matches)`` -- the original line is returned unchanged when no rules match.
         """
         if not self.enabled:
             return line, False
@@ -496,7 +496,7 @@ class HighlightEngine:
         codes are propagated across line boundaries so each line is self-contained.
 
         :param block: Multi-line terminal output (may contain SGR sequences).
-        :returns:``(highlighted_block, had_matches)``.
+        :returns: ``(highlighted_block, had_matches)``.
         """
         if not self.enabled:
             return block, False

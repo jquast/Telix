@@ -139,7 +139,7 @@ def client_name(sw_name: str | None = None) -> str:
     Build the MNES CLIENT_NAME value.
 
     :param sw_name: Terminal software name detected via XTVERSION (e.g. ``"Konsole"``).
-    :returns:``"Telix"`` or ``"Telix/Konsole"`` when a name is available.
+    :returns: ``"Telix"`` or ``"Telix/Konsole"`` when a name is available.
     """
     if sw_name:
         return f"Telix/{sw_name}"

@@ -99,7 +99,7 @@ class RoomStore:
 
         :param db_path: Path to the ``.db`` file.
         :param read_only: Open in read-only mode (no table creation).
-        :param session_key:``host:port`` identifier stored as metadata.
+        :param session_key: ``host:port`` identifier stored as metadata.
         """
         dir_path = os.path.dirname(db_path)
         if dir_path:

@@ -48,7 +48,7 @@ def parse_gmcp_frame(text: str) -> tuple[str, typing.Any]:
     JSON is returned as a raw string.
 
     :param text: Raw TEXT frame content.
-    :returns:``(package_name, parsed_payload)``
+    :returns: ``(package_name, parsed_payload)``
     :raises ValueError: If *text* is empty.
     """
     if not text:
@@ -95,7 +95,7 @@ def extract_iac(data: bytes, remainder: bytes = b"") -> tuple[bytes, list[IacEve
 
     :param data: Raw bytes from a BINARY WebSocket frame.
     :param remainder: Leftover bytes from the previous frame.
-    :returns:``(clean_data, events, new_remainder)``
+    :returns: ``(clean_data, events, new_remainder)``
     """
     buf = remainder + data
     iac_byte = telnetlib3.telopt.IAC[0]
@@ -306,7 +306,7 @@ class WebSocketWriter:
         Initialise the writer.
 
         :param ws: A ``websockets`` connection object.
-        :param peername:``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
         :param encoding: Character encoding for outgoing text.
         """
         self._ws = ws

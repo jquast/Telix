@@ -186,7 +186,7 @@ class ScriptOutputBuffer:
         Wait until the next GA/EOR prompt signal.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns:``True`` if prompt arrived, ``False`` on timeout.
+        :returns: ``True`` if prompt arrived, ``False`` on timeout.
         """
         target = self._prompt_count + 1
         if timeout is None:
@@ -341,7 +341,7 @@ class ScriptContext:
         """
         Search all GMCP package dicts for *field*.
 
-        :returns:``(value, package_dict)`` or ``(None, None)`` if not found.
+        :returns: ``(value, package_dict)`` or ``(None, None)`` if not found.
         """
         for pkg_data in self._ctx.gmcp_data.values():
             if not isinstance(pkg_data, dict):

@@ -241,11 +241,8 @@ def load_font_file(path: pathlib.Path, glyph_offset: int, nglyphs: int) -> tuple
     return name, width, height, glyphs
 
 
-def resolve_source(local_dir: pathlib.Path, url_base: str, cache_name: str, subpath: str) -> pathlib.Path:
-    """Return *subpath* from *local_dir* if it exists, otherwise download to the deps cache."""
-    local_path = local_dir / subpath
-    if local_path.exists():
-        return local_path
+def resolve_source(url_base: str, cache_name: str, subpath: str) -> pathlib.Path:
+    """Download *subpath* to the deps cache and return the cached path."""
     cache_path = DEPS_DIR / cache_name / subpath
     fetch(f"{url_base}/{subpath}", cache_path)
     return cache_path
@@ -259,12 +256,7 @@ def main() -> None:
     fonts: list[tuple[int, str, str, int, int, int, bytes]] = []
 
     int10h_zip = DEPS_DIR / "oldschool_pc_font_pack_v2.2_FULL.zip"
-    local_int10h = pathlib.Path("/tmp/oldschool_pc_fonts.zip")
-    if local_int10h.exists() and not int10h_zip.exists():
-        log.info("Copying %s to deps cache", local_int10h)
-        int10h_zip.write_bytes(local_int10h.read_bytes())
-    else:
-        fetch(INT10H_URL, int10h_zip)
+    fetch(INT10H_URL, int10h_zip)
     with zipfile.ZipFile(int10h_zip) as zf:
         otb_data = zf.read("otb - Bm (linux bitmap)/Bm437_IBM_VGA_8x16.otb")
 
@@ -279,14 +271,11 @@ def main() -> None:
         fonts.append((font_id, name, encoding, 8, 16, 256, raw))
         log.info("  [%2d] %s (%s) - %d bytes", font_id, name, encoding, len(raw))
 
-    hoard_local = PROJECT_ROOT.parent / "hoard-of-bitfonts"
-    amiga_local = pathlib.Path.home() / "Source.Progs" / "amigafonts"
-
     for font_id, rel_path, name, encoding, glyph_off, fn_glyphs in FONT_DEFS:
         if rel_path.startswith("../hoard-of-bitfonts/"):
-            dest = resolve_source(hoard_local, HOARD_BASE, "hoard", rel_path.removeprefix("../hoard-of-bitfonts/"))
+            dest = resolve_source(HOARD_BASE, "hoard", rel_path.removeprefix("../hoard-of-bitfonts/"))
         elif rel_path.startswith("amigafonts/"):
-            dest = resolve_source(amiga_local, AMIGA_BASE, "amiga", rel_path.removeprefix("amigafonts/"))
+            dest = resolve_source(AMIGA_BASE, "amiga", rel_path.removeprefix("amigafonts/"))
         else:
             dest = pathlib.Path(rel_path)
 

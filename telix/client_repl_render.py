@@ -144,7 +144,7 @@ def write_hint(
     :param hint: Plain hint text.
     :param out: Stream to write SGR-encoded bytes to.
     :param bt: blessed Terminal instance.
-    :param progress:``0.0..1.0`` fraction, or ``None`` for plain dim text.
+    :param progress: ``0.0..1.0`` fraction, or ``None`` for plain dim text.
     :param bg_sgr: Optional background SGR prefix (e.g. trigger bg color).
     :param trigger: Use trigger suggestion color instead of normal.
     """
@@ -308,7 +308,7 @@ def vital_color(fraction: float, kind: str) -> str:
     Return an RGB hex color for a vitals bar.
 
     :param fraction: 0.0 (empty) to 1.0 (full).
-    :param kind:``"hp"`` for red-to-green, ``"mp"`` for golden-yellow-to-blue, ``"xp"`` for purple-to-violet.
+    :param kind: ``"hp"`` for red-to-green, ``"mp"`` for golden-yellow-to-blue, ``"xp"`` for purple-to-violet.
     """
     fraction = max(0.0, min(1.0, fraction))
     if kind == "hp":
@@ -503,7 +503,7 @@ def layout_toolbar(slots: list["ToolbarSlot"], cols: int) -> tuple[list["Toolbar
     """
     Fit toolbar slots into *cols* columns by priority.
 
-    :returns:``(left_slots, right_slots)`` ordered by ``display_order``.
+    :returns: ``(left_slots, right_slots)`` ordered by ``display_order``.
     """
     left: list[ToolbarSlot] = []
     right: list[ToolbarSlot] = []
@@ -569,7 +569,7 @@ def fill_toolbar(
     """
     Distribute extra horizontal space across growable slots and separators.
 
-    :returns:``(left_slots, right_slots, sep_width)`` with expanded bars.
+    :returns: ``(left_slots, right_slots, sep_width)`` with expanded bars.
     """
     left_gaps = left_sep_widths(left)
     n_right_seps = max(0, len(right) - 1)
@@ -770,7 +770,7 @@ class ToolbarRenderer:
         """
         Render GMCP vitals toolbar at ``scroll.input_row + 1``.
 
-        :returns:``True`` if a flash is active and the caller should schedule a re-render.
+        :returns: ``True`` if a flash is active and the caller should schedule a re-render.
         """
         if not self.ensure_gmcp_ready():
             return False

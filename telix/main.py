@@ -252,7 +252,7 @@ def pop_server_type() -> str:
     """
     Remove ``--bbs`` or ``--mud`` from ``sys.argv`` and return the type.
 
-    :returns:``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
+    :returns: ``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
     """
     for flag, value in (("--bbs", "bbs"), ("--mud", "mud")):
         if flag in sys.argv[1:]:

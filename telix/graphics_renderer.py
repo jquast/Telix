@@ -28,7 +28,7 @@ def detect_kitty(term) -> bool:
     Check whether *term* supports the Kitty graphics protocol.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns:``True`` if kitty graphics is supported.
+    :returns: ``True`` if kitty graphics is supported.
     """
     try:
         return term.does_kitty_graphics(timeout=0.5)
@@ -41,7 +41,7 @@ def detect_sixel(term) -> bool:
     Check whether *term* supports sixel graphics.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns:``True`` if sixel graphics is supported.
+    :returns: ``True`` if sixel graphics is supported.
     """
     try:
         return term.does_sixel(timeout=0.5)
@@ -63,7 +63,7 @@ def detect_graphics_protocol(term) -> str | None:
     to test sixel even when kitty is available.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns:``"kitty"``, ``"sixel"``, or ``None`` if neither is supported.
+    :returns: ``"kitty"``, ``"sixel"``, or ``None`` if neither is supported.
     """
     if os.environ.get("TELIX_FORCE_SIXEL") == "1":
         if detect_sixel(term):
@@ -90,7 +90,7 @@ def _quantize_colors(colors: np.ndarray, n_colors: int) -> tuple[np.ndarray, np.
 
     :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
     :param n_colors: Maximum palette size.
-    :returns:``(indexed, palette)`` tuple where *indexed* is ``(H, W)`` uint8 and *palette* is ``(N, 3)`` float32.
+    :returns: ``(indexed, palette)`` tuple where *indexed* is ``(H, W)`` uint8 and *palette* is ``(N, 3)`` float32.
     """
     levels = 2
     while (levels + 1) ** 3 <= n_colors and levels < 6:

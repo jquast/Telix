@@ -433,7 +433,7 @@ async def autodiscover(
     :param ctx: Session context with room graph and session attributes.
     :param log: Logger.
     :param limit: Maximum number of exits to explore.
-    :param strategy:``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
+    :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
     :param noreply: Completely disable the trigger engine during the walk.
     :param room_change_cmd: Semicolon-separated commands to send in each newly discovered room.
     """

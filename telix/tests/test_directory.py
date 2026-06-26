@@ -104,7 +104,7 @@ class TestLoadFavorites:
         entries = load_favorites()
         by_name = {e["name"]: e for e in entries}
         boot_factory = by_name["Boot Factory BBS"]
-        assert boot_factory["echo_mode"] == "remote"
+        assert boot_factory.get("echo_mode") is None
         area52 = by_name["Area 52 BBS"]
         assert area52.get("echo_mode") is None
 
@@ -171,7 +171,7 @@ class TestDirectoryToSessions:
     def test_favorites_echo_mode_flows_to_config(self) -> None:
         sessions = directory_to_sessions()
         cfg = sessions["bfbbs.no-ip.com:8888"]
-        assert cfg.echo_mode == "remote"
+        assert cfg.echo_mode == "auto"
         area52 = sessions["area52.tk:5200"]
         assert area52.echo_mode == "auto"
 

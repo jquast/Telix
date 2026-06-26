@@ -57,9 +57,9 @@ def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
     """
     Compute local echo flag from echo mode and server's WILL ECHO state.
 
-    :param echo_mode:``"auto"``, ``"local"``, or ``"remote"``
-    :param will_echo:``True`` when server has negotiated WILL ECHO
-    :returns:``True`` if client should echo input locally
+    :param echo_mode: ``"auto"``, ``"local"``, or ``"remote"``
+    :param will_echo: ``True`` when server has negotiated WILL ECHO
+    :returns: ``True`` if client should echo input locally
     """
     if echo_mode == "local":
         return True

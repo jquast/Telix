@@ -186,7 +186,7 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
     :param when: Condition dict, e.g. ``{"hp%": ">50"}`` (percentage), ``{"hp": ">500"}`` (raw value),
         ``{"Char.Guild.Stats.Water%": ">50"}`` (dotted path), or ``{"Adrenaline": ">100"}`` (captured variable).
     :param ctx: Session context with ``gmcp_data`` and ``captures`` attributes.
-    :returns:``(ok, failure_description)`` -- *ok* is ``False`` when a condition is not met; *failure_description*
+    :returns: ``(ok, failure_description)`` -- *ok* is ``False`` when a condition is not met; *failure_description*
         explains which.
     """
     if not when:
@@ -513,7 +513,7 @@ class SearchBuffer:
 
         :param text: Raw server output (may contain ANSI sequences).
         :param echo_filter: Set of sent command strings to suppress.
-        :returns:``True`` if new complete lines were added.
+        :returns: ``True`` if new complete lines were added.
         """
         stripped = wcwidth.strip_sequences(text)
         if not stripped:
@@ -717,7 +717,7 @@ class TriggerEngine:
         """
         Return and clear the last condition failure.
 
-        :returns:``(rule_index_1based, description)`` if last match failed a condition, otherwise ``None``.
+        :returns: ``(rule_index_1based, description)`` if last match failed a condition, otherwise ``None``.
         """
         val = self.condition_failed
         self.condition_failed = None
@@ -1032,7 +1032,7 @@ class TriggerEngine:
         With the simplified exclusive model (all rules exclusive, cleared by reply-chain completion), this always
         returns ``False``.  Kept for API compatibility with travel code.
 
-        :returns:``True`` if exclusive was cleared by timeout.
+        :returns: ``True`` if exclusive was cleared by timeout.
         """
         return False
 
