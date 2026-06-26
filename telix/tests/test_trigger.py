@@ -1320,6 +1320,7 @@ async def test_trigger_engine_stamps_last_fired():
         writer=types.SimpleNamespace(write=lambda s: None),
         gmcp_data={},
         walk=types.SimpleNamespace(active_command=None, active_command_time=0.0, randomwalk_active=False),
+        commands=session_context.CommandState(),
     )
     rule = TriggerRule(pattern=re.compile("hello"), reply="world;")
     engine = TriggerEngine(rules=[rule], ctx=ctx, log=logging.getLogger("test"))
@@ -1527,7 +1528,7 @@ async def test_until_progress_cleared_on_timeout():
 async def test_status_text_masks_send_when_will_echo():
     """status_text shows '(masked)' instead of the command when will_echo is True."""
     sent: list[str] = []
-    ctx = make_status_ctx(write=sent.append, will_echo=True)
+    ctx = make_status_ctx(with_commands=True, write=sent.append, will_echo=True)
     rules = [TriggerRule(pattern=re.compile(r"Password:"), reply="`delay 20ms`;secret")]
     engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
     engine.feed("Password:\n")
