@@ -36,7 +36,7 @@ Dependencies
 ------------
 
 textual_, blessed_, and wcwidth_ is used for the User Interface.  telnetlib3_, asyncssh_,
-websockets_ for networking.  numpy_ is used for graphics rendering of retrocomputing fonts.
+websockets_ for networking.
 
 wcwidth_ is depended on by each of Telix, telnetlib3_, blessed_, and rich_ for string operations
 related to measuring the width of strings containing sequences and complex unicode like emojis.
@@ -49,6 +49,8 @@ integrated with by Telix.
 textual_ is used for all complex TUIs, which depends on its core library rich_.  For Windows
 systems, jinxed_ is used by both Telix and telnetlib3_ for msvcrt keyboard routines.  numpy_
 provides vectorized image processing for the sixel and kitty graphics renderers.
+
+numpy_ and pyte_ is used for graphics rendering of retrocomputing fonts.
 
 File overview
 -------------
@@ -380,12 +382,123 @@ Data arriving **before** the REPL event loop starts is buffered in
 the telnet reader's internal buffer and consumed by the first
 ``read()`` call in ``read_server``.
 
+Graphics rendering pipeline
+---------------------------
 
+When ``--graphics-font auto`` is active and the terminal supports kitty or sixel, the raw-mode output
+path uses ``GraphicsWriter`` (``graphics_writer.py``) instead of ``ColorFilteredWriter``.
+
+``GraphicsWriter`` decodes server output, feeds it through a pyte_ virtual terminal, and renders the
+result **as a pixel image** encoded in the terminal's native graphics protocol (kitty or sixel).
+This can be thought of as "tmux for retrocomputing".
+
+Input stage
+~~~~~~~~~~~
+
+1. **Raw bytes** from the server arrive via ``write(data: bytes)``, called synchronously by
+   telnetlib3's ``_raw_event_loop``.
+
+2. **Pre-processing**: Form Feed bytes (``0x0C``) are replaced with clear-screen sequences if the
+   ``ff-clears-screen`` option is on.  A cursor-home sequence is injected before clear-screen if
+   ``clear-homes-cursor`` is on (CTerm compatibility).
+
+3. **Decoding**: bytes are re-encoded per the active font's wire encoding (e.g. ``cp437``,
+   ``iso-8859-1``) to map server bytes to font glyph indices.
+
+4. **Font switching**: SyncTERM ``CSI Ps1 ; Ps2 SP D`` sequences are intercepted.
+
+   The font and wire encoding switch to the requested font ID. ``CSI`` sequences with intermediate
+   bytes that pyte_ cannot handle are stripped, like DCS terminal queries (``XTGETTCAP``).
+
+5. **Color filter**: ANSI SGR color codes are translated through the configured hardware palette
+   (VGA, xterm, etc.) into 24-bit RGB values using ``color_filter.py``.  This ensures the colors
+   displayed match the era-accurate palette the BBS artist intended, regardless of the terminal's
+   color palette, which is very often customized as something else.
+
+Virtual terminal
+~~~~~~~~~~~~~~~~
+
+6. pyte_: the cleaned text is fed to an in-memory ``pyte.Screen`` (80x25 by default, or forced
+   size via ``--graphics-columns`` / ``--graphics-rows``).  The screen maintains per-cell character
+   and color attributes with full DEC VT100/VT220 emulation.
+
+   ``BBSScreen`` (a ``pyte.Screen`` subclass) applies two BBS compatibility adjustments: DECAWM
+   (auto-wrap) is permanently disabled to match raw BBS connections sends ``CR+LF`` as line endings.
+   With DECAWM on, pyte injects extra line breaks causing doubled spacing.  ``ED 2`` (Erase in
+   Display) also homes the cursor, matching SyncTERM/CTerm behavior of BBS software.
+
+Rendering
+~~~~~~~~~
+
+The rendering pipeline contains many performance enhancements to improve latency and reduce CPU
+usage. It is also required to create a "software cursor" when using the graphics pipeline, and,
+special attention to preference of *integer* ("non-blurry") scaling.
+
+7. **Diff**: only cells in pyte's ``screen.dirty`` set are re-rendered.  A full redraw is forced
+   when the font changes, the terminal resizes, or ``_needs_full_redraw`` is set.
+
+8. **Glyph cache**: each font's bitmap data is pre-rasterized into a ``(nglyphs, height, width)``
+   numpy boolean array.  The cache is built once per font switch.
+
+9. **Pixel buffer**: for each changed cell, the character's glyph index is resolved via
+   ``_char_to_code()`` (mapping from the font's encoding back to a byte index).  The glyph bitmap
+   is stamped into a ``(rows * fh, columns * fw, 3)`` numpy float32 array using the cell's
+   foreground and background RGB colors.  Colors are resolved through ``pyte_color_to_rgb()`` which
+   handles named colors, xterm-256, and #RRGGBB values.
+
+10. **Cursor** -- the block cursor is drawn by inverting (``1.0 - color``) the pixel region at the
+    screen cursor position.  The cursor shape (block, underline, I-beam) is parsed from DECSCUSR
+    sequences stripped from the text stream.  Blink timing is managed by a repeating 500ms timer;
+    the cursor is visible during the first half of each cycle and hidden during the second half.
+
+11. **Scaling** -- if ``--graphics-columns`` / ``--graphics-rows`` specify a cell pixel size larger
+    than the font's native dimensions, the pixel buffer is integer-scaled via ``np.repeat``.
+
+Protocol encoding
+~~~~~~~~~~~~~~~~~
+
+Kitty graphics is preferred when a terminal supports both Kitty and Sixel. Although C bindings to
+"libsixel" could significantly reduce CPU usage, a numpy-based solution is used for sixel to
+maximize compatibility and compilation troubles. kitty graphics has less overhead because the
+encoding is very straight-forward.
+
+12. **Kitty** -- the pixel array is encoded as an APC sequence (``ESC _ G``).  RGBA data is
+    deflate-compressed and base64-encoded in 4096-byte chunks.  The frame specifies
+    ``a=T,f=32,s=<w>,v=<h>`` (RGBA transmission, 32-bit format).  The entire frame is wrapped in
+    DEC 2026 synchronized output brackets (``ESC [?2026h`` / ``ESC [?2026l``) for tear-free
+    display.
+
+13. **Sixel** -- the pixel array is quantized per-row into color registers and transmitted as a
+    DCS sequence (``ESC P q``).  Each sixel band encodes a row of pixels; repeated pixels use
+    run-length encoding.  DEC 2026 sync brackets are NOT used with sixel because they produce
+    blank output in foot and xterm.  Instead, each frame is preceded by a clear-screen sequence
+    (``ESC [H ESC [2J``).
+
+Output bridge
+~~~~~~~~~~~~~
+
+14. **Sync-to-async** -- ``write()`` runs in telnetlib3's synchronous ``_raw_event_loop``.  Rendering
+    is dispatched to the asyncio event loop via ``loop.create_task(self._render_frame())``.
+    ``_render_frame()`` calls ``_do_render()`` (builds the pixel buffer and encodes the protocol
+    sequence) then ``await self.inner.drain()`` to flush output atomically.
+
+15. **Rate limiting** -- renders are capped at ~30 fps (``MIN_RENDER_INTERVAL = 0.033``).  Multiple
+    ``write()`` calls within the interval coalesce dirty cells into a single frame.  If the
+    ``_rendering`` guard is already set, subsequent writes skip scheduling and let the inflight
+    render complete.
+
+Encoding-only path
+~~~~~~~~~~~~~~~~~~
+
+When graphics font is not active but a color palette is configured, raw-mode output uses
+``ColorFilteredWriter`` -- a simpler writer that applies the color filter and encoding translation
+directly to server bytes without the pyte virtual terminal or graphics rendering stages.
 
 .. _telnetlib3: https://github.com/jquast/telnetlib3
 .. _blessed: https://github.com/jquast/blessed
 .. _wcwidth: https://github.com/jquast/wcwidth
 .. _textual: https://github.com/Textualize/textual
+.. _pyte: https://github.com/selectel/pyte
 .. _rich: https://github.com/Textualize/rich
 .. _pytest: https://pytest.org
 .. _ruff: https://docs.astral.sh/ruff/

@@ -231,16 +231,24 @@ def load_font_file(path: pathlib.Path, glyph_offset: int, nglyphs: int) -> tuple
     name = _strip_size_suffix(font.name)
 
     glyph_dict: dict[int, bytes] = {}
-    for glyph in font.glyphs:
-        cp_bytes = glyph.codepoint.value
-        if len(cp_bytes) == 1:
-            glyph_dict[cp_bytes[0]] = glyph.as_bytes()
+    for i, glyph in enumerate(font.glyphs):
+        glyph_dict[i] = glyph.as_bytes()
 
     glyphs: list[bytes] = []
     for i in range(glyph_offset, glyph_offset + nglyphs):
         glyphs.append(glyph_dict.get(i, b"\x00" * height))
 
     return name, width, height, glyphs
+
+
+def resolve_source(local_dir: pathlib.Path, url_base: str, cache_name: str, subpath: str) -> pathlib.Path:
+    """Return *subpath* from *local_dir* if it exists, otherwise download to the deps cache."""
+    local_path = local_dir / subpath
+    if local_path.exists():
+        return local_path
+    cache_path = DEPS_DIR / cache_name / subpath
+    fetch(f"{url_base}/{subpath}", cache_path)
+    return cache_path
 
 
 def main() -> None:
@@ -276,22 +284,9 @@ def main() -> None:
 
     for font_id, rel_path, name, encoding, glyph_off, fn_glyphs in FONT_DEFS:
         if rel_path.startswith("../hoard-of-bitfonts/"):
-            subpath = rel_path[len("../hoard-of-bitfonts/"):]
-            local_dest = hoard_local / subpath
-            if local_dest.exists():
-                dest = local_dest
-            else:
-                dest = DEPS_DIR / "hoard" / subpath
-                fetch(f"{HOARD_BASE}/{subpath}", dest)
+            dest = resolve_source(hoard_local, HOARD_BASE, "hoard", rel_path.removeprefix("../hoard-of-bitfonts/"))
         elif rel_path.startswith("amigafonts/"):
-            subpath = rel_path[len("amigafonts/"):]
-            filename = pathlib.Path(rel_path).name
-            local_dest = amiga_local / subpath
-            if local_dest.exists():
-                dest = local_dest
-            else:
-                dest = DEPS_DIR / "amiga" / filename
-                fetch(f"{AMIGA_BASE}/{subpath}", dest)
+            dest = resolve_source(amiga_local, AMIGA_BASE, "amiga", rel_path.removeprefix("amigafonts/"))
         else:
             dest = pathlib.Path(rel_path)
 
