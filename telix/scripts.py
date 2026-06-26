@@ -477,7 +477,7 @@ class ScriptContext:
         Wait for the next GA/EOR signal from the server.
 
         :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if prompt arrived within *timeout*.
+        :returns: Boolean ``True`` if prompt arrived within *timeout*.
         """
         return await self._buf.wait_for_prompt(timeout)
 
@@ -487,7 +487,7 @@ class ScriptContext:
 
         :param n: Number of prompts to wait for.
         :param timeout: Timeout in seconds for *each* prompt, or ``None`` to wait indefinitely.
-        :returns: ``True`` if all prompts arrived; ``False`` if any timed out.
+        :returns: Boolean ``True`` if all prompts arrived; ``False`` if any timed out.
         """
         for _ in range(n):
             if not await self._buf.wait_for_prompt(timeout):

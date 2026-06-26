@@ -338,7 +338,7 @@ class RoomStore:
 
         :param src: Source room number.
         :param blocked: Room numbers to treat as impassable.
-        :returns: ``{room_num: distance}`` for all reachable rooms.
+        :returns: dict ``{room_num: distance}`` for all reachable rooms.
         """
         known = self.room_nums()
         if src not in known:
@@ -435,8 +435,8 @@ class RoomStore:
         :param src: Source room number to search from.
         :param limit: Maximum number of branches to return.
         :param blocked: Room numbers to treat as impassable.
-        :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
-        :returns: ``[(gateway_room_num, direction, target_num), ...]`` sorted by BFS distance from *src*.
+        :param strategy: search order ``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
+        :returns: list ``[(gateway_room_num, direction, target_num), ...]`` sorted by BFS distance from *src*.
         """
         if not self.has_room(src):
             return []
