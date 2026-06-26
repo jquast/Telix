@@ -89,7 +89,7 @@ class SSHTelix(asyncssh.SSHClient):
         :param name: Challenge name (displayed for context).
         :param instructions: Instructions from the server.
         :param lang: Language tag (unused).
-        :param prompts: List of ``(prompt_text, echo)`` pairs.
+        :param prompts: List of (prompt_text, echo) pairs.
         :returns: List of responses in the same order as *prompts*.
         """
         if instructions:
@@ -141,11 +141,11 @@ async def run_ssh_client(
     :param port: SSH port (default 22).
     :param username: Login username; empty string uses the system login name.
     :param key_file: Path to a private key file; empty string uses password auth.
-    :param term_type: Terminal type string (e.g. ``"xterm-256color"``).
-    :param shell: Async callable ``shell(reader, writer)`` -- the REPL entry point.
-    :param color_args: Parsed color/palette CLI options, or ``None`` to skip color setup.
-    :param encoding: Wire byte decoding (e.g. ``"utf-8"``, ``"iso-8859-1"``).
-    :param encoding_errors: Error handling for the wire decoder (default ``"replace"``).
+    :param term_type: Terminal type string (e.g. "xterm-256color").
+    :param shell: Async callable shell(reader, writer) -- the REPL entry point.
+    :param color_args: Parsed color/palette CLI options, or None to skip color setup.
+    :param encoding: Wire byte decoding (e.g. "utf-8", "iso-8859-1").
+    :param encoding_errors: Error handling for the wire decoder (default "replace").
     """
     reader = ssh_transport.SSHReader()
     writer = ssh_transport.SSHWriter(peername=(host, port))

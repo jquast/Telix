@@ -60,10 +60,10 @@ class DispatchHooks:
     :param wait_fn: Async callable to wait for GA/EOR prompt.
     :param send_fn: Callable that sends a command string to the server.
     :param echo_fn: Callable that echoes a command for display.
-    :param on_status: Callback to set a status string, or ``None``.
-    :param on_progress: Callback ``(start, deadline)`` to set progress bar, or ``None``.
-    :param on_progress_clear: Callback to clear the progress bar, or ``None``.
-    :param on_activity: Callback to signal activity (e.g. toolbar refresh), or ``None``.
+    :param on_status: Callback to set a status string, or None.
+    :param on_progress: Callback (start, deadline) to set progress bar, or None.
+    :param on_progress_clear: Callback to clear the progress bar, or None.
+    :param on_activity: Callback to signal activity (e.g. toolbar refresh), or None.
     :param prompt_ready: Event to clear before waiting for the next prompt.
     """
 
@@ -86,7 +86,7 @@ class ExpandedCommands(typing.NamedTuple):
     Result of :func:`expand_commands_ex`.
 
     :param commands: Flat list of individual commands.
-    :param immediate_set: Indices of commands whose preceding separator was ``|`` (send immediately, no GA/EOR wait).
+    :param immediate_set: Indices of commands whose preceding separator was | (send immediately, no GA/EOR wait).
     """
 
     commands: list[str]
@@ -207,7 +207,7 @@ def get_search_buffer(ctx: "TelixSessionContext") -> typing.Any | None:
     *is* ``self`` and ``ctx.trigger_engine`` points to it).
 
     :param ctx: Session context.
-    :returns: The engine's :class:`SearchBuffer`, or ``None``.
+    :returns: The engine's :class:`SearchBuffer`, or None.
     """
     engine = ctx.triggers.engine
     if engine is not None:
@@ -228,7 +228,7 @@ async def dispatch_one(
     :param sent_count: Number of plain sends already issued.
     :param immediate_set: Indices of commands that skip GA/EOR wait.
     :param hooks: Caller-specific callbacks.
-    :param mask_send: If ``True``, mask plain command text in status.
+    :param mask_send: If True, mask plain command text in status.
     :returns: :class:`StepResult` indicating what happened.
     """
     from .trigger import check_condition
@@ -410,7 +410,7 @@ def collapse_runs(commands: list[str], start: int = 0) -> list[tuple[str, int, i
 
     :param commands: Full command list.
     :param start: Index to start collapsing from (earlier entries are skipped).
-    :returns: List of ``(display_text, start_idx, end_idx)`` tuples.
+    :returns: List of (display_text, start_idx, end_idx) tuples.
     """
     if start >= len(commands):
         return []
@@ -455,7 +455,7 @@ def render_active_command(
 
     :param flash_elapsed: Unused (kept for API compatibility).
     :param hint: Right-aligned dim hint text (e.g. trigger status).
-    :param progress: Until timer progress ``0.0..1.0``, or ``None``.
+    :param progress: Until timer progress 0.0..1.0, or None.
     :param base_bg_sgr: Background SGR for the input row.
     :param trigger: Use trigger suggestion color for hints.
     :returns: Display width of the rendered command text.
@@ -507,7 +507,7 @@ def render_command_queue(
 
     :param flash_elapsed: Unused (kept for API compatibility).
     :param hint: Right-aligned dim hint text (e.g. trigger status).
-    :param progress: Until timer progress ``0.0..1.0``, or ``None``.
+    :param progress: Until timer progress 0.0..1.0, or None.
     :param base_bg_sgr: Background SGR for the input row.
     :param trigger: Use trigger suggestion color for hints.
     :returns: Total display width of all rendered fragments.
@@ -800,7 +800,7 @@ async def execute_macro_commands(text: str, ctx: "TelixSessionContext", log: log
     dispatched via :func:`dispatch_one`, and plain commands are sent to
     the server with GA/EOR pacing (or immediately if ``|`` separated).
 
-    :param text: Raw macro text with ``;``/``|`` separators.
+    :param text: Raw macro text with ;/| separators.
     :param ctx: Session context.
     :param log: Logger.
     """

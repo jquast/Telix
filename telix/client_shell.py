@@ -57,9 +57,9 @@ def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
     """
     Compute local echo flag from echo mode and server's WILL ECHO state.
 
-    :param echo_mode: ``"auto"``, ``"local"``, or ``"remote"``
-    :param will_echo: ``True`` when server has negotiated WILL ECHO
-    :returns: ``True`` if client should echo input locally
+    :param echo_mode: "auto", "local", or "remote"
+    :param will_echo: True when server has negotiated WILL ECHO
+    :returns: True if client should echo input locally
     """
     if echo_mode == "local":
         return True
@@ -216,7 +216,7 @@ class ClearHomesWriter:
 
     Used in raw mode without a color filter when ``clear_homes_cursor`` or ``ff_clears_screen`` is enabled.
 
-    :param inner: The underlying ``asyncio.StreamWriter``.
+    :param inner: The underlying asyncio.StreamWriter.
     :param clear_homes_cursor: Inject HOME before lone ED 2 sequences.
     :param ff_clears_screen: Replace Form Feed with HOME + ED 2.
     """
@@ -246,8 +246,8 @@ class ColorFilteredWriter:
     Used in raw-mode paths where :func:`telnetlib3.client_shell._raw_event_loop` writes decoded server text as bytes
     directly to stdout, bypassing the REPL's filter step.
 
-    :param inner: The underlying ``asyncio.StreamWriter``.
-    :param ctx: Session context carrying ``color_filter`` and ``erase_eol``.
+    :param inner: The underlying asyncio.StreamWriter.
+    :param ctx: Session context carrying color_filter and erase_eol.
     :param encoding: Character encoding for decoding bytes before filtering.
     """
 

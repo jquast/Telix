@@ -94,7 +94,7 @@ class TabbedEditorScreen(textual.screen.Screen[None]):
         """
         Initialize tabbed editor from a parameters dict.
 
-        :param params: Dict with keys for each pane's constructor args, plus ``initial_tab``, ``initial_channel``, and
+        :param params: Dict with keys for each pane's constructor args, plus initial_tab, initial_channel, and
             ``hide_globals``.
         """
         super().__init__()
@@ -920,7 +920,7 @@ def run_autodiscover_dialog(
     Launch the autodiscover dialog in the current (worker) thread.
 
     :param result_file: Path to the JSON file where the result is written.
-    :param default_strategy: Initial strategy selection (``"bfs"`` or ``"dfs"``).
+    :param default_strategy: Initial strategy selection ("bfs" or "dfs").
     :param default_room_change_cmd: Initial room change command string.
     :param default_triggers: Initial triggers toggle state.
     :param default_command_delay: Initial command delay in seconds.

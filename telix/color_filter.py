@@ -558,7 +558,7 @@ class PetsciiColorFilter:
         """
         Flush buffered state.
 
-        :returns: Always ``""``.
+        :returns: Always "".
         """
         return ""
 
@@ -658,6 +658,6 @@ class AtasciiControlFilter:
         """
         Flush buffered state.
 
-        :returns: Always ``""``.
+        :returns: Always "".
         """
         return ""

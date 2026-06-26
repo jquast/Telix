@@ -46,7 +46,7 @@ def _detect_terminal_colors() -> "str | None":
     the framework. Stores background/foreground results in :envvar:`TELIX_DETECTED_BG` and :envvar:`TELIX_DETECTED_FG`
     (format ``R,G,B``) so subprocess connections inherit them without re-querying.
 
-    :returns: Detected terminal software name, or ``None`` if not detected.
+    :returns: Detected terminal software name, or None if not detected.
     """
     import blessed
 
@@ -252,7 +252,7 @@ def pop_server_type() -> str:
     """
     Remove ``--bbs`` or ``--mud`` from ``sys.argv`` and return the type.
 
-    :returns: ``"bbs"``, ``"mud"``, or ``""`` if neither flag was given.
+    :returns: "bbs", "mud", or "" if neither flag was given.
     """
     for flag, value in (("--bbs", "bbs"), ("--mud", "mud")):
         if flag in sys.argv[1:]:
@@ -267,7 +267,7 @@ def get_argv_value(flag: str, default: str) -> str:
 
     Supports both ``--flag=value`` and ``--flag value`` forms.
 
-    :param flag: The flag name including dashes (e.g. ``"--term"``).
+    :param flag: The flag name including dashes (e.g. "--term").
     :param default: Value to return if the flag is not found.
     """
     for i, arg in enumerate(sys.argv[1:], 1):

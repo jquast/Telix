@@ -197,7 +197,7 @@ def detect_graphics_caps() -> tuple[bool, bool]:
 
     Results are cached in the module-level ``_GRAPHICS_CAPS`` tuple.
 
-    :returns: ``(has_kitty, has_sixel)`` tuple.
+    :returns: (has_kitty, has_sixel) tuple.
     """
     global _GRAPHICS_CAPS
     if _GRAPHICS_CAPS is not None:
@@ -285,10 +285,10 @@ def navigate_from_button(
     """
     Handle arrow navigation when a button in the column is focused.
 
-    :param key: The key name (e.g. ``"up"``, ``"down"``, ``"right"``).
+    :param key: The key name (e.g. "up", "down", "right").
     :param focused: The currently focused widget.
     :param buttons: Ordered list of buttons in the column.
-    :param target: Widget to focus on ``"right"`` press.
+    :param target: Widget to focus on "right" press.
     :param screen: The screen owning the widgets.
     :param event: The key event to call :meth:`prevent_default` on.
     """
@@ -811,8 +811,8 @@ def terminal_cleanup(clear_screen: bool = True) -> str:
     """
     Return the terminal cleanup sequence.
 
-    :param clear_screen: When ``True``, append cursor-home and clear-screen sequences. Set to ``False`` when the caller
-        wants the previous output (e.g. a disconnect message) to remain visible.
+    :param clear_screen: When True, append cursor-home and clear-screen sequences. Set to False when the caller wants
+        the previous output (e.g. a disconnect message) to remain visible.
     """
     if clear_screen:
         return TERMINAL_CLEANUP + "\x1b[H\x1b[2J"

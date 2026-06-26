@@ -14,7 +14,7 @@ def get_help(topic: str) -> str:
     """
     Return combined help text for a TUI help topic.
 
-    :param str topic: One of ``"macro"``, ``"trigger"``, ``"highlight"``, ``"room"``, or ``"keybindings"``.
+    :param str topic: One of "macro", "trigger", "highlight", "room", or "keybindings".
     :rtype: str
     """
     commands = read_topic("commands")

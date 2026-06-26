@@ -91,7 +91,7 @@ def activity_hint(engine: "trigger_mod.TriggerEngine | None", cols: int = 0) -> 
     truncated with an ellipsis if necessary so that ``[return to cancel]`` is
     always fully visible at a consistent right-aligned position.
 
-    :returns: Hint string like ``"#3 | until /pat/  [return to cancel]"``,
+    :returns: Hint string like "#3 | until /pat/  [return to cancel]",
         or ``""`` when there is nothing to display.
     """
     if engine is None:
@@ -120,7 +120,7 @@ def until_progress(engine: "trigger_mod.TriggerEngine | None") -> float | None:
     """
     Return the until timer progress fraction, or ``None``.
 
-    :returns: Float in ``0.0..1.0`` when an until/untils timer is active.
+    :returns: Float in 0.0..1.0 when an until/untils timer is active.
     """
     if engine is None:
         return None
@@ -144,7 +144,7 @@ def write_hint(
     :param hint: Plain hint text.
     :param out: Stream to write SGR-encoded bytes to.
     :param bt: blessed Terminal instance.
-    :param progress: ``0.0..1.0`` fraction, or ``None`` for plain dim text.
+    :param progress: 0.0..1.0 fraction, or None for plain dim text.
     :param bg_sgr: Optional background SGR prefix (e.g. trigger bg color).
     :param trigger: Use trigger suggestion color instead of normal.
     """
@@ -292,7 +292,7 @@ def fmt_value(n: int) -> str:
     Format a numeric value with k/m suffixes for compact display.
 
     :param n: Integer value.
-    :returns: Formatted string, e.g. ``1.2k``, ``3.5m``.
+    :returns: Formatted string, e.g. 1.2k, 3.5m.
     """
     if n >= 1_000_000:
         v = n / 1_000_000
@@ -308,7 +308,7 @@ def vital_color(fraction: float, kind: str) -> str:
     Return an RGB hex color for a vitals bar.
 
     :param fraction: 0.0 (empty) to 1.0 (full).
-    :param kind: ``"hp"`` for red-to-green, ``"mp"`` for golden-yellow-to-blue, ``"xp"`` for purple-to-violet.
+    :param kind: "hp" for red-to-green, "mp" for golden-yellow-to-blue, "xp" for purple-to-violet.
     """
     fraction = max(0.0, min(1.0, fraction))
     if kind == "hp":
@@ -388,7 +388,7 @@ def vital_bar(
     characters bookend the bar for a rounded appearance.
 
     :param flash_elapsed: Seconds since flash start; negative means no flash.
-    :param color_override: If set, use this ``#rrggbb`` color instead of computing from *kind*.
+    :param color_override: If set, use this #rrggbb color instead of computing from *kind*.
     """
     try:
         cur = int(current)
@@ -503,7 +503,7 @@ def layout_toolbar(slots: list["ToolbarSlot"], cols: int) -> tuple[list["Toolbar
     """
     Fit toolbar slots into *cols* columns by priority.
 
-    :returns: ``(left_slots, right_slots)`` ordered by ``display_order``.
+    :returns: (left_slots, right_slots) ordered by display_order.
     """
     left: list[ToolbarSlot] = []
     right: list[ToolbarSlot] = []
@@ -569,7 +569,7 @@ def fill_toolbar(
     """
     Distribute extra horizontal space across growable slots and separators.
 
-    :returns: ``(left_slots, right_slots, sep_width)`` with expanded bars.
+    :returns: (left_slots, right_slots, sep_width) with expanded bars.
     """
     left_gaps = left_sep_widths(left)
     n_right_seps = max(0, len(right) - 1)
@@ -703,7 +703,7 @@ class XPTracker(VitalTracker):
         """
         Compute ETA fragments from XP history.
 
-        :returns: Fragment list for the ETA slot, or ``None`` if unavailable.
+        :returns: Fragment list for the ETA slot, or None if unavailable.
         """
         if len(self.history) < 2 or maxxp is None or self.last_value is None:
             return None
@@ -770,7 +770,7 @@ class ToolbarRenderer:
         """
         Render GMCP vitals toolbar at ``scroll.input_row + 1``.
 
-        :returns: ``True`` if a flash is active and the caller should schedule a re-render.
+        :returns: True if a flash is active and the caller should schedule a re-render.
         """
         if not self.ensure_gmcp_ready():
             return False
@@ -1049,7 +1049,7 @@ class ToolbarRenderer:
         Bars with no known maximum (``maxval`` is ``None`` or zero) are
         suppressed -- a progress bar without a denominator is meaningless.
 
-        :returns: ``True`` if a flash animation is active.
+        :returns: True if a flash animation is active.
         """
         try:
             mx = int(maxval) if maxval is not None else 0

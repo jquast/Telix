@@ -230,7 +230,7 @@ class BaseScreenWriter:
 
     Parses server output, manages cursor state, and dispatches rendering to subclass hooks.
 
-    :param inner: The underlying ``asyncio.StreamWriter`` (real stdout).
+    :param inner: The underlying asyncio.StreamWriter (real stdout).
     :param ctx: Session context with display configuration.
     :param encoding: Wire encoding override.
     :param columns: Virtual terminal columns (default 80).
@@ -426,9 +426,9 @@ class GraphicsWriter(BaseScreenWriter):
     Each virtual character cell is rasterized at the font's native pixel dimensions and transmitted as a terminal
     graphics frame. The terminal scales it to fit.
 
-    :param inner: The underlying ``asyncio.StreamWriter`` (real stdout).
+    :param inner: The underlying asyncio.StreamWriter (real stdout).
     :param ctx: Session context with graphics configuration.
-    :param protocol: Graphics protocol to use (``"kitty"`` or ``"sixel"``).
+    :param protocol: Graphics protocol to use ("kitty" or "sixel").
     :param encoding: Wire encoding override.
     :param columns: Virtual terminal columns (default 80).
     :param rows: Virtual terminal rows (default 25).

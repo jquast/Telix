@@ -183,11 +183,11 @@ def check_condition(when: dict[str, str], ctx: "TelixSessionContext") -> tuple[b
     Keys may be bare names (``"hp%"``, ``"Water"``) which are searched across all GMCP packages, or fully-qualified
     dotted paths (``"Char.Guild.Stats.Water%"``).
 
-    :param when: Condition dict, e.g. ``{"hp%": ">50"}`` (percentage), ``{"hp": ">500"}`` (raw value),
+    :param when: Condition dict, e.g. {"hp%": ">50"} (percentage), {"hp": ">500"} (raw value),
         ``{"Char.Guild.Stats.Water%": ">50"}`` (dotted path), or ``{"Adrenaline": ">100"}`` (captured variable).
-    :param ctx: Session context with ``gmcp_data`` and ``captures`` attributes.
-    :returns: ``(ok, failure_description)`` -- *ok* is ``False`` when a condition is not met; *failure_description*
-        explains which.
+    :param ctx: Session context with gmcp_data and captures attributes.
+    :returns: (ok, failure_description) -- *ok* is False when a condition is not met; *failure_description* explains
+        which.
     """
     if not when:
         return True, ""
@@ -246,10 +246,10 @@ class TriggerRule:
     completes.
 
     :param pattern: Compiled regex pattern.
-    :param reply: Reply template with ``\1``/``\2`` group refs, ``;``/``|`` command separators, repeat prefixes
-        (``3e``), delay segments, ``\`when HP%>=N\```, and ``\`until [T] pat\```.
+    :param reply: Reply template with \1/\2 group refs, ;/| command separators, repeat prefixes (``3e``), delay
+        segments, ``\`when HP%>=N\```, and ``\`until [T] pat\```.
     :param always: Match even while another rule's reply chain is active.
-    :param when: Vital conditions that must be met for the rule to fire, e.g. ``{"HP%": ">50", "MP%": ">30"}``.
+    :param when: Vital conditions that must be met for the rule to fire, e.g. {"HP%": ">50", "MP%": ">30"}.
     :param immediate: Fire without waiting for prompt/GA/EOR.
     :param case_sensitive: Match the pattern case-sensitively.
     """
@@ -308,7 +308,7 @@ def load_triggers(path: str, session_key: str) -> list[TriggerRule]:
     The file is keyed by session (``"host:port"``).  Each value is an object with an ``"triggers"`` list.
 
     :param path: Path to the triggers JSON file.
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     :returns: List of :class:`TriggerRule` instances.
     :raises FileNotFoundError: When *path* does not exist.
     :raises ValueError: When JSON structure is invalid or regex fails.
@@ -325,7 +325,7 @@ def save_triggers(path: str, rules: list[TriggerRule], session_key: str) -> None
 
     :param path: Path to the triggers JSON file.
     :param rules: List of :class:`TriggerRule` instances to save.
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     """
     entries = [
         {
@@ -353,7 +353,7 @@ def extract_group_source(pattern_src: str, group_num: int) -> str | None:
 
     :param pattern_src: Raw regex source string.
     :param group_num: 1-based group number.
-    :returns: Group source text or ``None``.
+    :returns: Group source text or None.
     """
     cap_count = 0
     i = 0
@@ -513,7 +513,7 @@ class SearchBuffer:
 
         :param text: Raw server output (may contain ANSI sequences).
         :param echo_filter: Set of sent command strings to suppress.
-        :returns: ``True`` if new complete lines were added.
+        :returns: True if new complete lines were added.
         """
         stripped = wcwidth.strip_sequences(text)
         if not stripped:
@@ -620,7 +620,7 @@ class SearchBuffer:
 
         :param pattern: Compiled regex to search for.
         :param timeout: Maximum seconds to wait.
-        :returns: The match object, or ``None`` on timeout.
+        :returns: The match object, or None on timeout.
         """
         if self.new_text is None:
             self.new_text = asyncio.Event()
@@ -717,7 +717,7 @@ class TriggerEngine:
         """
         Return and clear the last condition failure.
 
-        :returns: ``(rule_index_1based, description)`` if last match failed a condition, otherwise ``None``.
+        :returns: (rule_index_1based, description) if last match failed a condition, otherwise None.
         """
         val = self.condition_failed
         self.condition_failed = None
@@ -1032,7 +1032,7 @@ class TriggerEngine:
         With the simplified exclusive model (all rules exclusive, cleared by reply-chain completion), this always
         returns ``False``.  Kept for API compatibility with travel code.
 
-        :returns: ``True`` if exclusive was cleared by timeout.
+        :returns: True if exclusive was cleared by timeout.
         """
         return False
 

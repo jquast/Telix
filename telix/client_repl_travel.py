@@ -44,9 +44,9 @@ async def settle_triggers(
     When *noreply* is ``True`` or *engine* has nothing pending, returns immediately.  Otherwise loops until both
     ``exclusive_active`` and ``reply_pending`` clear, waiting for a fresh prompt between iterations.
 
-    :param engine: The trigger engine (may be ``None``).
-    :param wait_fn: Coroutine to wait for a server prompt (may be ``None``).
-    :param noreply: Skip waiting entirely when ``True``.
+    :param engine: The trigger engine (may be None).
+    :param wait_fn: Coroutine to wait for a server prompt (may be None).
+    :param noreply: Skip waiting entirely when True.
     """
     if noreply or engine is None:
         return
@@ -77,7 +77,7 @@ def correct_room_edge(
     Called when a same-name room is reached under a different ID than expected. Only updates the exit if it currently
     points at *old_target*.  Updates the in-memory adjacency cache so subsequent pathfinding sees the change.
 
-    :param graph: The room graph (``RoomStore``).
+    :param graph: The room graph (RoomStore).
     :param prev_num: Room from which the exit originates.
     :param old_target: Expected target room ID.
     :param new_target: Actual target room ID.
@@ -96,11 +96,11 @@ def repath(
     """
     Re-pathfind from *current* to *destination* using *room_graph*.
 
-    :param room_graph: The room graph (``RoomStore``).
+    :param room_graph: The room graph (RoomStore).
     :param destination: Target room ID.
     :param current: Current room ID.
     :param log_fn: Callable accepting a status message string.
-    :returns: New list of ``(direction, room_id)`` steps, or empty list.
+    :returns: New list of (direction, room_id) steps, or empty list.
     """
     if room_graph is None or current == destination:
         return []
@@ -135,8 +135,8 @@ async def fast_travel(
     :param ctx: Session context for sending commands.
     :param log: Logger.
     :param destination: Final target room ID for re-pathfinding on detour.
-    :param correct_names: If ``True`` (default), rewrite graph edges when arriving at a same-name room with a different
-        ID. Set to ``False`` when distinct room IDs must be preserved.
+    :param correct_names: If True (default), rewrite graph edges when arriving at a same-name room with a different ID.
+        Set to ``False`` when distinct room IDs must be preserved.
     :param noreply: Completely disable the trigger engine during travel.
     """
     wait_fn = ctx.prompt.wait_fn
@@ -433,7 +433,7 @@ async def autodiscover(
     :param ctx: Session context with room graph and session attributes.
     :param log: Logger.
     :param limit: Maximum number of exits to explore.
-    :param strategy: ``"bfs"`` for nearest-first, ``"dfs"`` for deepest-first ordering.
+    :param strategy: "bfs" for nearest-first, "dfs" for deepest-first ordering.
     :param noreply: Completely disable the trigger engine during the walk.
     :param room_change_cmd: Semicolon-separated commands to send in each newly discovered room.
     """

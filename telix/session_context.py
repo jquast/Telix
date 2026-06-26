@@ -206,7 +206,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
     MUD-specific state grouped into typed sub-objects.
     Created in ``session_shell`` and attached as ``writer.ctx``.
 
-    :param session_key: Session identifier (``"host:port"``).
+    :param session_key: Session identifier ("host:port").
     """
 
     def __init__(

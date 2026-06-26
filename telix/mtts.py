@@ -71,9 +71,9 @@ def make_ttype_callback(term: str, ssl: bool = False, encoding: str = "utf-8") -
     """
     Return a closure that cycles TTYPE responses per MTTS protocol.
 
-    :param term: Terminal type string (e.g. from ``$TERM``).
+    :param term: Terminal type string (e.g. from $TERM).
     :param ssl: Whether the connection uses TLS.
-    :param encoding: Character encoding (e.g. ``"utf-8"``, ``"cp437"``).
+    :param encoding: Character encoding (e.g. "utf-8", "cp437").
     :returns: Callable that returns the next TTYPE response on each call.
     """
     caps = MttsCapabilities(ssl=ssl, utf8=encoding.lower().replace("-", "") == "utf8")
@@ -138,8 +138,8 @@ def client_name(sw_name: str | None = None) -> str:
     """
     Build the MNES CLIENT_NAME value.
 
-    :param sw_name: Terminal software name detected via XTVERSION (e.g. ``"Konsole"``).
-    :returns: ``"Telix"`` or ``"Telix/Konsole"`` when a name is available.
+    :param sw_name: Terminal software name detected via XTVERSION (e.g. "Konsole").
+    :returns: "Telix" or "Telix/Konsole" when a name is available.
     """
     if sw_name:
         return f"Telix/{sw_name}"
@@ -153,10 +153,10 @@ def install_mtts(term: str, ssl: bool = False, sw_name: str | None = None, encod
     Replaces ``TelnetClient`` and ``TelnetTerminalClient`` in the ``telnetlib3.client`` module so that
     :func:`telnetlib3.client.run_client` picks up the subclasses.
 
-    :param term: Terminal type string (e.g. from ``$TERM``).
+    :param term: Terminal type string (e.g. from $TERM).
     :param ssl: Whether the connection uses TLS.
     :param sw_name: Terminal software name from XTVERSION query.
-    :param encoding: Character encoding (e.g. ``"utf-8"``, ``"cp437"``).
+    :param encoding: Character encoding (e.g. "utf-8", "cp437").
     """
     caps = MttsCapabilities(ssl=ssl, utf8=encoding.lower().replace("-", "") == "utf8")
     TelixClient.ttype_factory = staticmethod(make_ttype_callback(term, ssl=ssl, encoding=encoding))

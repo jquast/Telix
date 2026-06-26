@@ -114,9 +114,8 @@ class SSHWriter:
         """
         Initialise the writer.
 
-        :param process: The asyncssh process; may be ``None`` initially and set later once the connection is
-            established.
-        :param peername: ``(host, port)`` tuple for ``get_extra_info("peername")``.
+        :param process: The asyncssh process; may be None initially and set later once the connection is established.
+        :param peername: (host, port) tuple for get_extra_info("peername").
         """
         self._process: asyncssh.SSHClientProcess[str] | None = process
         self._peername = peername
@@ -212,7 +211,7 @@ class SSHWriter:
         """
         Return transport metadata.
 
-        :param name: Key name (only ``"peername"`` and ``"ssl_object"`` supported).
+        :param name: Key name (only "peername" and "ssl_object" supported).
         :param default: Value to return if *name* is not available.
         """
         if name == "peername":
@@ -225,8 +224,8 @@ class SSHWriter:
         r"""
         Register an extension callback.
 
-        :param key: Telopt byte (e.g. ``b'\xc9'`` for GMCP).
-        :param callback: Callable receiving ``(package, data)``.
+        :param key: Telopt byte (e.g. b'\xc9' for GMCP).
+        :param callback: Callable receiving (package, data).
         """
         self._ext_callback[key] = callback
 
@@ -234,7 +233,7 @@ class SSHWriter:
         r"""
         Register an IAC callback.
 
-        :param key: IAC command byte (e.g. ``b'\xf9'`` for GA).
+        :param key: IAC command byte (e.g. b'\xf9' for GA).
         :param callback: Callable receiving the command byte.
         """
         self._iac_callback[key] = callback

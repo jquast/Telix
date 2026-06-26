@@ -132,7 +132,7 @@ def directory_to_sessions() -> dict[str, typing.Any]:
     ``"host:port"``.  Only fields that differ from ``SessionConfig`` defaults
     are set.  Favorites are merged in and bookmarked.
 
-    :returns: dict mapping ``"host:port"`` to ``SessionConfig``
+    :returns: dict mapping "host:port" to SessionConfig
     """
     entries = load_directory()
     sessions: dict[str, typing.Any] = {}

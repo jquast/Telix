@@ -215,7 +215,7 @@ def randomwalk_dialog(replay_buf: typing.Any | None = None, session_key: str = "
 
     :param replay_buf: Optional replay buffer for screen repaint.
     :param session_key: Session key for loading/saving preferences.
-    :returns: Command string (e.g. ``"`randomwalk 2 autosearch`"``) on confirm, or ``None`` on cancel.
+    :returns: Command string (e.g. "`randomwalk 2 autosearch`") on confirm, or None on cancel.
     """
     default_visit_level = 2
     default_room_change_cmd = ""
@@ -273,7 +273,7 @@ def autodiscover_dialog(replay_buf: typing.Any | None = None, session_key: str =
 
     :param replay_buf: Optional replay buffer for screen repaint.
     :param session_key: Session key for loading/saving preferences.
-    :returns: Command string (e.g. ``"`autodiscover bfs`"``) on confirm, or ``None`` on cancel.
+    :returns: Command string (e.g. "`autodiscover bfs`") on confirm, or None on cancel.
     """
     default_strategy = "bfs"
     default_room_change_cmd = ""
@@ -409,7 +409,7 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     Gathers parameters for all panes, runs :func:`~telix.client_tui_dialogs.run_unified_editor`
     in a worker thread, and reloads all potentially-modified configs on return.
 
-    :param initial_tab: Tab to open initially (e.g. ``"help"``, ``"macros"``).
+    :param initial_tab: Tab to open initially (e.g. "help", "macros").
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """
@@ -516,7 +516,7 @@ def launch_tui_editor(editor_type: str, ctx: "TelixSessionContext", replay_buf: 
     """
     Launch a TUI editor for macros or triggers in a subprocess.
 
-    :param editor_type: ``"macros"``, ``"triggers"``, or ``"highlights"``.
+    :param editor_type: "macros", "triggers", or "highlights".
     :param ctx: Session context with file path and definition attributes.
     :param replay_buf: Optional replay buffer for screen repaint on return.
     """

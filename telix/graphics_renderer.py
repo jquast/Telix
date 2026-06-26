@@ -28,7 +28,7 @@ def detect_kitty(term) -> bool:
     Check whether *term* supports the Kitty graphics protocol.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``True`` if kitty graphics is supported.
+    :returns: True if kitty graphics is supported.
     """
     try:
         return term.does_kitty_graphics(timeout=0.5)
@@ -41,7 +41,7 @@ def detect_sixel(term) -> bool:
     Check whether *term* supports sixel graphics.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``True`` if sixel graphics is supported.
+    :returns: True if sixel graphics is supported.
     """
     try:
         return term.does_sixel(timeout=0.5)
@@ -63,7 +63,7 @@ def detect_graphics_protocol(term) -> str | None:
     to test sixel even when kitty is available.
 
     :param term: A :class:`blessed.Terminal` instance.
-    :returns: ``"kitty"``, ``"sixel"``, or ``None`` if neither is supported.
+    :returns: "kitty", "sixel", or None if neither is supported.
     """
     if os.environ.get("TELIX_FORCE_SIXEL") == "1":
         if detect_sixel(term):
@@ -88,9 +88,9 @@ def _quantize_colors(colors: np.ndarray, n_colors: int) -> tuple[np.ndarray, np.
     Picks the largest ``levels`` such that ``levels ** 3 <= n_colors`` and ``levels >= 2``. Clamped to 6 (216 colors,
     the practical DEC sixel ceiling).
 
-    :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
+    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
     :param n_colors: Maximum palette size.
-    :returns: ``(indexed, palette)`` tuple where *indexed* is ``(H, W)`` uint8 and *palette* is ``(N, 3)`` float32.
+    :returns: (indexed, palette) tuple where *indexed* is (H, W) uint8 and *palette* is (N, 3) float32.
     """
     levels = 2
     while (levels + 1) ** 3 <= n_colors and levels < 6:
@@ -116,7 +116,7 @@ def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256,
     """
     Encode an RGB image as a sixel escape sequence and write to *dest*.
 
-    :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
+    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
     :param dest: Text stream to write the escape sequence into.
     :param max_colors: Maximum palette size (default 256).
     :param scale: Integer pixel scale factor. Each sixel pixel maps to *scale* screen pixels. Use this to make the image
@@ -174,7 +174,7 @@ def _make_png(colors: np.ndarray) -> bytes:
 
     Uses raw DEFLATE compression via :mod:`zlib`.
 
-    :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
+    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
     :returns: Valid PNG file bytes.
     """
     h, w = colors.shape[:2]
@@ -204,8 +204,8 @@ def _try_pil_png(colors: np.ndarray) -> bytes | None:
     """
     Try to create a PNG using PIL, which compresses better.
 
-    :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
-    :returns: PNG bytes, or ``None`` if PIL is not installed.
+    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
+    :returns: PNG bytes, or None if PIL is not installed.
     """
     try:
         from PIL import Image
@@ -222,9 +222,9 @@ def encode_kitty(colors: np.ndarray, dest: io.TextIOBase, fmt: str = "png", colu
     """
     Encode an RGB image as a Kitty graphics escape sequence and write to *dest*.
 
-    :param colors: Array of shape ``(H, W, 3)`` with float values 0.0..1.0.
+    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
     :param dest: Text stream to write the escape sequence into.
-    :param fmt: Output format: ``"png"`` (default), ``"rgb"``, or ``"rgba"``.
+    :param fmt: Output format: "png" (default), "rgb", or "rgba".
     :param columns: Display width in terminal columns. When > 0, the terminal scales the image to fit *columns* cells,
         providing font-size-independent sizing.
     :param rows: Display height in terminal rows.  When > 0, the terminal scales the image to fit *rows* cells.

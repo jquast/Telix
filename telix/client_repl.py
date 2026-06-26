@@ -207,7 +207,7 @@ def split_incomplete_esc(data: bytes) -> tuple[bytes, bytes]:
     more bytes arrive. Handles CSI (``ESC [``) with arbitrarily long parameter/intermediate bytes, OSC (``ESC ]``), DCS
     (``ESC P``), and plain two-byte ``ESC X`` sequences.
 
-    :returns: ``(flush_now, hold_back)`` -- concatenation equals *data*.
+    :returns: (flush_now, hold_back) -- concatenation equals *data*.
     """
     n = len(data)
     if n == 0:
@@ -291,7 +291,7 @@ def restore_after_subprocess(replay_buf: "OutputRingBuffer | None", reserve: int
     the asyncio StreamWriter writes the post-action render. The cursor is hidden at this point, so no visible blink
     occurs.
 
-    :param replay_buf: Ring buffer to replay, or ``None`` to skip replay.
+    :param replay_buf: Ring buffer to replay, or None to skip replay.
     :param reserve: Number of bottom rows reserved for the input area.
     """
     global subprocess_needs_rearm
@@ -523,7 +523,7 @@ async def repl_scaffold(
     Yields ``(scroll, rows_cols)`` where *rows_cols* is a mutable ``[rows, cols]`` list kept up-to-date by the resize
     handler. Restores the original ``handle_send_naws`` in a ``finally`` block.
 
-    :param on_resize: Optional extra callback invoked after scroll region update, receiving ``(new_rows, new_cols)``.
+    :param on_resize: Optional extra callback invoked after scroll region update, receiving (new_rows, new_cols).
     """
     rows, cols = get_terminal_size()
     rows_cols = [rows, cols]
@@ -620,7 +620,7 @@ class KeyDispatch:
         returns named keystrokes rather than escape sequences.
 
         :param key: Blessed Keystroke to translate.
-        :returns: ANSI sequence string, or ``None``.
+        :returns: ANSI sequence string, or None.
         """
         from . import macros as macros_mod
 
@@ -640,7 +640,7 @@ class LineHoldBuffer:
     Server output split across TCP segments may arrive mid-line.  This buffer accumulates text and splits it into "ready
     to emit" (complete lines terminated by ``\n``) and a held-back trailing fragment.
 
-    :param highlight_engine_getter: callable returning the current :class:`HighlightEngine` (or ``None``).
+    :param highlight_engine_getter: callable returning the current :class:`HighlightEngine` (or None).
     """
 
     def __init__(self, highlight_engine_getter: Callable[[], typing.Any]) -> None:
@@ -715,7 +715,7 @@ class ReplSession:
 
     :param telnet_reader: Server-side reader stream.
     :param telnet_writer: Server-side writer stream.
-    :param tty_shell: ``Terminal`` instance from ``client_shell``.
+    :param tty_shell: Terminal instance from client_shell.
     :param stdout: asyncio StreamWriter for local terminal output.
     :param history_file: Optional path for persistent line history.
     :param banner_lines: Lines to display after the scroll region is active.
@@ -1227,7 +1227,7 @@ class ReplSession:
         records the current terminal size to suppress a redundant
         ``on_resize_repaint``, and re-enables DEC mode 2048.
 
-        :returns: ``True`` if a subprocess was reaped and a repaint is needed.
+        :returns: True if a subprocess was reaped and a repaint is needed.
         """
         global subprocess_needs_rearm
         if not subprocess_needs_rearm:
@@ -1836,7 +1836,7 @@ class ReplSession:
         """
         Run the REPL event loop.
 
-        :returns: ``True`` if the server switched to kludge mode, ``False`` if the connection closed normally.
+        :returns: True if the server switched to kludge mode, False if the connection closed normally.
         """
         self.init_terminal()
         self.init_editor()
@@ -1885,9 +1885,9 @@ async def repl_event_loop(
     Uses blessed ``async_inkey()`` for keystroke input and a headless :class:`~blessed.line_editor.LineEditor` for line
     editing with history and auto-suggest.
 
-    :param tty_shell: ``Terminal`` instance from ``client_shell``.
+    :param tty_shell: Terminal instance from client_shell.
     :param banner_lines: Lines to display after scroll region is active.
-    :returns: ``True`` if the server switched to kludge mode (caller should fall through to the standard event loop),
+    :returns: True if the server switched to kludge mode (caller should fall through to the standard event loop),
         ``False`` if the connection closed normally.
     """
     session = ReplSession(

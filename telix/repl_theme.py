@@ -72,8 +72,8 @@ def invert_hex(hexcolor: str) -> str:
     """
     Return the RGB inverse of *hexcolor*.
 
-    :param hexcolor: Color string like ``#1a0000``.
-    :returns: Inverted color as ``#rrggbb``.
+    :param hexcolor: Color string like #1a0000.
+    :returns: Inverted color as #rrggbb.
     """
     r, g, b = hex_to_rgb(hexcolor)
     return f"#{255 - r:02x}{255 - g:02x}{255 - b:02x}"
@@ -83,10 +83,10 @@ def blend_hex(c1: str, c2: str, t: float) -> str:
     """
     Linearly blend *c1* towards *c2* by fraction *t*.
 
-    :param c1: Start color as ``#rrggbb``.
-    :param c2: End color as ``#rrggbb``.
-    :param t: Blend fraction in ``[0, 1]`` (0 = c1, 1 = c2).
-    :returns: Blended color as ``#rrggbb``.
+    :param c1: Start color as #rrggbb.
+    :param c2: End color as #rrggbb.
+    :param t: Blend fraction in [0, 1] (0 = c1, 1 = c2).
+    :returns: Blended color as #rrggbb.
     """
     r1, g1, b1 = hex_to_rgb(c1)
     r2, g2, b2 = hex_to_rgb(c2)
@@ -117,7 +117,7 @@ def resolve_theme(theme_name: str) -> dict[str, str]:
     Resolve *theme_name* to a ``generate()`` color dict.
 
     :param theme_name: Name of a Textual built-in theme.
-    :returns: Dict mapping token names to ``#rrggbb`` hex strings.
+    :returns: Dict mapping token names to #rrggbb hex strings.
     """
     theme = textual.theme.BUILTIN_THEMES.get(theme_name)
     if theme is None:
@@ -132,7 +132,7 @@ def saved_theme_name(session_key: str) -> str:
     """
     Load the saved theme name for *session_key*, falling back to defaults.
 
-    :param session_key: Session identifier (``host:port``), or empty string.
+    :param session_key: Session identifier (host:port), or empty string.
     :returns: Theme name string, or empty if nothing is saved.
     """
     if session_key:
@@ -152,7 +152,7 @@ def get_repl_palette(session_key: str = "") -> dict[str, str]:
     Loads the saved theme name from per-session or global preferences, then resolves Textual theme tokens into concrete
     hex colors.  Results are cached per theme name.
 
-    :param session_key: Session identifier (``host:port``), or empty string.
+    :param session_key: Session identifier (host:port), or empty string.
     :returns: Dict of semantic color names to hex strings.
     """
     theme_name = saved_theme_name(session_key) or DEFAULT_THEME
@@ -203,8 +203,8 @@ def hex_to_rgb(hexcolor: str) -> tuple[int, int, int]:
     """
     Convert ``#rrggbb`` hex string to an ``(r, g, b)`` tuple.
 
-    :param hexcolor: Color string like ``#1a0000``.
-    :returns: Tuple of integers in ``[0, 255]``.
+    :param hexcolor: Color string like #1a0000.
+    :returns: Tuple of integers in [0, 255].
     """
     h = hexcolor.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))

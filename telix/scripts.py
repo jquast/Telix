@@ -161,7 +161,7 @@ class ScriptOutputBuffer:
 
         :param pattern: Compiled regex pattern to search for.
         :param timeout: Maximum seconds to wait.
-        :returns: The match object, or ``None`` on timeout.
+        :returns: The match object, or None on timeout.
         """
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[re.Match[str] | None] = loop.create_future()
@@ -185,8 +185,8 @@ class ScriptOutputBuffer:
         """
         Wait until the next GA/EOR prompt signal.
 
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if prompt arrived, ``False`` on timeout.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: True if prompt arrived, False on timeout.
         """
         target = self._prompt_count + 1
         if timeout is None:
@@ -211,7 +211,7 @@ class ScriptOutputBuffer:
         """
         Return the accumulated output text.
 
-        :param clear: If ``True``, clear the buffer after returning.
+        :param clear: If True, clear the buffer after returning.
         :returns: Joined lines as a single string.
         """
         text = self._full_text()
@@ -305,8 +305,8 @@ class ScriptContext:
 
         The ``Max`` lookup is case-insensitive (``MaxWater``, ``maxwater``, etc.).
 
-        :param dotted_path: Key path, e.g. ``"Char.Vitals.hp"`` or ``"hp"``.
-        :returns: The value at that path, or ``None`` if not found.
+        :param dotted_path: Key path, e.g. "Char.Vitals.hp" or "hp".
+        :returns: The value at that path, or None if not found.
         """
         if dotted_path.endswith("%"):
             return self._gmcp_get_pct(dotted_path[:-1])
@@ -341,7 +341,7 @@ class ScriptContext:
         """
         Search all GMCP package dicts for *field*.
 
-        :returns: ``(value, package_dict)`` or ``(None, None)`` if not found.
+        :returns: (value, package_dict) or (None, None) if not found.
         """
         for pkg_data in self._ctx.gmcp_data.values():
             if not isinstance(pkg_data, dict):
@@ -388,7 +388,7 @@ class ScriptContext:
         Look up a room by number.
 
         :param num: Room number string.
-        :returns: :class:`~telix.rooms.Room` or ``None``.
+        :returns: :class:`~telix.rooms.Room` or None.
         """
         rg = self._ctx.room.graph
         if rg is None:
@@ -400,7 +400,7 @@ class ScriptContext:
         Find a path of directions from the current room to *dst*.
 
         :param dst: Destination room number string.
-        :returns: List of direction strings, or ``None`` if no path found.
+        :returns: List of direction strings, or None if no path found.
         """
         rg = self._ctx.room.graph
         if rg is None or not self._ctx.room.current:
@@ -476,8 +476,8 @@ class ScriptContext:
         """
         Wait for the next GA/EOR signal from the server.
 
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: Boolean ``True`` if prompt arrived within *timeout*.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: Boolean True if prompt arrived within *timeout*.
         """
         return await self._buf.wait_for_prompt(timeout)
 
@@ -486,8 +486,8 @@ class ScriptContext:
         Wait for *n* consecutive server prompts.
 
         :param n: Number of prompts to wait for.
-        :param timeout: Timeout in seconds for *each* prompt, or ``None`` to wait indefinitely.
-        :returns: Boolean ``True`` if all prompts arrived; ``False`` if any timed out.
+        :param timeout: Timeout in seconds for *each* prompt, or None to wait indefinitely.
+        :returns: Boolean True if all prompts arrived; False if any timed out.
         """
         for _ in range(n):
             if not await self._buf.wait_for_prompt(timeout):
@@ -498,7 +498,7 @@ class ScriptContext:
         """
         Return accumulated server output text.
 
-        :param clear: If ``True``, clear the buffer after returning (default ``True``).
+        :param clear: If True, clear the buffer after returning (default True).
         :returns: Output text string.
         """
         return self._buf.output(clear)
@@ -517,8 +517,8 @@ class ScriptContext:
         Wait for a regex pattern to appear in the server output.
 
         :param pattern: Regular expression string.
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: The :class:`re.Match` object, or ``None`` on timeout.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: The :class:`re.Match` object, or None on timeout.
         """
         compiled = re.compile(pattern, re.IGNORECASE | re.MULTILINE | re.DOTALL)
         return await self._buf.wait_for_pattern(compiled, timeout)
@@ -565,12 +565,12 @@ class ScriptContext:
         If the key is not found in GMCP data, it falls back to highlight
         capture variables.
 
-        :param key: Condition key (e.g. ``"hp%"``, ``"Mode"``).
-        :param op: Comparison operator: ``">"``, ``"<"``, ``">="``, ``"<="``,
+        :param key: Condition key (e.g. "hp%", "Mode").
+        :param op: Comparison operator: ">", "<", ">=", "<=",
             ``"="``, ``"!="``.
         :param threshold: Numeric or string threshold.
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` when condition is met, ``False`` on timeout.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: True when condition is met, False on timeout.
         """
         return await self._wait_for_condition({key: f"{op}{threshold}"}, timeout)
 
@@ -590,9 +590,9 @@ class ScriptContext:
         :func:`asyncio.wait`, this checks all conditions atomically, so you are
         guaranteed they all hold simultaneously when it returns.
 
-        :param conditions: ``(key, op, threshold)`` tuples, or a single list of them.
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` when all conditions are met at the same time, ``False`` on timeout.
+        :param conditions: (key, op, threshold) tuples, or a single list of them.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: True when all conditions are met at the same time, False on timeout.
         """
         items: typing.Sequence[tuple[str, str, int | str]]
         if len(conditions) == 1 and isinstance(conditions[0], list):
@@ -610,7 +610,7 @@ class ScriptContext:
         values are converted via :func:`str`.  Uses the same echo mechanism as trigger notifications.
 
         :param args: Values to display.
-        :param sep: Separator string inserted between values (default ``" "``).
+        :param sep: Separator string inserted between values (default " ").
         """
         text = sep.join(str(a) for a in args)
         echo = self._ctx.prompt.echo
@@ -700,8 +700,8 @@ class ScriptContext:
                         break
                     ctx.print(f"[tracker] {ctx.previous_room_id} -> {ctx.room_id}")
 
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if a transition occurred; ``False`` on timeout.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: True if a transition occurred; False on timeout.
         """
         evt = self._ctx.room.changed
         try:
@@ -726,10 +726,10 @@ class ScriptContext:
             # wait for any GMCP update
             await ctx.gmcp_changed()
 
-        :param package: GMCP package name, e.g. ``"Char.Vitals"``.
+        :param package: GMCP package name, e.g. "Char.Vitals".
             Pass ``None`` (the default) to wait for any GMCP update.
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
-        :returns: ``True`` if a packet arrived; ``False`` on timeout.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
+        :returns: True if a packet arrived; False on timeout.
         """
         if package is None:
             evt = self._ctx.gmcp.any_update
@@ -789,7 +789,7 @@ class ScriptContext:
         (e.g. during the event-loop gap between one call completing and the next being set up), it is buffered and
         returned immediately by the next call.
 
-        :param timeout: Maximum seconds to wait, or ``None`` to wait indefinitely.
+        :param timeout: Maximum seconds to wait, or None to wait indefinitely.
         """
         cs = self._ctx.commands
         cs.ever_had_waiter = True
@@ -832,7 +832,7 @@ class ScriptManager:
         The scripts directory and cwd are temporarily prepended to ``sys.path`` during load and removed in a ``finally``
         block. If the source file's mtime has changed since the last load, ``importlib.reload`` is called.
 
-        :param module_path: Dotted module path (e.g. ``"combat"`` or ``"ai.bot"``).
+        :param module_path: Dotted module path (e.g. "combat" or "ai.bot").
         :returns: The loaded module object.
         """
         search_dirs = []
@@ -883,7 +883,7 @@ class ScriptManager:
         If no dot is present, the function name defaults to ``"run"``.
 
         :param session_ctx: Active session context.
-        :param spec: Script spec string (``"module.fn arg1 arg2"``).
+        :param spec: Script spec string ("module.fn arg1 arg2").
         :returns: The running :class:`asyncio.Task`.
         :raises ValueError: If the module or function cannot be found.
         """
@@ -969,7 +969,7 @@ class ScriptManager:
         """
         Cancel a running script or all running scripts.
 
-        :param name: Script name to stop, or ``None`` to stop all.
+        :param name: Script name to stop, or None to stop all.
         :returns: Names of scripts that were actually cancelled.
         """
         stopped = []

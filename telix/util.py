@@ -66,8 +66,8 @@ def load_json_entries(path: str, session_key: str, entry_key: str) -> list[dict[
     is absent.
 
     :param path: Path to the JSON file.
-    :param session_key: Session identifier (e.g. ``"host:port"``).
-    :param entry_key: Key within the session object (e.g. ``"triggers"``).
+    :param session_key: Session identifier (e.g. "host:port").
+    :param entry_key: Key within the session object (e.g. "triggers").
     :returns: List of raw entry dicts.
     :raises FileNotFoundError: When *path* does not exist.
     :raises json.JSONDecodeError: When the file is not valid JSON.
@@ -87,8 +87,8 @@ def save_json_entries(path: str, session_key: str, entry_key: str, entries: list
     :func:`~telix.paths.atomic_write`.
 
     :param path: Path to the JSON file.
-    :param session_key: Session identifier (e.g. ``"host:port"``).
-    :param entry_key: Key within the session object (e.g. ``"triggers"``).
+    :param session_key: Session identifier (e.g. "host:port").
+    :param entry_key: Key within the session object (e.g. "triggers").
     :param entries: Serialised entry dicts to store.
     """
     data: dict[str, typing.Any] = {}
@@ -139,8 +139,8 @@ def select_radio_button(radio_set: typing.Any, target_button: typing.Any) -> Non
 
     ``radio_set._pressed_button`` and ``_selected`` are updated directly to keep internal state consistent.
 
-    :param radio_set: The ``RadioSet`` widget containing the buttons.
-    :param target_button: The ``RadioButton`` widget to select.
+    :param radio_set: The RadioSet widget containing the buttons.
+    :param target_button: The RadioButton widget to select.
     """
     # Import here to avoid top-level dependency on textual in util.py.
     import textual.widgets

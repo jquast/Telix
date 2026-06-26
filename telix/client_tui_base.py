@@ -103,7 +103,7 @@ class HelpPane(textual.containers.Vertical):
         """
         Replace help content with a different topic.
 
-        :param topic: Help topic key (e.g. ``"macro"``, ``"keybindings"``).
+        :param topic: Help topic key (e.g. "macro", "keybindings").
         """
         if topic == self.topic:
             return
