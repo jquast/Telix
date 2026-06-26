@@ -57,9 +57,9 @@ def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
     """
     Compute local echo flag from echo mode and server's WILL ECHO state.
 
-    :param echo_mode: ``"auto"``, ``"local"``, or ``"remote"``
-    :param will_echo: ``True`` when server has negotiated WILL ECHO
-    :returns: ``True`` if client should echo input locally
+    :param echo_mode:``"auto"``, ``"local"``, or ``"remote"``
+    :param will_echo:``True`` when server has negotiated WILL ECHO
+    :returns:``True`` if client should echo input locally
     """
     if echo_mode == "local":
         return True
@@ -994,7 +994,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             if not ctx.repl.ansi_keys:
                 _apply_delete_to_backspace(stdin)
             state = telnetlib3.client_shell._RawLoopState(
-                switched_to_raw=True, last_will_echo=False, local_echo=compute_local_echo(ctx.echo_mode, ws_writer.will_echo), linesep=linesep
+                switched_to_raw=True,
+                last_will_echo=False,
+                local_echo=compute_local_echo(ctx.echo_mode, ws_writer.will_echo),
+                linesep=linesep,
             )
             raw_stdout = make_raw_stdout(stdout, ctx, tty_shell=tty_shell, writer=ws_writer)
             raw_stdout_ref[0] = raw_stdout

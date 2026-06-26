@@ -6,9 +6,12 @@ History
 
 - bugfix: correct some kinds of VGA color filtering
 - bugfix: session manager table not redrawn on terminal resize
-- bugfix: add ``--echo-mode`` option to fix doubled-input on raw-mode BBSes that echo but do not negotiate telnet ECHO
+- bugfix: add ``--local-echo`` / ``--remote-echo`` options to fix doubled-input on raw-mode BBSes that echo but do not negotiate telnet ECHO
 - enhancement: new "Font Graphics" support using kitty/sixel for BBS/SyncTERM-compatible bitmap fonts
 - enhancement: new "FF is Clear+Home" toggle (SyncTERM compatibility)
+- enhancement: Topaz, MicroKnight, and other ISO-8859-1 fonts now available as encoding names
+- bugfix: various graphics and SSH font rendering improvements
+- enhancement: completely rewritten bitmap font subsystem with clean upstream font sources
 
 0.1.7 -- 2026-03-16
 -------------------

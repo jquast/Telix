@@ -145,11 +145,7 @@ def directory_to_sessions() -> dict[str, typing.Any]:
         if key in sessions:
             sessions[key].bookmarked = True
             apply_overrides(
-                sessions[key],
-                fav.get("encoding"),
-                fav.get("mode"),
-                fav.get("echo_mode"),
-                fav.get("protocol"),
+                sessions[key], fav.get("encoding"), fav.get("mode"), fav.get("echo_mode"), fav.get("protocol")
             )
         else:
             cfg = entry_to_session(fav)

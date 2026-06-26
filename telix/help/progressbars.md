@@ -32,6 +32,7 @@ a GMCP package field pair (value + max) to a colored bar display.
 ### Form Fields
 
 - **Name** -- display label for the bar
+- **Type** -- ``Progress Bar`` (standard filled bar) or ``Label`` (text-only with format string)
 - **Enabled** -- toggle the bar on/off
 - **Source** -- the GMCP package containing the fields
   (e.g. `Char.Vitals`, `Char.Status`)
@@ -43,6 +44,7 @@ a GMCP package field pair (value + max) to a colored bar display.
   (custom mode: two dropdowns; theme mode: theme color choices)
 - **Max** -- bar color at 100% and text color on the empty portion
   (custom mode: two dropdowns; theme mode: theme color choices)
+- **Format** -- label format string (only when Type is ``Label``); defaults to ``{name}: {value}/{max}``
 - **Path** -- `Shortest` or `Longest` hue arc between colors
 - **Preview** -- animated live preview of the bar cycling through 0-100%
 

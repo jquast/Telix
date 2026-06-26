@@ -18,8 +18,6 @@ log = logging.getLogger(__name__)
 MIN_RENDER_INTERVAL = 0.033  # ~30 fps
 
 
-
-
 class BBSScreen(pyte.Screen):
     """
     Pyte Screen subclass with BBS/CTerm compatibility adjustments.
@@ -50,7 +48,6 @@ class BBSScreen(pyte.Screen):
         if how == 2:
             self.cursor.x = 0
             self.cursor.y = 0
-
 
 
 SYNCTERM_FONT_RE = re.compile(r"\x1b\[(\d+);(\d+) D")
@@ -89,7 +86,6 @@ def intercept_device_queries(screen: pyte.Screen, ctx_writer, text: str) -> None
     col = screen.cursor.x + 1
     if ctx_writer is not None:
         ctx_writer.write(f"\x1b[{row};{col}R")
-
 
 
 PYTE_COLOR_NAMES: dict[str, int] = {
@@ -161,8 +157,6 @@ def pyte_color_to_rgb(
     return palette[7] if is_fg else palette[0]
 
 
-
-
 class BitmapFont:
     """
     A variable-size bitmap font.
@@ -230,8 +224,6 @@ def load_font(font_id: int) -> BitmapFont:
     return font
 
 
-
-
 class BaseScreenWriter:
     """
     Shared pyte virtual terminal pipeline.
@@ -275,7 +267,6 @@ class BaseScreenWriter:
         self._real_cols = real_cols
         self._init_screen()
 
-
     def on_font_changed(self) -> None:
         """Called after a font switch sequence is processed."""
 
@@ -296,7 +287,6 @@ class BaseScreenWriter:
         """Force a full render."""
         raise NotImplementedError
 
-
     def _output(self, data: str) -> None:
         self.inner.write(data.encode("utf-8", errors="replace"))
 
@@ -311,7 +301,6 @@ class BaseScreenWriter:
 
     def __getattr__(self, name: str) -> object:
         return getattr(self.inner, name)
-
 
     def _handle_font_switch(self, text: str) -> str:
         """Strip and process SyncTERM font switching sequences."""
@@ -357,7 +346,6 @@ class BaseScreenWriter:
         except (LookupError, ValueError, TypeError):
             return 0x3F
 
-
     def _update_real_size(self) -> bool:
         """
         Re-query the real terminal size.
@@ -389,7 +377,6 @@ class BaseScreenWriter:
         self.on_resize()
         self._needs_full_redraw = True
         self.trigger_render()
-
 
     def write(self, data: bytes) -> None:
         """Decode, feed to pyte, and dispatch rendering."""
@@ -430,8 +417,6 @@ class BaseScreenWriter:
         self._prev_cursor_y = self.screen.cursor.y
 
         self.on_write_complete(cursor_moved, shape_changed)
-
-
 
 
 class GraphicsWriter(BaseScreenWriter):
@@ -476,7 +461,6 @@ class GraphicsWriter(BaseScreenWriter):
         self._glyph_cache: np.ndarray | None = None
         self._px_buf: np.ndarray | None = None
 
-
     def on_font_changed(self) -> None:
         self._glyph_cache = None
 
@@ -497,14 +481,12 @@ class GraphicsWriter(BaseScreenWriter):
     def trigger_render(self) -> None:
         self._schedule_render()
 
-
     def cleanup(self) -> None:
         if self._render_timer is not None:
             self._render_timer.cancel()
             self._render_timer = None
         self._cancel_blink()
         super().cleanup()
-
 
     def _ensure_glyph_cache(self) -> None:
         if self._glyph_cache is not None:
@@ -610,7 +592,6 @@ class GraphicsWriter(BaseScreenWriter):
         x1 = min(w, x1)
         if y1 > y0 and x1 > x0:
             colors[y0:y1, x0:x1] = 1.0 - colors[y0:y1, x0:x1]
-
 
     def _render_full(self) -> None:
         try:

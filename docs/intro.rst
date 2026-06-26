@@ -27,7 +27,7 @@ Features
   ANSI color codes and legacy encodings to modern 24-bit color codes and terminal encoding (usually
   utf-8).
 - **Graphic Fonts** render BBS bitmap fonts (CP437, Topaz, MicroKnight, P0T NOoDLE, and all 45
-  `SyncTERM`_ fonts) using kitty/sixel graphics or Unicode 16 "Octants", providing perfect
+  `SyncTERM`_ fonts) using kitty/sixel graphics, providing perfect
   retrocomputing bitmap font display on modern terminals.
 
 Built using Python libraries telnetlib3_, blessed_, textual_, wcwidth_, asyncssh_, websockets_, and numpy_.
@@ -92,14 +92,22 @@ For a full list of CLI options:
 .. begin-cli-help
 .. code-block:: text
 
-    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT] [--always-wont OPT] [--ansi-keys] [--ascii-eol]
-                 [--compression] [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N] [--encoding ENCODING]
-                 [--encoding-errors ENCODING_ERRORS] [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
-                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL] [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
-                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM] [--typescript FILE]
-                 [--typescript-mode {append,rewrite}] [--key-file FILE] [--username USER] [--background-color COLOR] [--bbs]
-                 [--color-brightness N] [--color-contrast N] [--colormatch PALETTE] [--mud] [--clear-homes-cursor] [--ff-clears-screen]
-                 [--graphics-font MODE] [--graphics-columns N] [--graphics-rows N] [--no-ice-colors]
+    usage: telix [-h] [--always-do OPT] [--always-dont OPT] [--always-will OPT]
+                 [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
+                 [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N]
+                 [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
+                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
+                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL]
+                 [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
+                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify]
+                 [--term TERM] [--typescript FILE]
+                 [--typescript-mode {append,rewrite}] [--key-file FILE]
+                 [--username USER] [--background-color COLOR] [--bbs]
+                 [--color-brightness N] [--color-contrast N]
+                 [--colormatch PALETTE] [--mud] [--clear-homes-cursor]
+                 [--ff-clears-screen] [--graphics-font [MODE]]
+                 [--graphics-columns N] [--graphics-rows N] [--no-ice-colors]
+                 [--local-echo] [--remote-echo]
 
     Telnet, WebSocket, and SSH MUD/BBS client.
 
@@ -114,11 +122,16 @@ For a full list of CLI options:
       -h, --help            show this help message and exit
 
     Connection options:
-      --always-do OPT       always send DO for this option (comma-separated, named like GMCP)
-      --always-dont OPT     always send DONT for this option, refusing even natively supported
-      --always-will OPT     always send WILL for this option (comma-separated, named like MXP)
-      --always-wont OPT     always send WONT for this option, refusing even natively supported
-      --ansi-keys           transmit raw ANSI escape sequences for arrow/function keys
+      --always-do OPT       always send DO for this option (comma-separated, named
+                            like GMCP)
+      --always-dont OPT     always send DONT for this option, refusing even
+                            natively supported
+      --always-will OPT     always send WILL for this option (comma-separated,
+                            named like MXP)
+      --always-wont OPT     always send WONT for this option, refusing even
+                            natively supported
+      --ansi-keys           transmit raw ANSI escape sequences for arrow/function
+                            keys
       --ascii-eol           use ASCII CR/LF instead of encoding-native EOL
       --compression         request MCCP compression
       --connect-maxwait N   timeout for pending negotiation (default: 4.0)
@@ -136,7 +149,8 @@ For a full list of CLI options:
       --loglevel LOGLEVEL   logging level (default: warn)
       --no-repl             disable the interactive REPL (raw I/O only)
       --raw-mode            force raw-mode input (default: auto-detect)
-      --send-environ VARS   comma-separated environment variables to send via NEW-ENVIRON
+      --send-environ VARS   comma-separated environment variables to send via NEW-
+                            ENVIRON
       --shell SHELL         dotted path to shell coroutine
       --speed N             terminal speed to report (default: 38400)
       --ssl                 enable SSL/TLS (telnet only)
@@ -153,18 +167,27 @@ For a full list of CLI options:
 
     Telix options:
       --background-color COLOR
-                            terminal background color as #RRGGBB (default: #000000)
+                            terminal background color as #RRGGBB (default:
+                            #000000)
       --bbs                 apply BBS connection presets
       --color-brightness N  color brightness multiplier (default: 1.0)
       --color-contrast N    color contrast multiplier (default: 1.0)
-      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to disable)
+      --colormatch PALETTE  color palette for remapping (default: vga, 'none' to
+                            disable)
       --mud                 apply MUD connection presets
-      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm compatibility)
-      --ff-clears-screen    treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility)
-      --graphics-font MODE  font graphics mode: auto, octants, or empty
-      --graphics-columns N  force virtual terminal columns for graphics font (e.g. 40)
-      --graphics-rows N     force virtual terminal rows for graphics font (default: 25)
+      --clear-homes-cursor  inject cursor home before clear screen (BBS/CTerm
+                            compatibility)
+      --ff-clears-screen    treat Form Feed (0x0C) as clear screen and home cursor
+                            (SyncTERM compatibility)
+      --graphics-font [MODE]
+                            font graphics mode: auto (default)
+      --graphics-columns N  force virtual terminal columns for graphics font (e.g.
+                            40)
+      --graphics-rows N     force virtual terminal rows for graphics font
+                            (default: 25)
       --no-ice-colors       disable iCE color (blink as bright background) support
+      --local-echo          force local echo (client echoes input)
+      --remote-echo         force remote echo (server echoes input)
 
 .. end-cli-help
 

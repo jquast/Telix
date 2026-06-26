@@ -1761,15 +1761,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                     )
                 yield textual.widgets.Label("Echo Mode")
                 with textual.widgets.RadioSet(id="echo-mode-radio"):
-                    yield textual.widgets.RadioButton(
-                        "Auto", value=cfg.echo_mode == "auto", id="echo-auto"
-                    )
-                    yield textual.widgets.RadioButton(
-                        "Local echo", value=cfg.echo_mode == "local", id="echo-local"
-                    )
-                    yield textual.widgets.RadioButton(
-                        "Remote echo", value=cfg.echo_mode == "remote", id="echo-remote"
-                    )
+                    yield textual.widgets.RadioButton("Auto", value=cfg.echo_mode == "auto", id="echo-auto")
+                    yield textual.widgets.RadioButton("Local echo", value=cfg.echo_mode == "local", id="echo-local")
+                    yield textual.widgets.RadioButton("Remote echo", value=cfg.echo_mode == "remote", id="echo-remote")
             with textual.containers.Vertical(id="repl-col"), textual.containers.Horizontal(classes="switch-row"):
                 repl_dim = "" if cfg.mode != "raw" else " dimmed"
                 yield textual.widgets.Label("Advanced REPL", id="repl-label", classes=f"field-label{repl_dim}")
@@ -2072,7 +2066,9 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#ff-clears-screen", textual.widgets.Switch).value = True
             self.update_palette_preview()
             compress_label = "no (SSL)" if ssl_on else "passive"
-            self.notify(f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off, MCCP Compression {compress_label}")
+            self.notify(
+                f"BBS: Color Palette vga, iCE Colors on, Raw mode, Remote echo, REPL off, MCCP Compression {compress_label}"
+            )
         elif button_id == "type-mud":
             if ssl_on:
                 self.select_radio("compression-radio", "compress-no")

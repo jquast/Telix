@@ -19,6 +19,8 @@ Once connected, disconnect using ``Ctrl + ]``, which returns to the session mana
 | **New** | Create a new session pre-filled with defaults |
 | **Bookmark** | Toggle bookmark on the selected session |
 | **Delete** | Delete the selected session |
+| **Copy** | Copy the selected session |
+| **Theme** | Change the TUI theme |
 | **Edit** | Edit the selected session |
 
 ### Keyboard Shortcuts
@@ -30,6 +32,8 @@ Once connected, disconnect using ``Ctrl + ]``, which returns to the session mana
 | **E** | Edit the selected session |
 | **B** | Toggle bookmark on the selected session |
 | **D** | Delete the selected session |
+| **C** | Copy the selected session |
+| **T** | Change theme |
 | **F1** | Open this help screen |
 | **Q** | Quit Telix |
 
@@ -60,6 +64,7 @@ options:
 | **eol** | ASCII line endings |
 | **!ice** | iCE colors disabled |
 | **!repl** | REPL disabled (display only) |
+| **gfx** | Graphics font auto-detected |
 | **ts** | Typescript session recording to a file |
 
 ### Session Editing
@@ -76,12 +81,13 @@ The session editor has a **Server Type** radio (BBS / MUD) that applies
 recommended defaults for the connection:
 
 **BBS** sets Color Palette to vga, iCE Colors on, Raw mode, REPL off,
-Clear Homes Cursor on, FF is Clear+Home on, and MCCP Compression to
-passive.  Most BBSs require an 80-column by 25-line terminal.
+Clear Homes Cursor on, FF is Clear+Home on, Echo Mode to Remote, and
+MCCP Compression to passive.  Most BBSs require an 80-column by 25-line
+terminal.
 
-**MUD** sets MCCP Compression on, Line mode, REPL on, Color Palette
-to none, and iCE Colors off.  Most MUDs expect a screen width of 100
-or 120 columns.
+**MUD** sets MCCP Compression on, Line mode, REPL on, Echo Mode to
+Auto, Color Palette to none, and iCE Colors off.  Most MUDs expect a
+screen width of 100 or 120 columns.
 
 These are starting points -- all fields remain editable after selection.
 
@@ -129,6 +135,7 @@ The Display tab includes color and rendering options:
 | **Clear Homes Cursor** | Inject cursor-home before clear-screen (CTerm compatibility) |
 | **FF is Clear+Home** | Treat Form Feed (0x0C) as clear screen and home cursor (SyncTERM compatibility) |
 | **Columns / Rows** | Force virtual terminal size for graphics font (blank = auto) |
+| **Echo Mode** | ``Auto`` (default -- follow telnet ECHO negotiation), ``Local`` (client echoes), ``Remote`` (server echoes) |
 
 **Clear Homes Cursor** compensates for BBS software that sends
 ``ESC[2J`` (erase display) expecting the cursor to also return home,
