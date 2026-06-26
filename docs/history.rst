@@ -7,6 +7,7 @@ History
 - enhcancement: add ``--local-echo`` or ``--remote-echo`` for retrocomputer BBS's that require it.
 - enhancement: add ``--graphics-font`` option, uses kitty or sixel for retrocomputer fonts.
 - enhancement: new "FF is Clear+Home" toggle (SyncTERM compatibility)
+- bugfix: backspace with ATASCII
 
 0.1.7 -- 2026-03-16
 -------------------
