@@ -801,7 +801,7 @@ class TestComputeLocalEcho:
         assert compute_local_echo("auto", True) is False
 
     def test_auto_without_will_echo(self) -> None:
-        assert compute_local_echo("auto", False) is True
+        assert compute_local_echo("auto", False) is False
 
     def test_local_mode(self) -> None:
         assert compute_local_echo("local", True) is True

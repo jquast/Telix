@@ -65,7 +65,8 @@ def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
         return True
     if echo_mode == "remote":
         return False
-    return not will_echo
+    if echo_mode == "auto":
+        return False
 
 
 def _apply_delete_to_backspace(stdin: typing.Any) -> None:
