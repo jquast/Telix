@@ -168,87 +168,31 @@ def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256,
     dest.write(DCS_END)
 
 
-def _make_png(colors: np.ndarray) -> bytes:
-    """
-    Create a minimal PNG from an RGB image without external dependencies.
-
-    Uses raw DEFLATE compression via :mod:`zlib`.
-
-    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
-    :returns: Valid PNG file bytes.
-    """
-    h, w = colors.shape[:2]
-    rgb = (colors * 255).astype(np.uint8)
-
-    raw = bytearray()
-    for y in range(h):
-        raw.append(0)
-        raw.extend(rgb[y].tobytes())
-
-    def _chunk(chunk_type: bytes, data: bytes) -> bytes:
-        length = len(data).to_bytes(4, "big")
-        chunk_data = chunk_type + data
-        crc = zlib.crc32(chunk_data) & 0xFFFFFFFF
-        return length + chunk_data + crc.to_bytes(4, "big")
-
-    signature = b"\x89PNG\r\n\x1a\n"
-    ihdr_data = w.to_bytes(4, "big") + h.to_bytes(4, "big") + bytes([8, 2, 0, 0, 0])
-    ihdr = _chunk(b"IHDR", ihdr_data)
-    compressed = zlib.compress(bytes(raw), level=6)
-    idat = _chunk(b"IDAT", compressed)
-    iend = _chunk(b"IEND", b"")
-    return signature + ihdr + idat + iend
-
-
-def _try_pil_png(colors: np.ndarray) -> bytes | None:
-    """
-    Try to create a PNG using PIL, which compresses better.
-
-    :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
-    :returns: PNG bytes, or None if PIL is not installed.
-    """
-    try:
-        from PIL import Image
-    except ImportError:
-        return None
-    rgb = (colors * 255).astype(np.uint8)
-    img = Image.fromarray(rgb)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
-    return buf.getvalue()
-
-
-def encode_kitty(colors: np.ndarray, dest: io.TextIOBase, fmt: str = "png", columns: int = 0, rows: int = 0) -> None:
+def encode_kitty(colors: np.ndarray, dest: io.TextIOBase, fmt: str = "rgb", columns: int = 0, rows: int = 0) -> None:
     """
     Encode an RGB image as a Kitty graphics escape sequence and write to *dest*.
 
     :param colors: Array of shape (H, W, 3) with float values 0.0..1.0.
     :param dest: Text stream to write the escape sequence into.
-    :param fmt: Output format: "png" (default), "rgb", or "rgba".
+    :param fmt: Output format: "rgb" (default) or "rgba".
     :param columns: Display width in terminal columns. When > 0, the terminal scales the image to fit *columns* cells,
         providing font-size-independent sizing.
     :param rows: Display height in terminal rows.  When > 0, the terminal scales the image to fit *rows* cells.
     """
     h, w = colors.shape[:2]
+    rgb = (colors * 255).astype(np.uint8)
 
-    if fmt == "png":
-        data = _try_pil_png(colors)
-        if data is None:
-            data = _make_png(colors)
-        fmt_code = 100
-        params = f"a=T,C=1,f={fmt_code}"
+    if fmt == "rgba":
+        alpha = np.full((h, w, 1), 255, dtype=np.uint8)
+        rgba = np.concatenate([rgb, alpha], axis=2)
+        data = rgba.tobytes()
+        fmt_code = 32
     else:
-        rgb = (colors * 255).astype(np.uint8)
-        if fmt == "rgba":
-            alpha = np.full((h, w, 1), 255, dtype=np.uint8)
-            rgba = np.concatenate([rgb, alpha], axis=2)
-            data = rgba.tobytes()
-            fmt_code = 32
-        else:
-            data = rgb.tobytes()
-            fmt_code = 24
-        data = zlib.compress(data, level=6)
-        params = f"a=T,C=1,f={fmt_code},o=z,s={w},v={h}"
+        data = rgb.tobytes()
+        fmt_code = 24
+
+    data = zlib.compress(data, level=6)
+    params = f"a=T,C=1,f={fmt_code},o=z,s={w},v={h}"
 
     if columns > 0:
         params += f",c={columns}"

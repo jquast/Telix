@@ -44,6 +44,7 @@ from . import (
     highlighter,
     progressbars,
     ws_transport,
+    raw_transport,
     ssh_transport,
     session_context,
 )
@@ -292,6 +293,7 @@ def build_session_key(
         | telnetlib3.stream_writer.TelnetWriterUnicode
         | ws_transport.WebSocketWriter
         | ssh_transport.SSHWriter
+        | raw_transport.RawWriter
     ),
 ) -> str:
     """
@@ -301,10 +303,10 @@ def build_session_key(
     :func:`socket.getpeername`, so that session-specific files (history, rooms, macros, etc.) are keyed by the human-
     readable hostname used to connect.
 
-    For WebSocket and SSH writers, falls through directly to peername since the hostname is already set by the
+    For WebSocket, SSH, and raw TCP writers, falls through directly to peername since the hostname is already set by the
     respective client.
     """
-    if isinstance(writer, (ws_transport.WebSocketWriter, ssh_transport.SSHWriter)):
+    if isinstance(writer, (ws_transport.WebSocketWriter, ssh_transport.SSHWriter, raw_transport.RawWriter)):
         peername = writer.get_extra_info("peername")
         if peername:
             return f"{peername[0]}:{peername[1]}"  # type: ignore[index]

@@ -10,7 +10,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, ssh_transport
+from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
 
 if typing.TYPE_CHECKING:
     from . import rooms, highlighter, progressbars
@@ -213,7 +213,11 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self,
         session_key: str = "",
         writer: (
-            telnetlib3.stream_writer.TelnetWriterUnicode | ws_transport.WebSocketWriter | ssh_transport.SSHWriter | None
+            telnetlib3.stream_writer.TelnetWriterUnicode
+            | ws_transport.WebSocketWriter
+            | ssh_transport.SSHWriter
+            | raw_transport.RawWriter
+            | None
         ) = None,
         encoding: str = "",
         raw_mode: bool | None = None,

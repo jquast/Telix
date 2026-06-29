@@ -6,16 +6,7 @@ import types
 import numpy as np
 import pytest
 
-from telix.graphics_renderer import (
-    APC_END,
-    DCS_END,
-    APC_START,
-    DCS_START,
-    _make_png,
-    encode_kitty,
-    encode_sixel,
-    _quantize_colors,
-)
+from telix.graphics_renderer import APC_END, DCS_END, APC_START, DCS_START, encode_kitty, encode_sixel, _quantize_colors
 
 
 def _solid_rgb(w, h, r, g, b):
@@ -94,29 +85,29 @@ class TestEncodeSixel:
 
 
 class TestEncodeKitty:
-    def test_png_output(self):
-        colors = _solid_rgb(8, 6, 0.0, 1.0, 0.0)
-        buf = io.StringIO()
-        encode_kitty(colors, buf, fmt="png")
-        output = buf.getvalue()
-        assert APC_START in output
-        assert APC_END in output
-        assert "f=100" in output
-        assert "a=T" in output
-
     def test_rgb_output(self):
-        colors = _solid_rgb(8, 6, 0.0, 0.0, 1.0)
+        colors = _solid_rgb(8, 6, 0.0, 1.0, 0.0)
         buf = io.StringIO()
         encode_kitty(colors, buf, fmt="rgb")
         output = buf.getvalue()
         assert APC_START in output
         assert APC_END in output
         assert "f=24" in output
+        assert "a=T" in output
+
+    def test_rgba_output(self):
+        colors = _solid_rgb(8, 6, 0.0, 0.0, 1.0)
+        buf = io.StringIO()
+        encode_kitty(colors, buf, fmt="rgba")
+        output = buf.getvalue()
+        assert APC_START in output
+        assert APC_END in output
+        assert "f=32" in output
 
     def test_output_contains_base64_data(self):
         colors = _solid_rgb(8, 6, 0.5, 0.5, 0.5)
         buf = io.StringIO()
-        encode_kitty(colors, buf, fmt="png")
+        encode_kitty(colors, buf, fmt="rgb")
         output = buf.getvalue()
         assert ";" in output
         data_part = output.split(";", 1)[1] if ";" in output else ""
@@ -128,25 +119,3 @@ class TestEncodeKitty:
         encode_kitty(colors, buf, fmt="rgb")
         output = buf.getvalue()
         assert "m=1" in output or "m=0" in output
-
-
-class TestMakePng:
-    def test_produces_valid_png_signature(self):
-        colors = _solid_rgb(8, 6, 0.5, 0.5, 0.5)
-        png = _make_png(colors)
-        assert png[:8] == b"\x89PNG\r\n\x1a\n"
-
-    def test_produces_ihdr_chunk(self):
-        colors = _solid_rgb(10, 10, 0.5, 0.5, 0.5)
-        png = _make_png(colors)
-        assert b"IHDR" in png
-
-    def test_produces_idat_chunk(self):
-        colors = _solid_rgb(10, 10, 0.5, 0.5, 0.5)
-        png = _make_png(colors)
-        assert b"IDAT" in png
-
-    def test_produces_iend_chunk(self):
-        colors = _solid_rgb(10, 10, 0.5, 0.5, 0.5)
-        png = _make_png(colors)
-        assert b"IEND" in png
