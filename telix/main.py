@@ -328,6 +328,7 @@ def main() -> None:
             sys.argv.append("--ssl")
 
     has_ssh_url = any(arg.startswith("ssh://") for arg in sys.argv[1:])
+    has_tcp_url = any(arg.startswith("tcp://") for arg in sys.argv[1:])
     has_ws_url = any(arg.startswith(("ws://", "wss://")) for arg in sys.argv[1:])
 
     if has_ws_url:
@@ -442,6 +443,55 @@ def main() -> None:
                     term_type=term_type,
                     shell=ssh_client_shell,
                     color_args=_color_args,
+                )
+            )
+        except KeyboardInterrupt:
+            pass
+        except OSError as err:
+            print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    if has_tcp_url:
+        import urllib.parse
+
+        from . import raw_client
+
+        tcp_url = next(arg for arg in sys.argv[1:] if arg.startswith("tcp://"))
+        parsed = urllib.parse.urlparse(tcp_url)
+        host = parsed.hostname or ""
+        argv = [a for a in sys.argv[1:] if a != tcp_url]
+        argv.insert(0, host)
+        if parsed.port and "--port" not in argv:
+            argv[1:1] = ["--port", str(parsed.port)]
+        args = raw_client.build_parser().parse_args(argv)
+        _color_args = argparse.Namespace(
+            colormatch=args.colormatch,
+            color_brightness=args.color_brightness,
+            color_contrast=args.color_contrast,
+            background_color=args.background_color,
+            no_ice_colors=args.no_ice_colors,
+            ansi_keys=False,
+            no_repl=False,
+            echo_mode=resolve_echo_mode(args),
+            clear_homes_cursor=False,
+            ff_clears_screen=False,
+            graphics_font="",
+            graphics_columns=None,
+            graphics_rows=None,
+            font_id=None,
+        )
+        try:
+            asyncio.run(
+                raw_client.run_raw_client(
+                    host=args.host,
+                    port=args.port,
+                    shell=raw_client.raw_client_shell,
+                    color_args=_color_args,
+                    encoding=args.encoding,
+                    encoding_errors=args.encoding_errors,
+                    typescript=args.typescript,
+                    ansi_keys=args.ansi_keys,
                 )
             )
         except KeyboardInterrupt:

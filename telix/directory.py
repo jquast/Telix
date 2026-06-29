@@ -57,7 +57,7 @@ def load_favorites() -> list[dict[str, typing.Any]]:
         if echo_mode in ("auto", "local", "remote"):
             entry["echo_mode"] = echo_mode
         protocol = values.get("protocol")
-        if protocol in ("telnet", "websocket"):
+        if protocol in ("telnet", "websocket", "raw"):
             entry["protocol"] = protocol
         ws_path = values.get("ws_path")
         if ws_path:
@@ -80,7 +80,7 @@ def apply_overrides(
         cfg.mode = mode
     if echo_mode in ("auto", "local", "remote"):
         cfg.echo_mode = echo_mode
-    if protocol in ("telnet", "websocket"):
+    if protocol in ("telnet", "websocket", "raw"):
         cfg.protocol = protocol
 
 

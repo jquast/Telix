@@ -87,7 +87,7 @@ def render_grid(font) -> None:
     sys.stdout.write(SYNC_START)
     sys.stdout.write("\033[H")
     if protocol == "kitty":
-        graphics_renderer.encode_kitty(colors, sys.stdout)
+        graphics_renderer.encode_kitty(colors, sys.stdout, fmt="rgb")
     else:
         graphics_renderer.encode_sixel(colors, sys.stdout)
     sys.stdout.write(SYNC_END)
