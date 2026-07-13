@@ -141,7 +141,9 @@ def build_help_parser() -> argparse.ArgumentParser:
             "  telix telnets://host[:port]       -- Telnet with SSL\n"
             "  telix ws://host[:port][/path]     -- WebSocket\n"
             "  telix wss://host[:port][/path]    -- WebSocket with SSL\n"
-            "  telix ssh://[user@]host[:port]    -- SSH"
+            "  telix ssh://[user@]host[:port]    -- SSH\n"
+            "  telix tcp://host[:port]           -- Raw TCP (BBS)\n"
+            "  telix raw://host[:port]           -- Raw TCP (BBS)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -321,7 +323,7 @@ def detect_scheme(argv: list[str]) -> "str | None":
             return "ws"
         if arg.startswith("ssh://"):
             return "ssh"
-        if arg.startswith("tcp://"):
+        if arg.startswith("tcp://") or arg.startswith("raw://"):
             return "tcp"
     return None
 
@@ -399,7 +401,7 @@ def handle_ssh() -> None:
 
 def handle_raw_tcp() -> None:
     """Parse raw TCP args, build TelixConfig, and run the raw client."""
-    tcp_url = next(arg for arg in sys.argv[1:] if arg.startswith("tcp://"))
+    tcp_url = next(arg for arg in sys.argv[1:] if arg.startswith(("tcp://", "raw://")))
     parsed = urllib.parse.urlparse(tcp_url)
     host = parsed.hostname or ""
     argv = [a for a in sys.argv[1:] if a != tcp_url]

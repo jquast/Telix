@@ -1,6 +1,7 @@
 """Replace generated blocks in RST docs between marker comments."""
 
 import io
+import os
 import re
 import sys
 import pathlib
@@ -93,7 +94,13 @@ def main() -> None:
     buf = io.StringIO()
     from telix.main import build_help_parser
 
-    build_help_parser().print_help(file=buf)
+    os.environ["COLUMNS"] = "80"
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        build_help_parser().print_help()
+    finally:
+        sys.stdout = old_stdout
     help_text = buf.getvalue().rstrip()
 
     help_lines = [".. code-block:: text", ""]

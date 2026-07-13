@@ -117,6 +117,8 @@ For a full list of CLI options:
       telix ws://host[:port][/path]     -- WebSocket
       telix wss://host[:port][/path]    -- WebSocket with SSL
       telix ssh://[user@]host[:port]    -- SSH
+      telix tcp://host[:port]           -- Raw TCP (BBS)
+      telix raw://host[:port]           -- Raw TCP (BBS)
 
     options:
       -h, --help            show this help message and exit
