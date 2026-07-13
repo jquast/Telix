@@ -450,8 +450,8 @@ class TestSetupAnsiKeys:
     """setup_ansi_keys works with the color_args on the session context."""
 
     def _make_telnet_color_args(self, **kwargs):
-        """Build an argparse.Namespace matching build_telix_parser() output."""
-        import argparse
+        """Build a TelixConfig matching build_telix_parser() output."""
+        from telix.telix_config import TelixConfig
 
         defaults = {
             "colormatch": "vga",
@@ -463,7 +463,7 @@ class TestSetupAnsiKeys:
             "ansi_keys": False,
         }
         defaults.update(kwargs)
-        return argparse.Namespace(**defaults)
+        return TelixConfig(**defaults)
 
     def test_defaults_false(self) -> None:
         ctx = TelixSessionContext()
@@ -490,7 +490,7 @@ class TestSetupColorFilter:
     """setup_color_filter works with color_args on the session context."""
 
     def _make_color_args(self, **kwargs):
-        import argparse
+        from telix.telix_config import TelixConfig
 
         defaults = {
             "colormatch": "vga",
@@ -500,7 +500,7 @@ class TestSetupColorFilter:
             "no_ice_colors": False,
         }
         defaults.update(kwargs)
-        return argparse.Namespace(**defaults)
+        return TelixConfig(**defaults)
 
     def test_attaches_color_filter_for_vga(self) -> None:
         """setup_color_filter attaches a ColorFilter for the default VGA palette."""

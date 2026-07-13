@@ -136,6 +136,7 @@ def encode_sixel(colors: np.ndarray, dest: io.TextIOBase, max_colors: int = 256,
     indices, palette = _quantize_colors(colors, max_colors)
 
     dest.write(DCS_START)
+    dest.write(f'"1;1;{w};{h}')
 
     for i, (r, g, b) in enumerate(palette):
         dest.write(f"#{i};2;{int(r * 100)};{int(g * 100)};{int(b * 100)}")

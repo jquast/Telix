@@ -48,10 +48,15 @@ from . import (
     ssh_transport,
     session_context,
 )
+from .telix_config import TelixConfig
 
 log = logging.getLogger(__name__)
 
 __all__ = ("ssh_client_shell", "telix_client_shell", "ws_client_shell")
+
+# Set by main() before telnetlib3.client.run_client() so the shell callback
+# can consume it without a module-level global on main.
+pending_config: TelixConfig | None = None
 
 
 def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
@@ -605,18 +610,17 @@ async def telix_client_shell(
     """
     # 1. Build SessionContext and attach to writer, preserving attributes
     #    that run_client() wrappers already set on the original ctx.
-    # Transfer color_args from module-level global to initial ctx for native telnet path.
-    from . import main as _main_mod
-
-    telnet_writer.ctx.color_args = _main_mod._color_args  # type: ignore[attr-defined]
+    global pending_config
+    telnet_writer.ctx.color_args = pending_config
+    pending_config = None
     ctx = telnet_writer.ctx = session_context.TelixSessionContext.create_using_telnet_ctx(
         writer=telnet_writer,  # type: ignore[arg-type]
         session_key=build_session_key(telnet_writer),
         encoding=telnet_writer.fn_encoding(incoming=True),
     )
-    ctx.repl.enabled = not _main_mod._color_args.no_repl
-    if hasattr(_main_mod._color_args, "echo_mode"):
-        ctx.echo_mode = _main_mod._color_args.echo_mode
+    ctx.repl.enabled = not telnet_writer.ctx.color_args.no_repl
+    if hasattr(telnet_writer.ctx.color_args, "echo_mode"):
+        ctx.echo_mode = telnet_writer.ctx.color_args.echo_mode
 
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)

@@ -827,6 +827,8 @@ def build_raw_command(config: SessionConfig) -> list[str]:
         cmd += ["--color-contrast", str(config.color_contrast)]
     if config.ansi_keys:
         cmd.append("--ansi-keys")
+    if config.ascii_eol:
+        cmd.append("--ascii-eol")
     if config.loglevel != "warn":
         cmd += ["--loglevel", config.loglevel]
     if config.logfile:
@@ -1843,9 +1845,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         """Yield widgets for the Display tab pane."""
         yield textual.containers.Horizontal(
             textual.widgets.Label("Color Palette", classes="field-label"),
-            textual.widgets.Select(
-                [(v, v) for v in ("vga", "xterm", "none")], value=cfg.colormatch, id="colormatch"
-            ),
+            textual.widgets.Select([(v, v) for v in ("vga", "xterm", "none")], value=cfg.colormatch, id="colormatch"),
             textual.widgets.Static("", id="palette-preview"),
             classes="field-row",
             id="palette-row",
@@ -1900,8 +1900,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             yield textual.widgets.Label("FF is Clear+Home", classes="field-label")
             ff_switch = textual.widgets.Switch(value=cfg.ff_clears_screen, id="ff-clears-screen")
             ff_switch.tooltip = (
-                "Form Feed (0x0c) clears screen and moves cursor to home position"
-                " (SyncTERM compatibility)"
+                "Form Feed (0x0c) clears screen and moves cursor to home position (SyncTERM compatibility)"
             )
             yield ff_switch
         with textual.containers.Horizontal(classes="switch-row"):

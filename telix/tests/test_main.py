@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from telix import main as main_mod
+from telix import client_shell
 from telix.main import main, _detect_terminal_colors
 
 
@@ -94,9 +95,9 @@ class TestServerTypePresets:
         with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
             main()
         assert "--raw-mode" in sys.argv
-        assert main_mod._color_args.colormatch == "vga"
-        assert main_mod._color_args.clear_homes_cursor is True
-        assert main_mod._color_args.ff_clears_screen is True
+        assert client_shell.pending_config.colormatch == "vga"
+        assert client_shell.pending_config.clear_homes_cursor is True
+        assert client_shell.pending_config.ff_clears_screen is True
         assert "--colormatch" not in sys.argv
         assert "--shell=telix.client_shell.telix_client_shell" in sys.argv
 
@@ -107,8 +108,8 @@ class TestServerTypePresets:
             main()
         assert "--line-mode" in sys.argv
         assert "--compression" in sys.argv
-        assert main_mod._color_args.colormatch == "none"
-        assert main_mod._color_args.no_ice_colors is True
+        assert client_shell.pending_config.colormatch == "none"
+        assert client_shell.pending_config.no_ice_colors is True
         assert "--colormatch" not in sys.argv
         assert "--no-ice-colors" not in sys.argv
         assert "--shell=telix.client_shell.telix_client_shell" in sys.argv

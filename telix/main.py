@@ -5,6 +5,7 @@ import os
 import sys
 import asyncio
 import argparse
+import urllib.parse
 
 if os.environ.get("COVERAGE_PROCESS_START"):
     import coverage
@@ -14,7 +15,17 @@ if os.environ.get("COVERAGE_PROCESS_START"):
 import telnetlib3.client
 
 # local
-from . import mtts, directory, ws_client, ssh_client, client_tui_dialogs, client_tui_session_manager
+from . import (
+    mtts,
+    directory,
+    ws_client,
+    raw_client,
+    ssh_client,
+    client_shell,
+    client_tui_dialogs,
+    client_tui_session_manager,
+)
+from .telix_config import TelixConfig
 
 
 def parse_option_list(values: list[str]) -> set[bytes]:
@@ -31,11 +42,6 @@ def parse_option_list(values: list[str]) -> set[bytes]:
             if item:
                 result.add(telnetlib3.client._parse_option_arg(item))
     return result
-
-
-# Module-level store for telix-specific args, set by main() before
-# telnetlib3 starts the shell.  Read by client_shell.setup_color_filter().
-_color_args: argparse.Namespace | None = None
 
 
 def _detect_terminal_colors() -> "str | None":
@@ -287,6 +293,134 @@ def get_term_value() -> str:
     return get_argv_value("--term", os.environ.get("TERM", "ansi"))
 
 
+def run_connection(async_fn, *args: object, **kwargs: object) -> None:
+    """
+    Invoke an async client runner with standard error handling.
+
+    :param async_fn: Async function to run (e.g. ``run_ws_client``).
+    :param args: Positional arguments forwarded to ``async_fn``.
+    :param kwargs: Keyword arguments forwarded to ``async_fn``.
+    """
+    try:
+        asyncio.run(async_fn(*args, **kwargs))
+    except KeyboardInterrupt:
+        pass
+    except OSError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        sys.exit(1)
+
+
+def detect_scheme(argv: list[str]) -> "str | None":
+    """
+    Detect the URL scheme from command-line arguments.
+
+    :returns:``"ws"``, ``"ssh"``, ``"tcp"``, or ``None`` if no known URL scheme matches.
+    """
+    for arg in argv[1:]:
+        if arg.startswith(("ws://", "wss://")):
+            return "ws"
+        if arg.startswith("ssh://"):
+            return "ssh"
+        if arg.startswith("tcp://"):
+            return "tcp"
+    return None
+
+
+def handle_websocket(server_type: str) -> None:
+    """Parse WebSocket args, build TelixConfig, and run the WebSocket client."""
+    parser = ws_client.build_parser()
+    args = parser.parse_args()
+    no_repl = args.no_repl or server_type == "bbs"
+    raw_mode: bool | None = True if args.raw_mode else (False if args.line_mode else None)
+    config = TelixConfig.from_args(args, ansi_keys=False, no_repl=no_repl, echo_mode=resolve_echo_mode(args))
+    compression: bool | None = True if args.compression else (False if args.no_compression else None)
+    always_do = parse_option_list(args.always_do)
+    always_will = parse_option_list(args.always_will)
+    always_dont = parse_option_list(args.always_dont)
+    always_wont = parse_option_list(args.always_wont)
+    gmcp_modules = [m.strip() for m in args.gmcp_modules.split(",") if m.strip()] if args.gmcp_modules else None
+    send_environ = tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
+    run_connection(
+        ws_client.run_ws_client,
+        url=args.url,
+        shell=args.shell,
+        no_repl=no_repl,
+        loglevel=args.loglevel,
+        logfile=args.logfile,
+        typescript=args.typescript,
+        logfile_mode=args.logfile_mode,
+        typescript_mode=args.typescript_mode,
+        encoding=args.encoding,
+        encoding_errors=args.encoding_errors,
+        raw_mode=raw_mode,
+        ansi_keys=args.ansi_keys,
+        ascii_eol=args.ascii_eol,
+        always_do=always_do,
+        always_will=always_will,
+        always_dont=always_dont,
+        always_wont=always_wont,
+        term=args.term,
+        speed=args.speed,
+        send_environ=send_environ,
+        gmcp_modules=gmcp_modules,
+        connect_minwait=args.connect_minwait,
+        connect_maxwait=args.connect_maxwait,
+        connect_timeout=args.connect_timeout,
+        compression=compression,
+        color_args=config,
+    )
+
+
+def handle_ssh() -> None:
+    """Parse SSH args, build TelixConfig, and run the SSH client."""
+    ssh_url = next(arg for arg in sys.argv[1:] if arg.startswith("ssh://"))
+    parsed = urllib.parse.urlparse(ssh_url)
+    host = parsed.hostname or ""
+    argv = [a for a in sys.argv[1:] if a != ssh_url]
+    argv.insert(0, host)
+    if parsed.port and "--port" not in argv:
+        argv[1:1] = ["--port", str(parsed.port)]
+    if parsed.username and "--username" not in argv:
+        argv += ["--username", parsed.username]
+    args = ssh_client.build_parser().parse_args(argv)
+    term_type = args.term or os.environ.get("TERM", "xterm-256color")
+    config = TelixConfig.from_args(args, echo_mode=resolve_echo_mode(args))
+    run_connection(
+        ssh_client.run_ssh_client,
+        host=args.host,
+        port=args.port,
+        username=args.username,
+        key_file=args.key_file,
+        term_type=term_type,
+        shell=client_shell.ssh_client_shell,
+        color_args=config,
+    )
+
+
+def handle_raw_tcp() -> None:
+    """Parse raw TCP args, build TelixConfig, and run the raw client."""
+    tcp_url = next(arg for arg in sys.argv[1:] if arg.startswith("tcp://"))
+    parsed = urllib.parse.urlparse(tcp_url)
+    host = parsed.hostname or ""
+    argv = [a for a in sys.argv[1:] if a != tcp_url]
+    argv.insert(0, host)
+    if parsed.port and "--port" not in argv:
+        argv[1:1] = ["--port", str(parsed.port)]
+    args = raw_client.build_parser().parse_args(argv)
+    config = TelixConfig.from_args(args, echo_mode=resolve_echo_mode(args))
+    run_connection(
+        raw_client.run_raw_client,
+        host=args.host,
+        port=args.port,
+        shell=raw_client.raw_client_shell,
+        color_args=config,
+        encoding=args.encoding,
+        encoding_errors=args.encoding_errors,
+        typescript=args.typescript,
+        ansi_keys=args.ansi_keys,
+    )
+
+
 def main() -> None:
     """
     Entry point for the ``telix`` command.
@@ -297,27 +431,20 @@ def main() -> None:
     The ``--bbs`` and ``--mud`` flags apply connection presets matching the TUI session editor defaults for each server
     type.
     """
-    global _color_args
-
     if "--reinit" in sys.argv[1:]:
         reinit()
         return
 
-    # Intercept --help early to show unified help output.
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
         build_help_parser().parse_args(["--help"])
         return
 
     detected_sw_name = _detect_terminal_colors()
-
     server_type = pop_server_type()
 
-    # Rewrite telnet:// and telnets:// URLs to bare host/port argv so the
-    # standard telnet path handles them.  telnets:// also injects --ssl.
+    # Rewrite telnet:// and telnets:// URLs to bare host/port argv.
     telnet_url = next((a for a in sys.argv[1:] if a.startswith(("telnet://", "telnets://"))), None)
     if telnet_url is not None:
-        import urllib.parse
-
         parsed = urllib.parse.urlparse(telnet_url)
         idx = sys.argv.index(telnet_url)
         replacement = [parsed.hostname or ""]
@@ -327,183 +454,20 @@ def main() -> None:
         if telnet_url.startswith("telnets://") and "--ssl" not in sys.argv:
             sys.argv.append("--ssl")
 
-    has_ssh_url = any(arg.startswith("ssh://") for arg in sys.argv[1:])
-    has_tcp_url = any(arg.startswith("tcp://") for arg in sys.argv[1:])
-    has_ws_url = any(arg.startswith(("ws://", "wss://")) for arg in sys.argv[1:])
-
-    if has_ws_url:
-        parser = ws_client.build_parser()
-        args = parser.parse_args()
-        no_repl = args.no_repl or server_type == "bbs"
-        raw_mode: bool | None = True if args.raw_mode else (False if args.line_mode else None)
-        _color_args = argparse.Namespace(
-            colormatch=args.colormatch,
-            color_brightness=args.color_brightness,
-            color_contrast=args.color_contrast,
-            background_color=args.background_color,
-            no_ice_colors=args.no_ice_colors,
-            ansi_keys=False,
-            no_repl=no_repl,
-            echo_mode=resolve_echo_mode(args),
-            clear_homes_cursor=False,
-            ff_clears_screen=False,
-            graphics_font="",
-            graphics_columns=None,
-            graphics_rows=None,
-            font_id=None,
-        )
-        compression: bool | None = True if args.compression else (False if args.no_compression else None)
-        always_do = parse_option_list(args.always_do)
-        always_will = parse_option_list(args.always_will)
-        always_dont = parse_option_list(args.always_dont)
-        always_wont = parse_option_list(args.always_wont)
-        gmcp_modules = [m.strip() for m in args.gmcp_modules.split(",") if m.strip()] if args.gmcp_modules else None
-        send_environ = (
-            tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
-        )
-        try:
-            asyncio.run(
-                ws_client.run_ws_client(
-                    url=args.url,
-                    shell=args.shell,
-                    no_repl=no_repl,
-                    loglevel=args.loglevel,
-                    logfile=args.logfile,
-                    typescript=args.typescript,
-                    logfile_mode=args.logfile_mode,
-                    typescript_mode=args.typescript_mode,
-                    encoding=args.encoding,
-                    encoding_errors=args.encoding_errors,
-                    raw_mode=raw_mode,
-                    ansi_keys=args.ansi_keys,
-                    ascii_eol=args.ascii_eol,
-                    always_do=always_do,
-                    always_will=always_will,
-                    always_dont=always_dont,
-                    always_wont=always_wont,
-                    term=args.term,
-                    speed=args.speed,
-                    send_environ=send_environ,
-                    gmcp_modules=gmcp_modules,
-                    connect_minwait=args.connect_minwait,
-                    connect_maxwait=args.connect_maxwait,
-                    connect_timeout=args.connect_timeout,
-                    compression=compression,
-                    color_args=_color_args,
-                )
-            )
-        except KeyboardInterrupt:
-            pass
-        except OSError as err:
-            print(f"Error: {err}", file=sys.stderr)
-            sys.exit(1)
+    scheme = detect_scheme(sys.argv)
+    if scheme == "ws":
+        handle_websocket(server_type)
+        return
+    if scheme == "ssh":
+        handle_ssh()
+        return
+    if scheme == "tcp":
+        handle_raw_tcp()
         return
 
-    if has_ssh_url:
-        import urllib.parse
-
-        from .client_shell import ssh_client_shell
-
-        ssh_url = next(arg for arg in sys.argv[1:] if arg.startswith("ssh://"))
-        parsed = urllib.parse.urlparse(ssh_url)
-        host = parsed.hostname or ""
-        # Build an argv for ssh_client.build_parser(): positional host plus optional flags.
-        # URL-encoded username and port are injected as flags unless already supplied.
-        argv = [a for a in sys.argv[1:] if a != ssh_url]
-        argv.insert(0, host)
-        if parsed.port and "--port" not in argv:
-            argv[1:1] = ["--port", str(parsed.port)]
-        if parsed.username and "--username" not in argv:
-            argv += ["--username", parsed.username]
-        args = ssh_client.build_parser().parse_args(argv)
-        term_type = args.term or os.environ.get("TERM", "xterm-256color")
-        _color_args = argparse.Namespace(
-            colormatch=args.colormatch,
-            color_brightness=args.color_brightness,
-            color_contrast=args.color_contrast,
-            background_color=args.background_color,
-            no_ice_colors=args.no_ice_colors,
-            ansi_keys=False,
-            no_repl=False,
-            echo_mode=resolve_echo_mode(args),
-            clear_homes_cursor=False,
-            ff_clears_screen=False,
-            graphics_font="",
-            graphics_columns=None,
-            graphics_rows=None,
-            font_id=None,
-        )
-        try:
-            asyncio.run(
-                ssh_client.run_ssh_client(
-                    host=args.host,
-                    port=args.port,
-                    username=args.username,
-                    key_file=args.key_file,
-                    term_type=term_type,
-                    shell=ssh_client_shell,
-                    color_args=_color_args,
-                )
-            )
-        except KeyboardInterrupt:
-            pass
-        except OSError as err:
-            print(f"Error: {err}", file=sys.stderr)
-            sys.exit(1)
-        return
-
-    if has_tcp_url:
-        import urllib.parse
-
-        from . import raw_client
-
-        tcp_url = next(arg for arg in sys.argv[1:] if arg.startswith("tcp://"))
-        parsed = urllib.parse.urlparse(tcp_url)
-        host = parsed.hostname or ""
-        argv = [a for a in sys.argv[1:] if a != tcp_url]
-        argv.insert(0, host)
-        if parsed.port and "--port" not in argv:
-            argv[1:1] = ["--port", str(parsed.port)]
-        args = raw_client.build_parser().parse_args(argv)
-        _color_args = argparse.Namespace(
-            colormatch=args.colormatch,
-            color_brightness=args.color_brightness,
-            color_contrast=args.color_contrast,
-            background_color=args.background_color,
-            no_ice_colors=args.no_ice_colors,
-            ansi_keys=False,
-            no_repl=False,
-            echo_mode=resolve_echo_mode(args),
-            clear_homes_cursor=False,
-            ff_clears_screen=False,
-            graphics_font="",
-            graphics_columns=None,
-            graphics_rows=None,
-            font_id=None,
-        )
-        try:
-            asyncio.run(
-                raw_client.run_raw_client(
-                    host=args.host,
-                    port=args.port,
-                    shell=raw_client.raw_client_shell,
-                    color_args=_color_args,
-                    encoding=args.encoding,
-                    encoding_errors=args.encoding_errors,
-                    typescript=args.typescript,
-                    ansi_keys=args.ansi_keys,
-                )
-            )
-        except KeyboardInterrupt:
-            pass
-        except OSError as err:
-            print(f"Error: {err}", file=sys.stderr)
-            sys.exit(1)
-        return
-
+    # No URL scheme -- check for bare host or launch TUI.
     has_host = any(not arg.startswith("-") for arg in sys.argv[1:])
-    wants_help = "-h" in sys.argv[1:] or "--help" in sys.argv[1:]
-    if not has_host and not wants_help:
+    if not has_host:
         client_tui_dialogs.tui_main()
         return
 
@@ -515,16 +479,9 @@ def main() -> None:
 
     # Parse and strip telix-specific flags so telnetlib3 doesn't see them.
     telix_args = strip_telix_args()
-    _color_args = telix_args
-    _color_args.echo_mode = resolve_echo_mode(_color_args)
+    config = TelixConfig.from_args(telix_args, echo_mode=resolve_echo_mode(telix_args))
 
     # Inject the telix shell so telnetlib3 uses our REPL-aware shell.
-    # Our shell waits for echo negotiation before entering the raw event loop,
-    # preventing a race where local_echo is set before WILL ECHO arrives and
-    # causes software echo of user input and CPR responses (visible as [r;cR
-    # garbage on screen).  BBS connections also benefit from this fix since
-    # gambatte-style servers negotiate WILL ECHO + SGA (kludge mode) and the
-    # default telnetlib3 shell computes local_echo before negotiation completes.
     if "--shell" not in sys.argv:
         sys.argv.insert(1, "--shell=telix.client_shell.telix_client_shell")
 
@@ -535,10 +492,6 @@ def main() -> None:
             get_term_value(), ssl=is_ssl, sw_name=detected_sw_name, encoding=get_argv_value("--encoding", "utf-8")
         )
 
-    try:
-        asyncio.run(telnetlib3.client.run_client())
-    except KeyboardInterrupt:
-        pass
-    except OSError as err:
-        print(f"Error: {err}", file=sys.stderr)
-        sys.exit(1)
+    # Set pending config for telix_client_shell to consume on telnetlib3 callback.
+    client_shell.pending_config = config
+    run_connection(telnetlib3.client.run_client)

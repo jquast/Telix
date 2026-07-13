@@ -75,6 +75,13 @@ class TestEncodeSixel:
         assert DCS_START in output
         assert DCS_END in output
 
+    def test_raster_attributes_header(self):
+        colors = _solid_rgb(10, 6, 0.5, 0.5, 0.5)
+        buf = io.StringIO()
+        encode_sixel(colors, buf, max_colors=64)
+        output = buf.getvalue()
+        assert '"1;1;10;6' in output
+
     def test_run_length_encoding(self):
         colors = _solid_rgb(20, 6, 1.0, 0.0, 0.0)
         buf = io.StringIO()

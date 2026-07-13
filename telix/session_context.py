@@ -2,7 +2,6 @@
 
 import typing
 import asyncio
-import argparse
 import collections
 import dataclasses
 from collections.abc import Callable, Awaitable
@@ -11,6 +10,7 @@ import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
 from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
+from .telix_config import TelixConfig
 
 if typing.TYPE_CHECKING:
     from . import rooms, highlighter, progressbars
@@ -228,7 +228,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         trigger_wait_fn: Callable[..., Awaitable[None]] | None = None,
         typescript_file: typing.IO[str] | None = None,
         gmcp_data: dict[str, typing.Any] | None = None,
-        color_args: argparse.Namespace | None = None,
+        color_args: TelixConfig | None = None,
     ):
         """Initialize session context with default state."""
         super().__init__(
@@ -280,7 +280,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
         self.mslp_collector: mslp.MslpCollector = mslp.MslpCollector()
 
         # CLI color arguments
-        self.color_args: argparse.Namespace | None = color_args
+        self.color_args: TelixConfig | None = color_args
 
         # debounced timestamp persistence timer (top-level)
         self.save_timer: asyncio.TimerHandle | None = None
