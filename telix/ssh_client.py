@@ -25,8 +25,18 @@ from collections.abc import Callable, Sequence, Awaitable
 import asyncssh
 
 from . import ssh_transport
+from .telix_config import TelixConfig
 
 log = logging.getLogger(__name__)
+
+_LEVEL_MAP = {
+    "trace": 5,
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warn": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
 
 
 class SSHTelix(asyncssh.SSHClient):
@@ -125,7 +135,7 @@ async def run_ssh_client(
     key_file: str,
     term_type: str,
     shell: Callable[..., Awaitable[None]],
-    color_args: "argparse.Namespace | None" = None,
+    color_args: "TelixConfig | None" = None,
     encoding: str = "utf-8",
     encoding_errors: str = "replace",
     typescript: str = "",
@@ -272,7 +282,7 @@ def main() -> None:
 
     term_type = args.term or os.environ.get("TERM", "xterm-256color")
 
-    color_args = argparse.Namespace(
+    color_args = TelixConfig(
         colormatch=args.colormatch,
         color_brightness=args.color_brightness,
         color_contrast=args.color_contrast,
@@ -287,18 +297,13 @@ def main() -> None:
         font_id=args.font_id,
     )
 
+    level = _LEVEL_MAP[args.loglevel]
     if args.logfile:
         logging.basicConfig(
-            level=logging.getLevelName(args.loglevel.upper()),
-            filename=args.logfile,
-            filemode="w",
-            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
+            level=level, filename=args.logfile, filemode="w", format="%(levelname)s %(filename)s:%(lineno)d %(message)s"
         )
     else:
-        logging.basicConfig(
-            level=logging.getLevelName(args.loglevel.upper()),
-            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
-        )
+        logging.basicConfig(level=level, format="%(levelname)s %(filename)s:%(lineno)d %(message)s")
 
     asyncio.run(
         run_ssh_client(

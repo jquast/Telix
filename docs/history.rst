@@ -1,6 +1,11 @@
 History
 =======
 
+0.1.9 -- 2026-07-13
+-------------------
+
+- enhancement: add raw tcp support and address a few session manager TUI layout issues
+
 0.1.8 -- 2026-06-26
 -------------------
 

@@ -95,12 +95,15 @@ The following is auto-generated as a convenience, of the first line of python do
     mtts.py                        MTTS and MNES protocol support.
     paths.py                       Consolidated XDG Base Directory paths for telix.
     progressbars.py                Progress bar configuration model for the GMCP vitals toolbar.
+    raw_client.py                  Raw TCP client for telix.
+    raw_transport.py               Raw TCP reader/writer adapters for telix sessions.
     repl_theme.py                  Resolve the user's Textual theme into concrete hex colors for the blessed REPL.
     rooms.py                       Room graph tracking, BFS pathfinding, and SQLite persistence for GMCP Room.Info data.
     scripts.py                     Async Python scripting engine for telix.
     session_context.py             Per-connection session state for MUD client sessions.
     ssh_client.py                  SSH client for telix.
     ssh_transport.py               SSH reader/writer adapters for telix sessions.
+    telix_config.py                Telix-specific CLI configuration threaded through the call chain to client shells.
     terminal.py                    Platform dispatcher for terminal operations.
     terminal_unix.py               Unix-specific terminal operations for the telix REPL.
     terminal_win32.py              Windows terminal operations for the telix REPL (stubs).

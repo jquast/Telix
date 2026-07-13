@@ -642,7 +642,7 @@ class GraphicsWriter(BaseScreenWriter):
         buf.write("\033[H")
 
         if self.protocol == "kitty":
-            graphics_renderer.encode_kitty(colors, buf, columns=self.columns, rows=self.rows)
+            graphics_renderer.encode_kitty(colors, buf, fmt="rgb", columns=self.columns, rows=self.rows)
         else:
             graphics_renderer.encode_sixel(colors, buf)
         buf.write(SYNC_END)
