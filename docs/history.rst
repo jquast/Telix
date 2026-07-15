@@ -1,6 +1,14 @@
 History
 =======
 
+0.1.10 -- 2026-07-15
+--------------------
+
+- bugfix: gmcp and room identifiers for Discworld MUD
+- bugfix: MUD TUI crashes due to CSS error
+- enhancement: log Textualie exceptions and css linting
+- ATASCII raw mode ESC/return fixes
+
 0.1.9 -- 2026-07-13
 -------------------
 
