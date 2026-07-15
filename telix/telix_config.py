@@ -24,6 +24,7 @@ class TelixConfig:
     graphics_columns: int | None = None
     graphics_rows: int | None = None
     font_id: int | None = None
+    on_connect_command: str = ""
 
     _DEFAULTS: typing.ClassVar[dict[str, object]] = {
         "colormatch": "vga",
@@ -40,6 +41,7 @@ class TelixConfig:
         "graphics_columns": None,
         "graphics_rows": None,
         "font_id": None,
+        "on_connect_command": "",
     }
 
     @classmethod

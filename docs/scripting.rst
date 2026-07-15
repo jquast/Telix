@@ -35,10 +35,11 @@ Example output::
 Starting
 --------
 
-Telix looks for scripts in this order:
+Telix looks for scripts in this order (first match wins):
 
 1. Current working directory
 2. ``$XDG_CONFIG_HOME/telix/scripts/`` (usually ``~/.config/telix/scripts/``)
+3. Bundled scripts shipped with telix (lowest priority)
 
 Scripts are started by the :samp:`\`async\`` or :samp:`\`await\`` commands.  Every time a script is
 launched, the last-modified time is checked and reloaded if necessary. Save a script file at any
@@ -221,4 +222,22 @@ Wait for a pattern then react::
             return
         await ctx.send(f"kill {target}")
         ctx.print("[hunt] fighting!")
+
+
+Bundled scripts
+---------------
+
+Telix ships with a few scripts for common tasks.  They are loaded by name
+like any other script::
+
+    `async discworld_rooms`
+
+Bundled scripts have the lowest lookup priority -- you can override them by
+placing a file with the same name in ``~/.config/telix/scripts/`` or the
+current working directory.
+
+- **discworld_rooms** -- Parses ``Room.Writtenmap`` GMCP messages (Discworld
+  MUD sends exit information as prose rather than structured data) and feeds
+  exits into the room graph so that ``randomwalk`` and ``autodiscover`` work.
+  Start it at the beginning of a Discworld session as a background daemon.
 

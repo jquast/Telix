@@ -465,6 +465,7 @@ class SessionConfig:
     # Advanced
     always_will: str = ""  # comma-separated option names
     always_do: str = ""
+    on_connect_command: str = ""
     loglevel: str = "warn"
     logfile: str = ""
     logfile_mode: str = "rewrite"
@@ -535,6 +536,7 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
     ("typescript", "--typescript", ""),
     ("typescript_mode", "--typescript-mode", "append"),
     ("ssl_cafile", "--ssl-cafile", ""),
+    ("on_connect_command", "--on-connect", ""),
 ]
 
 CMD_BOOL_FLAGS: list[tuple[str, str, bool]] = [
@@ -1981,6 +1983,16 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             textual.widgets.Switch(value=cfg.coverage, id="coverage", tooltip="Track code coverage (for developers)"),
             classes="field-row",
         )
+        yield self.field_row(
+            "On-connect",
+            textual.widgets.Input(
+                value=cfg.on_connect_command,
+                placeholder="`async my_script`",
+                id="on-connect-command",
+                classes="field-input",
+                tooltip="Commands to execute on connect, like background scripts",
+            ),
+        )
 
     def compose(self) -> textual.app.ComposeResult:
         """Build the tabbed session editor layout."""
@@ -2423,6 +2435,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         cfg.send_environ = (
             self.query_one("#send-environ", textual.widgets.Input).value.strip() or "TERM,LANG,COLUMNS,LINES,COLORTERM"
         )
+        cfg.on_connect_command = self.query_one("#on-connect-command", textual.widgets.Input).value.strip()
         cfg.always_will = self.config.always_will
         cfg.always_do = self.config.always_do
         cfg.loglevel = self.query_one("#loglevel", textual.widgets.Select).value  # type: ignore[assignment]

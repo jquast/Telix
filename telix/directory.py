@@ -62,6 +62,9 @@ def load_favorites() -> list[dict[str, typing.Any]]:
         ws_path = values.get("ws_path")
         if ws_path:
             entry["ws_path"] = ws_path
+        on_connect = values.get("on-connect")
+        if on_connect:
+            entry["on_connect"] = on_connect
         entries.append(entry)
     return entries
 
@@ -121,6 +124,9 @@ def entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager
     ws_path = entry.get("ws_path")
     if ws_path:
         cfg.ws_path = ws_path
+    on_connect = entry.get("on_connect")
+    if on_connect:
+        cfg.on_connect_command = on_connect
     return cfg
 
 

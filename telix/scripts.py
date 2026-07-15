@@ -284,6 +284,20 @@ class ScriptContext:
             return None
         return rg.get_room(self._ctx.room.current)
 
+    def update_room(self, data: dict[str, typing.Any]) -> None:
+        """
+        Update or create a room in the graph from a dict.
+
+        The dict must contain a room identifier key (``identifier``, ``num``,
+        ``id``, ``room_id``, or ``key``) and may contain ``exits`` as a dict of
+        direction→room-id mappings.
+
+        This is the scripting counterpart of :meth:`rooms.RoomStore.update_room`.
+        """
+        graph = self._ctx.room.graph
+        if graph is not None:
+            graph.update_room(data)
+
     def gmcp_get(self, dotted_path: str) -> typing.Any:
         """
         Retrieve a value from the GMCP data dict by dot-separated path.
@@ -814,12 +828,19 @@ class ScriptManager:
     matching does not conflict.
 
     :param scripts_dir: Path to the user global scripts directory.
+    :param bundled_dir: Path to bundled telix scripts (lowest priority).
     :param log: Logger instance.
     """
 
-    def __init__(self, scripts_dir: str = "", log: "logging.Logger | None" = None) -> None:
+    def __init__(
+        self,
+        scripts_dir: str = "",
+        bundled_dir: str = "",
+        log: "logging.Logger | None" = None,
+    ) -> None:
         """Initialize ScriptManager."""
         self.scripts_dir = scripts_dir
+        self.bundled_dir = bundled_dir
         self._log = log or logging.getLogger(__name__)
         self._tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._buffers: dict[str, ScriptOutputBuffer] = {}
@@ -841,6 +862,8 @@ class ScriptManager:
             search_dirs.append(cwd)
         if self.scripts_dir and self.scripts_dir != cwd:
             search_dirs.append(self.scripts_dir)
+        if self.bundled_dir and self.bundled_dir not in search_dirs:
+            search_dirs.append(self.bundled_dir)
 
         for d in reversed(search_dirs):
             if d not in sys.path:

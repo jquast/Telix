@@ -19,6 +19,7 @@ import sys
 import shlex
 import codecs
 import typing
+import pathlib
 import asyncio
 import logging
 import contextlib
@@ -41,6 +42,7 @@ from . import (
     trigger,
     terminal,
     client_repl,
+    client_repl_commands,
     highlighter,
     progressbars,
     ws_transport,
@@ -178,7 +180,10 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
 
     scripts_dir = str(paths.xdg_config_dir() / "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
-    ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
+    bundled_dir = str(pathlib.Path(__file__).parent / "bundled-scripts")
+    ctx.scripts.manager = scripts_mod.ScriptManager(
+        scripts_dir=scripts_dir, bundled_dir=bundled_dir, log=log
+    )
 
 
 # ED 2 (erase display) without an adjacent HOME -- inject HOME before it.
@@ -640,6 +645,15 @@ async def telix_client_shell(
 
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)
+
+    on_connect = getattr(ctx.color_args, "on_connect_command", "") if ctx.color_args is not None else ""
+    if on_connect and ctx.scripts.manager is not None:
+        m = client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(on_connect)
+        spec = m.group(1) if m else on_connect
+        try:
+            ctx.scripts.manager.start_script(ctx, spec)
+        except Exception:
+            log.warning("on-connect command %r failed", on_connect, exc_info=True)
 
     setup_color_filter(ctx, telnet_writer)
     setup_ansi_keys(ctx)

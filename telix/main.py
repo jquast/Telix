@@ -98,6 +98,7 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering")
     parser.add_argument("--local-echo", action="store_true", default=False, dest="local_echo")
     parser.add_argument("--remote-echo", action="store_true", default=False, dest="remote_echo")
+    parser.add_argument("--on-connect", default="", dest="on_connect_command")
     return parser
 
 
@@ -186,6 +187,9 @@ def build_help_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--loglevel", help="logging level (default: warn)")
     conn.add_argument("--no-repl", action="store_true", help="disable the interactive REPL (raw I/O only)")
+    conn.add_argument(
+        "--on-connect", metavar="CMD", help="commands to execute after connection, e.g. `async discworld_rooms`"
+    )
     conn.add_argument("--raw-mode", action="store_true", help="force raw-mode input (default: auto-detect)")
     conn.add_argument(
         "--send-environ", metavar="VARS", help="comma-separated environment variables to send via NEW-ENVIRON"

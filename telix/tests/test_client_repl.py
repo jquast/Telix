@@ -516,7 +516,10 @@ class DynamicRoomState:
             val = next(seq_iter, None)
             if val is not None:
                 object.__setattr__(self, "room_val", val)
-        return object.__getattribute__(self, "room_val")
+        room_val = object.__getattribute__(self, "room_val")
+        if room_val:
+            return room_val
+        return object.__getattribute__(self, "_real").current
 
     @current.setter
     def current(self, value: str) -> None:
@@ -1813,6 +1816,43 @@ async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatc
 
     assert engine.enabled is True
     assert writer.ctx.walk.last_walk_noreply is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_randomwalk_falls_back_to_current_file(tmp_path, monkeypatch, fast_sleep) -> None:
+    """When ctx.room.current is empty, randomwalk reads current from disk."""
+    room_file = tmp_path / "current_room"
+    room_file.write_text("room1")
+    adj = {"room1": {"north": "room2"}}
+    writer = WalkWriter(room_num="", adj=adj)
+    writer.ctx.room.current_file = str(room_file)
+
+    await randomwalk(writer.ctx, logging.getLogger("test"), limit=1)
+
+    assert "no room data" not in " ".join(writer.echo_log)
+    assert writer.ctx.room.current == "room1"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_autodiscover_falls_back_to_current_file(tmp_path, monkeypatch, fast_sleep) -> None:
+    """When ctx.room.current is empty, autodiscover reads current from disk."""
+    room_file = tmp_path / "current_room"
+    room_file.write_text("room1")
+    adj = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
+    writer = WalkWriter(room_num="", adj=adj)
+    writer.ctx.room.current_file = str(room_file)
+
+    async def fake_fast_travel(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("telix.client_repl_travel.fast_travel", fake_fast_travel)
+
+    await autodiscover(writer.ctx, logging.getLogger("test"), limit=1)
+
+    assert "no room data" not in " ".join(writer.echo_log)
+    assert writer.ctx.room.current == "room1"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")

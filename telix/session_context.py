@@ -9,11 +9,11 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
+from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport, rooms
 from .telix_config import TelixConfig
 
 if typing.TYPE_CHECKING:
-    from . import rooms, highlighter, progressbars
+    from . import highlighter, progressbars
 
 
 class CommandQueue:
@@ -35,10 +35,22 @@ class RoomState:
     graph: "rooms.RoomStore | None" = None
     file: str = ""
     current_file: str = ""
-    current: str = ""
+    _current: str = dataclasses.field(default="", repr=False)
     previous: str = ""
     arrival_timeout: float = 3.0
     changed: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+
+    @property
+    def current(self) -> str:
+        if not self._current and self.current_file:
+            val = rooms.read_current_room(self.current_file)
+            if val:
+                self._current = val
+        return self._current
+
+    @current.setter
+    def current(self, value: str) -> None:
+        self._current = value
 
 
 @dataclasses.dataclass
