@@ -466,6 +466,7 @@ class SessionConfig:
     always_will: str = ""  # comma-separated option names
     always_do: str = ""
     on_connect_command: str = ""
+    gmcp_modules: str = ""
     loglevel: str = "warn"
     logfile: str = ""
     logfile_mode: str = "rewrite"
@@ -537,6 +538,7 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
     ("typescript_mode", "--typescript-mode", "append"),
     ("ssl_cafile", "--ssl-cafile", ""),
     ("on_connect_command", "--on-connect", ""),
+    ("gmcp_modules", "--gmcp-modules", ""),
 ]
 
 CMD_BOOL_FLAGS: list[tuple[str, str, bool]] = [
@@ -2436,6 +2438,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
             self.query_one("#send-environ", textual.widgets.Input).value.strip() or "TERM,LANG,COLUMNS,LINES,COLORTERM"
         )
         cfg.on_connect_command = self.query_one("#on-connect-command", textual.widgets.Input).value.strip()
+        cfg.gmcp_modules = getattr(self.config, "gmcp_modules", "")
         cfg.always_will = self.config.always_will
         cfg.always_do = self.config.always_do
         cfg.loglevel = self.query_one("#loglevel", textual.widgets.Select).value  # type: ignore[assignment]

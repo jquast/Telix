@@ -647,11 +647,11 @@ async def telix_client_shell(
     load_configs(ctx)
 
     on_connect = getattr(ctx.color_args, "on_connect_command", "") if ctx.color_args is not None else ""
-    if on_connect and ctx.scripts.manager is not None:
-        m = client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(on_connect)
-        spec = m.group(1) if m else on_connect
+    if on_connect and (mgr := ctx.scripts.manager) is not None:
+        if m := client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(on_connect):
+            on_connect = m.group(1)
         try:
-            ctx.scripts.manager.start_script(ctx, spec)
+            mgr.start_script(ctx, on_connect)
         except Exception:
             log.warning("on-connect command %r failed", on_connect, exc_info=True)
 
