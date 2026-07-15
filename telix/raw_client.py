@@ -38,6 +38,7 @@ async def run_raw_client(
     encoding: str = "utf-8",
     encoding_errors: str = "replace",
     typescript: str = "",
+    typescript_mode: str = "append",
     ansi_keys: bool = False,
     ascii_eol: bool = False,
 ) -> None:
@@ -63,6 +64,7 @@ async def run_raw_client(
     writer.encoding = encoding
     writer.encoding_errors = encoding_errors
     writer.typescript = typescript  # type: ignore[attr-defined]
+    writer.typescript_mode = typescript_mode  # type: ignore[attr-defined]
     writer.ascii_eol = ascii_eol  # type: ignore[attr-defined]
 
     shell_task = asyncio.ensure_future(shell(reader, writer))
@@ -105,7 +107,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="logging level (default: warn)",
     )
     conn.add_argument("--logfile", default="", metavar="FILE", help="write log to FILE")
+    conn.add_argument(
+        "--logfile-mode",
+        default="append",
+        choices=["append", "rewrite"],
+        help="log file write mode: append (default) or rewrite",
+    )
     conn.add_argument("--typescript", default="", metavar="FILE", help="record session to FILE")
+    conn.add_argument(
+        "--typescript-mode",
+        default="append",
+        choices=["append", "rewrite"],
+        help="typescript write mode: append (default) or rewrite",
+    )
     conn.add_argument("--encoding", default="utf-8", metavar="ENC", help="connection encoding (default: utf-8)")
     conn.add_argument(
         "--encoding-errors", default="replace", metavar="POLICY", help="encoding error handling (default: replace)"
@@ -200,6 +214,11 @@ async def raw_client_shell(raw_reader: raw_transport.RawReader, raw_writer: raw_
     ctx.raw_mode = True
     ctx.ascii_eol = getattr(raw_writer, "ascii_eol", False)
 
+    typescript = getattr(raw_writer, "typescript", "")
+    typescript_mode = getattr(raw_writer, "typescript_mode", "append")
+    if typescript:
+        ctx.typescript_file = open(typescript, "w" if typescript_mode == "rewrite" else "a", encoding="utf-8")
+
     load_configs(ctx)
     setup_color_filter(ctx, raw_writer)  # type: ignore[arg-type]
     setup_clear_homes(ctx)
@@ -241,6 +260,10 @@ async def raw_client_shell(raw_reader: raw_transport.RawReader, raw_writer: raw_
                 from .client_shell import _apply_delete_to_backspace
 
                 _apply_delete_to_backspace(stdin)
+            if raw_writer.encoding == "atascii":
+                from .client_shell import _apply_atascii_return
+
+                _apply_atascii_return(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
@@ -290,7 +313,10 @@ def main() -> None:
     level = _LEVEL_MAP[args.loglevel]
     if args.logfile:
         logging.basicConfig(
-            level=level, filename=args.logfile, filemode="w", format="%(levelname)s %(filename)s:%(lineno)d %(message)s"
+            level=level,
+            filename=args.logfile,
+            filemode="w" if args.logfile_mode == "rewrite" else "a",
+            format="%(levelname)s %(filename)s:%(lineno)d %(message)s",
         )
     else:
         logging.basicConfig(level=level, format="%(levelname)s %(filename)s:%(lineno)d %(message)s")
@@ -304,6 +330,7 @@ def main() -> None:
             encoding=args.encoding,
             encoding_errors=args.encoding_errors,
             typescript=args.typescript,
+            typescript_mode=args.typescript_mode,
             ansi_keys=args.ansi_keys,
             ascii_eol=args.ascii_eol,
         )

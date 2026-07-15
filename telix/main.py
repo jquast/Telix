@@ -178,7 +178,12 @@ def build_help_parser() -> argparse.ArgumentParser:
     conn.add_argument("--gmcp-modules", metavar="MODULES", help="comma-separated list of GMCP modules to request")
     conn.add_argument("--line-mode", action="store_true", help="force line-mode input (default: auto-detect)")
     conn.add_argument("--logfile", metavar="FILE", help="write log to FILE")
-    conn.add_argument("--logfile-mode", choices=["append", "rewrite"], help="log file write mode (default: append)")
+    conn.add_argument(
+        "--logfile-mode",
+        choices=["append", "rewrite"],
+        default="rewrite",
+        help="log file write mode (default: rewrite)",
+    )
     conn.add_argument("--loglevel", help="logging level (default: warn)")
     conn.add_argument("--no-repl", action="store_true", help="disable the interactive REPL (raw I/O only)")
     conn.add_argument("--raw-mode", action="store_true", help="force raw-mode input (default: auto-detect)")

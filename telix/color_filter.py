@@ -569,6 +569,7 @@ _ATASCII_CONTROL_CODES: dict[str, str] = {
     "\u25c0": "\x08\x1b[P",  # ◀  backspace/delete (0x7E / 0xFE)
     "\u25b6": "\t",  # ▶  tab (0x7F / 0xFF)
     "\u21b0": "\x1b[2J\x1b[H",  # ↰  clear screen (0x7D / 0xFD)
+    "\u241b": "\x1b",  # ␛  escape (0x1B)
     "\u2191": "\x1b[A",  # ↑  cursor up (0x1C / 0x9C)
     "\u2193": "\x1b[B",  # ↓  cursor down (0x1D / 0x9D)
     "\u2190": "\x1b[D",  # ←  cursor left (0x1E / 0x9E)
@@ -583,6 +584,7 @@ ATASCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_ATASCII_CONTROL_COD
 _ATASCII_CONTROL_BYTES: dict[int, bytes] = {
     0x08: b"\x08\x1b[P",  # BS (decodes to U+25E2 ◢)
     0x09: b"\t",  # TAB (decodes to U+2597 ▗)
+    0x1B: b"\x1b",  # ESC (decodes to U+241B ␛)
     0x1C: b"\x1b[A",  # cursor up (decodes to U+2191 ↑)
     0x1D: b"\x1b[B",  # cursor down (decodes to U+2193 ↓)
     0x1E: b"\x1b[D",  # cursor left (decodes to U+2190 ←)

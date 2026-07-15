@@ -140,7 +140,12 @@ def run_in_thread(
     finally:
         subprocess_is_active = False
         if thread_exc is not None:
-            log.error("TUI thread failed", exc_info=thread_exc)
+            if isinstance(thread_exc, SystemExit) and thread_exc.code == 0:
+                log.debug("TUI thread exited normally (SystemExit 0)")
+            else:
+                log.error("TUI thread failed", exc_info=thread_exc)
+        else:
+            log.debug("TUI thread completed without error")
         restore_after_subprocess(replay_buf)
         for path in cleanup_files or ():
             try:

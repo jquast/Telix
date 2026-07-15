@@ -467,9 +467,9 @@ class SessionConfig:
     always_do: str = ""
     loglevel: str = "warn"
     logfile: str = ""
-    logfile_mode: str = "append"
+    logfile_mode: str = "rewrite"
     typescript: str = ""
-    typescript_mode: str = "append"
+    typescript_mode: str = "rewrite"
     no_repl: bool = False
 
     # Developer
@@ -791,8 +791,12 @@ def build_ssh_command(config: SessionConfig) -> list[str]:
         cmd += ["--loglevel", config.loglevel]
     if config.logfile:
         cmd += ["--logfile", config.logfile]
+        if config.logfile_mode != "append":
+            cmd += ["--logfile-mode", config.logfile_mode]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+        if config.typescript_mode != "append":
+            cmd += ["--typescript-mode", config.typescript_mode]
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
     return cmd
@@ -833,8 +837,12 @@ def build_raw_command(config: SessionConfig) -> list[str]:
         cmd += ["--loglevel", config.loglevel]
     if config.logfile:
         cmd += ["--logfile", config.logfile]
+        if config.logfile_mode != "append":
+            cmd += ["--logfile-mode", config.logfile_mode]
     if config.typescript:
         cmd += ["--typescript", config.typescript]
+        if config.typescript_mode != "append":
+            cmd += ["--typescript-mode", config.typescript_mode]
     append_clear_homes_flag(cmd, config)
     append_graphics_flags(cmd, config)
     return cmd
@@ -1509,8 +1517,11 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     #loglevel-spacer {
         width: 22;
     }
-    #tab-terminal > *, #tab-display > *, #tab-advanced > * {
+    #tab-terminal > *, #tab-display > * {
         margin-bottom: 1;
+    }
+    #tab-advanced .field-label {
+        padding-top: 0;
     }
     #tab-display > #palette-row {
         margin-bottom: 0;

@@ -27,7 +27,7 @@ EXIT_DIR_RE = re.compile(
 )
 
 
-ROOM_ID_KEYS = ("num", "vnum", "id")
+ROOM_ID_KEYS = ("num", "vnum", "id", "identifier")
 
 
 def room_id(info: dict[str, typing.Any]) -> str | None:
