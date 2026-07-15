@@ -643,6 +643,7 @@ def test_petscii_default_config() -> None:
         ("\u25c0", "\x08\x1b[P"),
         ("\u25b6", "\t"),
         ("\u21b0", "\x1b[2J\x1b[H"),
+        ("\u241b", "\x1b"),
         ("\u2191", "\x1b[A"),
         ("\u2193", "\x1b[B"),
         ("\u2190", "\x1b[D"),
@@ -697,6 +698,12 @@ def test_atascii_filter_bytes_clear_screen() -> None:
     f = AtasciiControlFilter()
     assert f.filter_bytes(b"\x7d") == b"\x1b[2J\x1b[H"
     assert f.filter_bytes(b"\xfd") == b"\x1b[2J\x1b[H"
+
+
+def test_atascii_filter_bytes_escape() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"\x1b") == b"\x1b"
+    assert f.filter_bytes(b"\x1b[2J") == b"\x1b[2J"
 
 
 def test_atascii_filter_bytes_tab() -> None:

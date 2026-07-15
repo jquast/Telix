@@ -810,3 +810,30 @@ class TestComputeLocalEcho:
     def test_remote_mode(self) -> None:
         assert compute_local_echo("remote", True) is False
         assert compute_local_echo("remote", False) is False
+
+
+def test_apply_atascii_return_translates_cr() -> None:
+    from telix.client_shell import _apply_atascii_return
+
+    class Stdin:
+        def __init__(self) -> None:
+            self.data = b"hello\rworld\r"
+
+        async def read(self, n: int = -1) -> bytes:
+            return self.data
+
+    stdin = Stdin()
+    orig_read = stdin.read
+    _apply_atascii_return(stdin)
+    assert stdin.read is not orig_read
+
+
+def test_apply_atascii_return_passthrough_non_cr() -> None:
+    from telix.client_shell import _apply_atascii_return
+
+    class Stdin:
+        async def read(self, n: int = -1) -> bytes:
+            return b"hello world"
+
+    stdin = Stdin()
+    _apply_atascii_return(stdin)

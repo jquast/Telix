@@ -9,6 +9,8 @@ editor entry points.  Session management (SessionConfig, SessionListScreen, etc.
 # std imports
 import os
 import abc
+import sys
+import select
 import typing
 import logging
 from typing import TYPE_CHECKING
@@ -591,6 +593,22 @@ class EditorApp(textual.app.App[None]):
         super().__init__()
         self.editor_screen = screen
         self.session_key = session_key
+        import types
+        import traceback
+
+        real_handle = self._handle_exception
+
+        def hooked_handler(self: typing.Any, error: Exception) -> None:
+            log.error("EditorApp._handle_exception: %r", error, exc_info=error)
+            try:
+                with open("/tmp/telix-tui-crash.log", "a") as crash_fh:
+                    crash_fh.write("".join(traceback.format_exception(type(error), error, error.__traceback__)))
+                    crash_fh.write("\n")
+            except OSError:
+                pass
+            real_handle(error)
+
+        self._handle_exception = types.MethodType(hooked_handler, self)  # type: ignore[method-assign]
 
     def on_mouse_down(self, event: textual.events.MouseDown) -> None:
         """Paste X11 primary selection on middle-click."""
@@ -625,6 +643,7 @@ class EditorApp(textual.app.App[None]):
             self.theme = saved_theme
         else:
             self.theme = "gruvbox"
+
         self.push_screen(self.editor_screen, callback=lambda _: self.exit())
 
     def watch_theme(self, old: str, new: str) -> None:
@@ -708,4 +727,35 @@ def launch_editor_in_thread(screen: textual.screen.Screen[typing.Any], session_k
     """
     log_child_diagnostics()
     patch_writer_thread_queue()
+
+    # Drain and log any stale data on stdin before Textual starts.
+    # Terminal query responses (XTWINOPS, DSR, etc.) can arrive between
+    # the REPL releasing the terminal and Textual acquiring it, causing the
+    # app to exit immediately.
+    drained: list[bytes] = []
+    try:
+        fd = sys.stdin.fileno()
+        was_blocking = os.get_blocking(fd)
+        os.set_blocking(fd, False)
+        while True:
+            r, _, _ = select.select([fd], [], [], 0)
+            if not r:
+                break
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                break
+            drained.append(chunk)
+    except (OSError, ValueError):
+        pass
+    finally:
+        try:
+            os.set_blocking(fd, was_blocking)
+        except OSError:
+            pass
+
+    if drained:
+        log.warning("drained %d bytes from stdin before Textual launch: %r", sum(len(c) for c in drained), drained)
+    else:
+        log.debug("stdin clean before Textual launch")
+
     EditorApp(screen, session_key=session_key).run()

@@ -90,6 +90,22 @@ def _apply_delete_to_backspace(stdin: typing.Any) -> None:
     stdin.read = _delete_to_backspace  # type: ignore[method-assign]
 
 
+def _apply_atascii_return(stdin: typing.Any) -> None:
+    """
+    Patch stdin so Enter (0x0d) is sent as ATASCII Return (0x9b).
+
+    ATASCII uses byte 0x9B as its end-of-line character, not ASCII CR (0x0D). Raw ATASCII connections must send 0x9B for
+    the Enter key so the server can detect ATASCII-capable clients.
+    """
+    _real_read = stdin.read
+
+    async def _cr_to_atascii_eol(n: int = -1) -> bytes:
+        data = await _real_read(n)
+        return data.replace(b"\r", b"\x9b")
+
+    stdin.read = _cr_to_atascii_eol  # type: ignore[method-assign]
+
+
 def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     """
     Create config/data directories and load all per-session config files into *ctx*.
@@ -753,6 +769,8 @@ async def telix_client_shell(
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
                 _apply_delete_to_backspace(stdin)
+            if (ctx.encoding or "").startswith("atascii"):
+                _apply_atascii_return(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
@@ -855,6 +873,8 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
                 _apply_delete_to_backspace(stdin)
+            if ssh_writer.encoding == "atascii":
+                _apply_atascii_return(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
@@ -863,7 +883,8 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
 
             ts_path = getattr(ssh_writer, "typescript", "")
             if ts_path:
-                ts_file = open(ts_path, "wb")
+                ts_mode = getattr(ssh_writer, "typescript_mode", "append")
+                ts_file = open(ts_path, "wb" if ts_mode == "rewrite" else "ab")
                 _inner_write = raw_stdout.write
 
                 def _tee_write(data: bytes) -> None:
@@ -1000,6 +1021,8 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
             if not ctx.repl.ansi_keys:
                 _apply_delete_to_backspace(stdin)
+            if (ctx.encoding or "").startswith("atascii"):
+                _apply_atascii_return(stdin)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True,
                 last_will_echo=False,

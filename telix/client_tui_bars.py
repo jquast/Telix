@@ -54,14 +54,17 @@ class ProgressBarEditPane(client_tui_base.EditListPane):
     DEFAULT_CSS = (
         client_tui_base.EditListPane.DEFAULT_CSS
         + """#progressbar-form { padding: 0 0 0 4; } #progressbar-form .form-label { width: 12; } #progressbar-form
-          Input { max-width: 50; } #progressbar-form Select { max-width: 50; } #pb-gmcp-select { max-width: 18; } #pb-
-          value-select { max-width: 18; } #pb-max-select { max-width: 18; } #pb-color-swatch-max { width: 4; height: 1;
-          padding-top: 1; } #pb-color-swatch-min { width: 4; height: 1; padding-top: 1; } #pb-color-row1 { height: auto;
-          margin: 0; } #pb-color-row2 { height: auto; margin: 0; } #pb-color-row3 { height: auto; margin: 0; } #pb-
-          color-mode { max-width: 20; } #pb-color-max { width: 28; } #pb-color-min { width: 28; } #pb-text-min { width:
-          28; } #pb-text-max { width: 28; } #pb-color-path { max-width: 20; } #pb-side { max-width: 20; } #pb-preview-
-          bar { height: 1; margin: 0 0 0 12; } #pb-preview-gradient { height: 1; margin: 0 0 0 12; } #pb-bar-type { max-
-          width: 20; } #pb-label-format { max-width: 50; } #pb-label-format-row { height: auto; margin: 0; }"""
+          Input { max-width: 50; } #progressbar-form Select { max-width: 50; } #pb-gmcp-select { max-width: 18; }
+          #pb-value-select { max-width: 18; } #pb-max-select { max-width: 18; }
+          #pb-color-swatch-max { width: 4; height: 1; padding-top: 1; }
+          #pb-color-swatch-min { width: 4; height: 1; padding-top: 1; }
+          #pb-color-row1 { height: auto; margin: 0; } #pb-color-row2 { height: auto; margin: 0; }
+          #pb-color-row3 { height: auto; margin: 0; }
+          #pb-color-mode { max-width: 20; } #pb-color-max { width: 28; } #pb-color-min { width: 28; } #pb-text-min {
+          width: 28; } #pb-text-max { width: 28; } #pb-color-path { max-width: 20; } #pb-side { max-width: 20; }
+          #pb-preview-bar { height: 1; margin: 0 0 0 12; } #pb-preview-gradient { height: 1; margin: 0 0 0 12; }
+          #pb-bar-type { max-width: 20; } #pb-label-format { max-width: 50; } #pb-label-format-row { height: auto;
+          margin: 0; }"""
 
     )
 

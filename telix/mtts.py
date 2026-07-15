@@ -125,6 +125,7 @@ class TelixClient(telnetlib3.client.TelnetClient):
             return
         self._gmcp_hello_sent = True
         hello = self.gmcp_hello or {"client": "Telix", "version": version}
+
         self.writer.send_gmcp("Core.Hello", hello)
         self.writer.send_gmcp("Core.Supports.Set", self._gmcp_modules)
         self.log.info("GMCP handshake: Core.Hello + Core.Supports.Set %s", self._gmcp_modules)
