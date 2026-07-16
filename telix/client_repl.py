@@ -1094,7 +1094,7 @@ class ReplSession:
         elif echo_fn is not None:
             echo_fn(f"RESUME: cannot resume mode '{mode}'")
 
-    def _cancel_walks_on_keypress(self) -> None:
+    def cancel_walks_on_keypress(self) -> None:
         """Cancel any active automated walk when the user presses a key."""
         echo_fn = self.ctx.prompt.echo
         cancelled = False
@@ -1590,7 +1590,7 @@ class ReplSession:
                     self.tty_shell._resize_pending.clear()
                     self.fire_resize()
 
-                self._cancel_walks_on_keypress()
+                self.cancel_walks_on_keypress()
 
                 action = self.dispatch.lookup(key)
                 if action is None and self.ctx.repl.ansi_keys:

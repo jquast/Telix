@@ -1,8 +1,7 @@
 """Parse Discworld Room.Writtenmap to discover exits from the current room.
 
-Discworld sends exit information as prose in ``Room.Writtenmap`` rather
-than as structured data in ``Room.Info``.  The prose describes nearby
-rooms using an ``of N D`` pattern, e.g.::
+Discworld sends exit information as ``Room.Writtenmap`` instead of ``Room.Info``.  The prose
+describes nearby rooms using an ``of N D`` pattern, e.g.::
 
     Exits south and north of one west and the limit of your vision is
     one west from here.
@@ -10,14 +9,17 @@ rooms using an ``of N D`` pattern, e.g.::
     north, exits south, southeast and west of two south.
 
 When a room at ``N D`` is described, the current room has an exit in
-direction ``D``.  This script extracts those directions and feeds them
-into the room graph so that ``randomwalk`` and ``autodiscover`` work.
+direction ``D``.  This script registers a callback that fires
+synchronously whenever ``Room.Writtenmap`` arrives, so exits are
+populated in the room graph before autodiscover or randomwalk reads
+them.
 
 Start it as a background daemon at the beginning of a session::
 
     `async discworld_rooms`
 """
 
+import asyncio
 import re
 from telix.scripts import ScriptContext
 
@@ -43,22 +45,29 @@ _OF_RE = re.compile(
 )
 
 
+def _parse_writtenmap(text: str, ctx: ScriptContext) -> None:
+    """Parse Room.Writtenmap prose and update the room graph with discovered exits."""
+    exits = {}
+    for match in _OF_RE.finditer(text):
+        direction = match.group(1).lower()
+        if direction not in exits:
+            exits[direction] = "1"
+
+    if not exits:
+        return
+
+    num = ctx._ctx.room.current
+    if not num:
+        return
+
+    ctx.update_room({"identifier": num, "exits": exits})
+
+
 async def run(ctx: ScriptContext) -> None:
-    ctx.print("Started discworld_rooms (telix)")
-
-    while True:
-        if not await ctx.gmcp_changed("Room.Writtenmap", timeout=None):
-            break
-
-        text = ctx.gmcp_get("Room.Writtenmap")
-        if not text:
-            continue
-
-        exits = {}
-        for match in _OF_RE.finditer(text):
-            direction = match.group(1).lower()
-            if direction not in exits:
-                exits[direction] = "1"
-
-        if exits and ctx.room is not None:
-            ctx.update_room({"identifier": ctx.room.num, "exits": exits})
+    """Register a Room.Writtenmap callback and keep the script alive."""
+    ctx.on_gmcp("Room.Writtenmap", lambda data: _parse_writtenmap(data, ctx))
+    ctx.print("discworld_rooms: exit parser registered")
+    try:
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        pass

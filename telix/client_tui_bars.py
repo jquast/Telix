@@ -129,6 +129,7 @@ class ProgressBarEditPane(client_tui_base.EditListPane):
                     yield textual.widgets.Button("Add", variant="success", id=f"{pfx}-add")
                     yield textual.widgets.Button("Edit", variant="warning", id=f"{pfx}-edit")
                     yield textual.widgets.Button("Copy", id=f"{pfx}-copy", classes="edit-copy")
+                    yield textual.widgets.Button("Delete", variant="error", id=f"{pfx}-delete")
                     yield textual.widgets.Button("Detect", variant="primary", id=f"{pfx}-detect")
                     yield textual.widgets.Button("Help", variant="success", id=f"{pfx}-help")
                     yield textual.widgets.Button("Save", variant="primary", id=f"{pfx}-save")

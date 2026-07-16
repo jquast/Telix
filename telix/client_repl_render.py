@@ -363,11 +363,15 @@ def segmented(text: str) -> str:
 
 def sgr_fg(hexcolor: str) -> str:
     """SGR foreground from ``#rrggbb`` hex via blessed (auto-downconverts)."""
+    if len(hexcolor) == 9 and hexcolor.startswith("#"):
+        hexcolor = hexcolor[:7]
     return str(get_term().color_hex(hexcolor))
 
 
 def sgr_bg(hexcolor: str) -> str:
     """SGR background from ``#rrggbb`` hex via blessed (auto-downconverts)."""
+    if len(hexcolor) == 9 and hexcolor.startswith("#"):
+        hexcolor = hexcolor[:7]
     return str(get_term().on_color_hex(hexcolor))
 
 

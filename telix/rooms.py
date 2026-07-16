@@ -235,11 +235,16 @@ class RoomStore:
         :param info: GMCP Room.Info dict with a room identifier key.
         """
         num = room_id(info) or ""
-        exits = info.get("exits", {})
-        if isinstance(exits, dict):
-            exits = {str(k): str(v) for k, v in exits.items() if v}
+        has_exits = "exits" in info
+        exits: dict[str, str]
+        if has_exits:
+            raw = info["exits"]
+            if isinstance(raw, dict):
+                exits = {str(k): str(v) for k, v in raw.items() if v}
+            else:
+                exits = {}
         else:
-            exits = {}
+            exits = self.adj.get(num, {})
 
         name = strip_exit_dirs(str(info.get("name", "")))
         area = str(info.get("area", ""))
@@ -257,12 +262,13 @@ class RoomStore:
             " last_visited=excluded.last_visited",
             (num, name, area, environment, now),
         )
-        self.conn.execute("DELETE FROM exit WHERE src_num = ?", (num,))
-        if exits:
-            self.conn.executemany(
-                "INSERT INTO exit (src_num, direction, dst_num) VALUES (?, ?, ?)",
-                [(num, d, dst) for d, dst in exits.items()],
-            )
+        if has_exits:
+            self.conn.execute("DELETE FROM exit WHERE src_num = ?", (num,))
+            if exits:
+                self.conn.executemany(
+                    "INSERT INTO exit (src_num, direction, dst_num) VALUES (?, ?, ?)",
+                    [(num, d, dst) for d, dst in exits.items()],
+                )
         self.conn.commit()
         self.adj[num] = exits
 

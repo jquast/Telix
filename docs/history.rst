@@ -1,6 +1,13 @@
 History
 =======
 
+0.1.11 -- 2026-07-??
+--------------------
+
+- enhancement: ``on_gmcp`` registration hooks for scripting and two bundled
+  demonstration scripts ``discworld_rooms.py`` and ``dunemud_fremen.py``.
+- change: press any key, not just return, to stop any automatic commands
+
 0.1.10 -- 2026-07-15
 --------------------
 

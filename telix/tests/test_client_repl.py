@@ -646,6 +646,40 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
     assert ("room1", "north") in writer.ctx.walk.blocked_exits
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "task_field, msg_prefix",
+    [
+        ("discover_task", "AUTODISCOVER"),
+        ("randomwalk_task", "RANDOMWALK"),
+        ("travel_task", "TRAVEL"),
+    ],
+)
+async def test_cancel_walks_on_keypress(task_field, msg_prefix) -> None:
+    """Any keypress cancels an active walk and echoes the appropriate message."""
+    echo_log: list[str] = []
+
+    async def walk_task() -> None:
+        await asyncio.sleep(100)
+
+    task = asyncio.ensure_future(walk_task())
+    await asyncio.sleep(0)
+    walk_kw = dict(discover_task=None, randomwalk_task=None, travel_task=None)
+    walk_kw[task_field] = task
+    walk_state = types.SimpleNamespace(**walk_kw)
+    mock_self = types.SimpleNamespace(
+        ctx=types.SimpleNamespace(
+            prompt=types.SimpleNamespace(echo=echo_log.append),
+            walk=walk_state,
+        ),
+        trigger_engine=None,
+    )
+    ReplSession.cancel_walks_on_keypress(mock_self)
+    await asyncio.sleep(0)
+    assert task.cancelled()
+    assert f"{msg_prefix}: cancelled by input" in echo_log
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_autodiscover_stuck_gateway_stops(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
