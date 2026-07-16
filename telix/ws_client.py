@@ -548,6 +548,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="comma-separated list of GMCP modules to request",
     )
     conn.add_argument(
+        "--gmcp-modules-extra",
+        default="",
+        metavar="MODULES",
+        dest="gmcp_modules_extra",
+        help="comma-separated GMCP modules appended to the defaults (weaker than --gmcp-modules)",
+    )
+    conn.add_argument(
         "--send-environ",
         default="",
         metavar="VARS",

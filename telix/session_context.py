@@ -177,6 +177,7 @@ class PromptState:
     echo: typing.Any | None = None
     ready: typing.Any | None = None
     repaint_input: typing.Any | None = None
+    pending_echo: list[str] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass

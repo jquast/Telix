@@ -44,7 +44,7 @@ _OF_RE = re.compile(
 
 
 async def run(ctx: ScriptContext) -> None:
-    ctx.print("[discworld_rooms] started, monitoring Room.Writtenmap")
+    ctx.print("Started discworld_rooms (telix)")
 
     while True:
         if not await ctx.gmcp_changed("Room.Writtenmap", timeout=None):

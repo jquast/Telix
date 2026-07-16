@@ -178,7 +178,7 @@ def terminal_cleanup() -> str:
     blessed_term = get_term()
     return (
         str(blessed_term.normal)
-        + str(blessed_term.cursor_normal)
+        + str(blessed_term.normal_cursor)
         + "\x1b[r"  # DECSTBM -- reset scroll region before leaving alt screen
         + str(blessed_term.exit_fullscreen)
         + "\x1b[?1000l"  # xterm -- disable basic mouse
@@ -1094,6 +1094,32 @@ class ReplSession:
         elif echo_fn is not None:
             echo_fn(f"RESUME: cannot resume mode '{mode}'")
 
+    def _cancel_walks_on_keypress(self) -> None:
+        """Cancel any active automated walk when the user presses a key."""
+        echo_fn = self.ctx.prompt.echo
+        cancelled = False
+        disc_task = self.ctx.walk.discover_task
+        if disc_task is not None and not disc_task.done():
+            if echo_fn is not None:
+                echo_fn("AUTODISCOVER: cancelled by input")
+            disc_task.cancel()
+            cancelled = True
+        rw_task = self.ctx.walk.randomwalk_task
+        if rw_task is not None and not rw_task.done():
+            if echo_fn is not None:
+                echo_fn("RANDOMWALK: cancelled by input")
+            rw_task.cancel()
+            cancelled = True
+        ft_task = self.ctx.walk.travel_task
+        if ft_task is not None and not ft_task.done():
+            if echo_fn is not None:
+                echo_fn("TRAVEL: cancelled by input")
+            ft_task.cancel()
+            self.ctx.walk.travel_task = None
+            cancelled = True
+        if cancelled and self.trigger_engine is not None:
+            self.trigger_engine.cancel()
+
     def randomwalk_mode(self) -> None:
         """Launch or cancel random walk mode."""
         if self.ctx.walk.randomwalk_active:
@@ -1313,6 +1339,12 @@ class ReplSession:
         self.ctx.prompt.ready = self.prompt_ready
         self.ctx.prompt.repaint_input = self.repaint_input_line
         self.ctx.on_trigger_activity = self.on_trigger_activity
+
+        # release any output printed by scripts before registration
+        if (pending := self.ctx.prompt.pending_echo):
+            for text in pending:
+                self.ctx.prompt.echo(text)
+            pending.clear()
 
         self.refresh_trigger_engine()
         self.refresh_highlight_engine()
@@ -1557,6 +1589,8 @@ class ReplSession:
                 if self.tty_shell._resize_pending.is_set():
                     self.tty_shell._resize_pending.clear()
                     self.fire_resize()
+
+                self._cancel_walks_on_keypress()
 
                 action = self.dispatch.lookup(key)
                 if action is None and self.ctx.repl.ansi_keys:

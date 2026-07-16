@@ -66,6 +66,8 @@ def load_favorites() -> list[dict[str, typing.Any]]:
             entry["on_connect"] = on_connect
         if gmcp_modules := values.get("gmcp-modules"):
             entry["gmcp_modules"] = gmcp_modules
+        if gmcp_modules_extra := values.get("gmcp-modules-extra"):
+            entry["gmcp_modules_extra"] = gmcp_modules_extra
         entries.append(entry)
     return entries
 
@@ -129,6 +131,8 @@ def entry_to_session(entry: dict[str, typing.Any]) -> client_tui_session_manager
         cfg.on_connect_command = on_connect
     if gmcp_modules := entry.get("gmcp_modules"):
         cfg.gmcp_modules = gmcp_modules
+    if gmcp_modules_extra := entry.get("gmcp_modules_extra"):
+        cfg.gmcp_modules_extra = gmcp_modules_extra
     return cfg
 
 

@@ -627,11 +627,11 @@ class ScriptContext:
         :param sep: Separator string inserted between values (default " ").
         """
         text = sep.join(str(a) for a in args)
-        echo = self._ctx.prompt.echo
-        if echo is not None:
-            echo(text)
-        else:
-            self._log.info("script print: %s", text)
+        if self._ctx.prompt.echo:
+            self._ctx.prompt.echo(text)
+            return
+        # pending text enqueued until ReplSession.register_callbacks() is ready
+        self._ctx.prompt.pending_echo.append(text)
 
     def debug(self, msg: str) -> None:
         """

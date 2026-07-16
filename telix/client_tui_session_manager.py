@@ -467,6 +467,7 @@ class SessionConfig:
     always_do: str = ""
     on_connect_command: str = ""
     gmcp_modules: str = ""
+    gmcp_modules_extra: str = ""
     loglevel: str = "warn"
     logfile: str = ""
     logfile_mode: str = "rewrite"
@@ -539,6 +540,7 @@ CMD_STR_FLAGS: list[tuple[str, str, object]] = [
     ("ssl_cafile", "--ssl-cafile", ""),
     ("on_connect_command", "--on-connect", ""),
     ("gmcp_modules", "--gmcp-modules", ""),
+    ("gmcp_modules_extra", "--gmcp-modules-extra", ""),
 ]
 
 CMD_BOOL_FLAGS: list[tuple[str, str, bool]] = [
@@ -1521,7 +1523,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
     #loglevel-spacer {
         width: 22;
     }
-    #tab-terminal > *, #tab-display > * {
+    #tab-terminal > *, #tab-display > *, #tab-advanced > * {
         margin-bottom: 1;
     }
     #tab-advanced .field-label {
@@ -1995,6 +1997,16 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
                 tooltip="Commands to execute on connect, like background scripts",
             ),
         )
+        yield self.field_row(
+            "GMCP Extra",
+            textual.widgets.Input(
+                value=cfg.gmcp_modules_extra,
+                placeholder="e.g. room.writtenmap 1",
+                id="gmcp-modules-extra",
+                classes="field-input",
+                tooltip="Extra GMCP modules appended to defaults (use --gmcp-modules to replace)",
+            ),
+        )
 
     def compose(self) -> textual.app.ComposeResult:
         """Build the tabbed session editor layout."""
@@ -2439,6 +2451,7 @@ class SessionEditScreen(textual.screen.Screen[SessionConfig | None]):
         )
         cfg.on_connect_command = self.query_one("#on-connect-command", textual.widgets.Input).value.strip()
         cfg.gmcp_modules = getattr(self.config, "gmcp_modules", "")
+        cfg.gmcp_modules_extra = self.query_one("#gmcp-modules-extra", textual.widgets.Input).value.strip()
         cfg.always_will = self.config.always_will
         cfg.always_do = self.config.always_do
         cfg.loglevel = self.query_one("#loglevel", textual.widgets.Select).value  # type: ignore[assignment]

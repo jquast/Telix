@@ -207,7 +207,7 @@ async def test_hello_uses_custom_modules():
     transport.data.clear()
     client.writer.handle_will(GMCP)
     data = bytes(transport.data)
-    assert b"IRE.Rift 1" in data
+    assert b"ire.rift 1" in data
 
 
 @pytest.mark.asyncio

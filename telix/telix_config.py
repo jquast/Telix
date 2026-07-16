@@ -25,6 +25,7 @@ class TelixConfig:
     graphics_rows: int | None = None
     font_id: int | None = None
     on_connect_command: str = ""
+    gmcp_modules_extra: str = ""
 
     _DEFAULTS: typing.ClassVar[dict[str, object]] = {
         "colormatch": "vga",
@@ -42,6 +43,7 @@ class TelixConfig:
         "graphics_rows": None,
         "font_id": None,
         "on_connect_command": "",
+        "gmcp_modules_extra": "",
     }
 
     @classmethod
