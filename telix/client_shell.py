@@ -529,6 +529,10 @@ def _setup_resize_and_naws(raw_stdout: typing.Any, writer: typing.Any, tty_shell
             return raw_stdout.virtual_size()
 
         writer.handle_send_naws = _naws  # type: ignore[method-assign]
+        import telnetlib3.telopt
+
+        if hasattr(writer, "set_ext_send_callback"):
+            writer.set_ext_send_callback(telnetlib3.telopt.NAWS, _naws)
     if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
         import signal
 

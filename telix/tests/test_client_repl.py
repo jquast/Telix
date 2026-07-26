@@ -187,8 +187,16 @@ def test_scramble_password_per_char_replacement() -> None:
 def scaffold_env(handler=None):
     """Build writer, stdout, term for repl_scaffold tests."""
     pytest.importorskip("blessed")
+    from telnetlib3.telopt import NAWS
+
     writer = mock_writer()
     writer.handle_send_naws = handler or (lambda: (24, 80))
+    writer._ext_send_callback = {NAWS: writer.handle_send_naws}
+
+    def set_ext_send_callback(cmd, func):
+        writer._ext_send_callback[cmd] = func
+
+    writer.set_ext_send_callback = set_ext_send_callback
     writer.local_option = types.SimpleNamespace(enabled=lambda _: False)
     writer.is_closing = lambda: False
     stdout, transport = mock_stdout()
@@ -206,6 +214,54 @@ async def test_adjusted_naws_active_scroll() -> None:
         assert isinstance(result, tuple)
         assert len(result) == 2
         assert result[0] == scroll.scroll_rows
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_active_scroll() -> None:
+    """telnet _send_naws() uses _ext_send_callback[NAWS], not handle_send_naws."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    async with repl_scaffold(writer, term, stdout) as (scroll, _):
+        result = writer._ext_send_callback[NAWS]()
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == scroll.scroll_rows
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_restored_on_exception() -> None:
+    """_ext_send_callback[NAWS] is restored even if repl_scaffold body raises."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    orig_callback = writer._ext_send_callback[NAWS]
+
+    with pytest.raises(RuntimeError, match="injected"):
+        async with repl_scaffold(writer, term, stdout):
+            raise RuntimeError("injected")
+
+    assert writer._ext_send_callback[NAWS] is orig_callback
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_restored_on_normal_exit() -> None:
+    """_ext_send_callback[NAWS] is restored after normal scaffold exit."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    orig_callback = writer._ext_send_callback[NAWS]
+
+    async with repl_scaffold(writer, term, stdout) as (scroll, rc):
+        assert writer._ext_send_callback[NAWS] is not orig_callback
+
+    assert writer._ext_send_callback[NAWS] is orig_callback
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")

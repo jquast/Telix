@@ -529,7 +529,9 @@ async def repl_scaffold(
     rows_cols = [rows, cols]
     scroll_region: ScrollRegion | None = None
 
-    orig_send_naws = getattr(telnet_writer, "handle_send_naws", None)
+    naws_cmd = telnetlib3.telopt.NAWS
+    orig_send_naws = telnet_writer.handle_send_naws
+    orig_ext_callback = telnet_writer._ext_send_callback.get(naws_cmd)
 
     def adjusted_send_naws() -> tuple[int, int]:
         if scroll_region is not None and scroll_region.active:
@@ -538,6 +540,7 @@ async def repl_scaffold(
         return get_terminal_size()
 
     telnet_writer.handle_send_naws = adjusted_send_naws  # type: ignore[method-assign]
+    telnet_writer.set_ext_send_callback(naws_cmd, adjusted_send_naws)
 
     try:
         if telnet_writer.local_option.enabled(telnetlib3.telopt.NAWS) and not telnet_writer.is_closing():
@@ -559,8 +562,11 @@ async def repl_scaffold(
             finally:
                 tty_shell.on_resize = None
     finally:
-        if orig_send_naws is not None:
-            telnet_writer.handle_send_naws = orig_send_naws  # type: ignore[method-assign]
+        telnet_writer.handle_send_naws = orig_send_naws  # type: ignore[method-assign]
+        if orig_ext_callback is not None:
+            telnet_writer.set_ext_send_callback(naws_cmd, orig_ext_callback)
+        else:
+            telnet_writer.set_ext_send_callback(naws_cmd, telnet_writer.handle_send_naws)
 
 
 async def run_repl_tasks(server_coro: "typing.Any", input_coro: "typing.Any") -> None:
