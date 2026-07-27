@@ -119,16 +119,29 @@ class TelixClient(telnetlib3.client.TelnetClient):
                 env.update(self.mnes_env)
         return env
 
-    def _send_gmcp_hello(self) -> None:
+    def send_gmcp_hello(self) -> None:
         """Send Core.Hello identifying Telix instead of telnetlib3."""
         if self._gmcp_hello_sent:
             return
         self._gmcp_hello_sent = True
         hello = self.gmcp_hello or {"client": "Telix", "version": version}
+        modules = [m.lower() for m in self._gmcp_modules]
 
         self.writer.send_gmcp("Core.Hello", hello)
-        self.writer.send_gmcp("Core.Supports.Set", self._gmcp_modules)
-        self.log.info("GMCP handshake: Core.Hello + Core.Supports.Set %s", self._gmcp_modules)
+        self.writer.send_gmcp("Core.Supports.Set", modules)
+        self.log.info("GMCP handshake: Core.Hello + Core.Supports.Set %s", modules)
+
+    def zmp_check(self, cmd: str) -> bool:
+        """Accept all ZMP commands."""
+        return True
+
+    def send_zmp_ident(self) -> None:
+        """Send ``zmp.ident`` identifying Telix instead of telnetlib3."""
+        if self._zmp_ident_sent:
+            return
+        self._zmp_ident_sent = True
+        self.writer.send_zmp("zmp.ident", "Telix", version)
+        self.log.info("ZMP handshake: zmp.ident Telix %s", version)
 
 
 class TelixTerminalClient(TelixClient, telnetlib3.client.TelnetTerminalClient):

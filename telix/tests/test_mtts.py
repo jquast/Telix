@@ -185,9 +185,9 @@ def test_gmcp_hello_sends_telix():
     client.log = logging.getLogger("test")
     sent = []
     client.writer = types.SimpleNamespace(send_gmcp=lambda pkg, data: sent.append((pkg, data)))
-    client._send_gmcp_hello()
+    client.send_gmcp_hello()
     assert sent[0] == ("Core.Hello", {"client": "Telix", "version": mtts.version})
-    assert sent[1] == ("Core.Supports.Set", ["Char 1"])
+    assert sent[1] == ("Core.Supports.Set", ["char 1"])
 
 
 def test_gmcp_hello_not_sent_twice():
@@ -201,5 +201,37 @@ def test_gmcp_hello_not_sent_twice():
     client.log = logging.getLogger("test")
     sent = []
     client.writer = types.SimpleNamespace(send_gmcp=lambda pkg, data: sent.append((pkg, data)))
-    client._send_gmcp_hello()
+    client.send_gmcp_hello()
     assert sent == []
+
+
+class TestZMP:
+    def test_zmp_check_accepts_all(self):
+        client = mtts.TelixClient.__new__(mtts.TelixClient)
+        assert client.zmp_check("char.vitals")
+        assert client.zmp_check("room.info")
+        assert client.zmp_check("zmp.ping")
+
+    def test_zmp_ident_sends_telix(self):
+        import types
+        import logging
+
+        client = mtts.TelixClient.__new__(mtts.TelixClient)
+        client._zmp_ident_sent = False
+        client.log = logging.getLogger("test")
+        sent = []
+        client.writer = types.SimpleNamespace(send_zmp=lambda cmd, *args: sent.append((cmd, *args)))
+        client.send_zmp_ident()
+        assert sent == [("zmp.ident", "Telix", mtts.version)]
+
+    def test_zmp_ident_not_sent_twice(self):
+        import types
+        import logging
+
+        client = mtts.TelixClient.__new__(mtts.TelixClient)
+        client._zmp_ident_sent = True
+        client.log = logging.getLogger("test")
+        sent = []
+        client.writer = types.SimpleNamespace(send_zmp=lambda cmd, *args: sent.append((cmd, *args)))
+        client.send_zmp_ident()
+        assert sent == []

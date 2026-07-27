@@ -307,7 +307,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
     ) -> "TelixSessionContext":
         # writer: ws_transport.WebSocketWriter
         """Class factory method, makes TelixSessionContext from TelnetSessionContext."""
-        return cls(
+        ctx = cls(
             session_key,
             writer,
             encoding,
@@ -321,6 +321,8 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             gmcp_data=writer.ctx.gmcp_data,
             color_args=getattr(writer.ctx, "color_args", None),
         )
+        ctx.zmp_data = writer.ctx.zmp_data
+        return ctx
 
     def mark_macros_dirty(self) -> None:
         """Mark macros as needing a save and schedule a debounced flush."""

@@ -690,6 +690,15 @@ async def telix_client_shell(
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.GMCP, on_gmcp)
 
+    # 4. Setup ZMP callbacks
+    base_on_zmp = telnet_writer._ext_callback.get(telnetlib3.telopt.ZMP)
+
+    def on_zmp(command: str, *args: str) -> None:
+        if base_on_zmp is not None:
+            base_on_zmp(command, *args)
+
+    telnet_writer.set_ext_callback(telnetlib3.telopt.ZMP, on_zmp)
+
     keyboard_escape = ctx.repl.keyboard_escape
 
     with telnetlib3.client_shell.Terminal(telnet_writer=telnet_writer) as tty_shell:
