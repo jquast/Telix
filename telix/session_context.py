@@ -136,6 +136,7 @@ class GmcpState:
     on_room_info: typing.Any | None = None
     package_events: dict[str, asyncio.Event] = dataclasses.field(default_factory=dict)
     any_update: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+    script_callbacks: dict[str, list[Callable[..., None]]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass

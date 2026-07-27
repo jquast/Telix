@@ -360,9 +360,7 @@ def handle_websocket(server_type: str) -> None:
     if gmcp_modules is None:
         gmcp_extra = [m.strip() for m in args.gmcp_modules_extra.split(",") if m.strip()]
         if gmcp_extra:
-            from telnetlib3.client import _DEFAULT_GMCP_MODULES
-
-            gmcp_modules = list(_DEFAULT_GMCP_MODULES) + gmcp_extra
+            gmcp_modules = list(telnetlib3.client._DEFAULT_GMCP_MODULES) + gmcp_extra
     send_environ = tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
     run_connection(
         ws_client.run_ws_client,
@@ -507,9 +505,7 @@ def main() -> None:
     if "--gmcp-modules" not in sys.argv:
         gmcp_extra = [m.strip() for m in telix_args.gmcp_modules_extra.split(",") if m.strip()]
         if gmcp_extra:
-            from telnetlib3.client import _DEFAULT_GMCP_MODULES
-
-            gmcp_modules = list(_DEFAULT_GMCP_MODULES) + gmcp_extra
+            gmcp_modules = list(telnetlib3.client._DEFAULT_GMCP_MODULES) + gmcp_extra
             sys.argv.extend(["--gmcp-modules", ",".join(gmcp_modules)])
 
     config = TelixConfig.from_args(telix_args, echo_mode=resolve_echo_mode(telix_args))

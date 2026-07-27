@@ -672,6 +672,8 @@ async def telix_client_shell(
         package = ".".join(seg.title() for seg in package.split("."))
         if base_on_gmcp is not None:
             base_on_gmcp(package, data)
+
+        # wire up additional callbacks
         if package == "Comm.Channel.Text":
             if ctx.chat.on_text is not None:
                 ctx.chat.on_text(data)
@@ -681,6 +683,10 @@ async def telix_client_shell(
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        script_callbacks = ctx.gmcp.script_callbacks.get(package)
+        if script_callbacks:
+            for cb in script_callbacks:
+                cb(data)
         evt = ctx.gmcp.package_events.get(package)
         if evt is not None:
             evt.set()
@@ -696,6 +702,7 @@ async def telix_client_shell(
     def on_zmp(command: str, *args: str) -> None:
         if base_on_zmp is not None:
             base_on_zmp(command, *args)
+        # XXX ?!
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.ZMP, on_zmp)
 
@@ -995,6 +1002,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        script_callbacks = ctx.gmcp.script_callbacks.get(package)
+        if script_callbacks:
+            for cb in script_callbacks:
+                cb(data)
         evt = ctx.gmcp.package_events.get(package)
         if evt is not None:
             evt.set()

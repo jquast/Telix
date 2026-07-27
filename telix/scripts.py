@@ -298,6 +298,34 @@ class ScriptContext:
         if graph is not None:
             graph.update_room(data)
 
+    def on_gmcp(self, package: str, callback: "typing.Callable[[typing.Any], None]") -> None:
+        """
+        Register a callback to be invoked whenever a GMCP package arrives.
+
+        The callback receives the package data (typically a dict or string) when
+        that GMCP package is received from the server.  Multiple callbacks may
+        be registered for the same package; they fire in registration order.
+
+        The callback runs synchronously inside the telnet data-receive handler,
+        so it must not block.  Use :meth:`gmcp_changed` for async waiting.
+
+        Example::
+
+            def on_writtenmap(data: dict) -> None:
+                exits = parse_exits(data)
+                if exits:
+                    ctx.update_room({"identifier": ctx.room_id, "exits": exits})
+
+            ctx.on_gmcp("Room.Writtenmap", on_writtenmap)
+
+        :param package: GMCP package name (e.g. ``"Room.Writtenmap"``).
+        :param callback: Callable accepting the GMCP package data.
+        """
+        callbacks = self._ctx.gmcp.script_callbacks
+        if package not in callbacks:
+            callbacks[package] = []
+        callbacks[package].append(callback)
+
     def gmcp_get(self, dotted_path: str) -> typing.Any:
         """
         Retrieve a value from the GMCP data dict by dot-separated path.

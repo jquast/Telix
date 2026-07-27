@@ -254,6 +254,7 @@ def make_ctx():
     ctx.commands = session_context.CommandState()
     ctx.gmcp.any_update = asyncio.Event()
     ctx.gmcp.package_events = {}
+    ctx.gmcp.script_callbacks = {}
     return ctx
 
 
@@ -291,6 +292,44 @@ class TestScriptContextGmcpGet:
             assert result == expected
         else:
             assert result == expected
+
+
+class TestScriptContextOnGmcp:
+    """ScriptContext.on_gmcp registers callbacks dispatched via session GMCP handler."""
+
+    def test_registers_callback_in_gmcp_state(self):
+        ctx, sctx = make_script_ctx()
+        cb = MagicMock()
+        ctx.on_gmcp("Room.Writtenmap", cb)
+        assert sctx.gmcp.script_callbacks["Room.Writtenmap"] == [cb]
+
+    def test_multiple_callbacks_for_same_package(self):
+        ctx, sctx = make_script_ctx()
+        cb1 = MagicMock()
+        cb2 = MagicMock()
+        ctx.on_gmcp("Room.Writtenmap", cb1)
+        ctx.on_gmcp("Room.Writtenmap", cb2)
+        assert sctx.gmcp.script_callbacks["Room.Writtenmap"] == [cb1, cb2]
+
+    def test_dispatched_from_gmcp_handler(self):
+        ctx, sctx = make_script_ctx()
+        received = []
+        ctx.on_gmcp("Char.Vitals", lambda data: received.append(data))
+        callbacks = sctx.gmcp.script_callbacks.get("Char.Vitals", [])
+        data = {"hp": 50}
+        for cb in callbacks:
+            cb(data)
+        assert received == [data]
+
+    def test_different_packages_separate(self):
+        ctx, sctx = make_script_ctx()
+        writtenmap = MagicMock()
+        vitals = MagicMock()
+        ctx.on_gmcp("Room.Writtenmap", writtenmap)
+        ctx.on_gmcp("Char.Vitals", vitals)
+        sctx.gmcp.script_callbacks["Char.Vitals"][0]({})
+        vitals.assert_called_once()
+        writtenmap.assert_not_called()
 
 
 class TestScriptContextPrint:

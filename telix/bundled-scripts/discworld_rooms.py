@@ -1,4 +1,5 @@
-"""Parse Discworld Room.Writtenmap to discover exits from the current room.
+"""
+Parse Discworld Room.Writtenmap to discover exits from the current room.
 
 Discworld sends exit information as ``Room.Writtenmap`` instead of ``Room.Info``.  The prose
 describes nearby rooms using an ``of N D`` pattern, e.g.::
