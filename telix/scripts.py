@@ -306,8 +306,7 @@ class ScriptContext:
         that GMCP package is received from the server.  Multiple callbacks may
         be registered for the same package; they fire in registration order.
 
-        The callback runs synchronously inside the telnet data-receive handler,
-        so it must not block.  Use :meth:`gmcp_changed` for async waiting.
+        The callback runs synchronously inside the telnet data-receive handler, it must not block.
 
         Example::
 
@@ -318,8 +317,8 @@ class ScriptContext:
 
             ctx.on_gmcp("Room.Writtenmap", on_writtenmap)
 
-        :param package: GMCP package name (e.g. ``"Room.Writtenmap"``).
-        :param callback: Callable accepting the GMCP package data.
+        :param package: GMCP package name
+        :param callback: Callable accepting GMCP package data.
         """
         callbacks = self._ctx.gmcp.script_callbacks
         if package not in callbacks:
