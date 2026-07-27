@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 # 3rd party
 import rich.text
 import rich.style
+import wcwidth
 import textual.app
 import textual.events
 import textual.screen
@@ -92,6 +93,7 @@ class RoomBrowserPane(textual.containers.Vertical):
         textual.binding.Binding("b", "toggle_block", "Block", show=True),
         textual.binding.Binding("h", "toggle_home", "Home", show=True),
         textual.binding.Binding("m", "toggle_mark", "Mark", show=True),
+        textual.binding.Binding("c", "view_content", "Contents", show=True),
         textual.binding.Binding("n", "sort_name", "Name sort", show=True),
         textual.binding.Binding("i", "sort_id", "ID sort", show=True),
         textual.binding.Binding("d", "sort_distance", "Dist sort", show=True),
@@ -129,6 +131,7 @@ class RoomBrowserPane(textual.containers.Vertical):
     #room-status { height: 1; margin-top: 0; }
     #room-count { width: auto; }
     #room-exits { height: 1; width: 100%; }
+    #room-contents { height: auto; width: 100%; margin-top: 0; color: $text-muted; }
     #room-distance { width: 1fr; text-align: right; }
     #room-marker-bar { height: auto; }
     #room-marker-bar Button { width: 13; min-width: 0; margin-right: 1; }
@@ -187,11 +190,13 @@ class RoomBrowserPane(textual.containers.Vertical):
                     yield textual.widgets.Static("", id="room-count")
                     yield textual.widgets.Static("", id="room-distance")
                 yield textual.widgets.Static("", id="room-exits")
+                yield textual.widgets.Static("", id="room-contents")
                 with textual.containers.Horizontal(id="room-marker-bar"):
                     yield textual.widgets.Button("Bookmark \u2021", variant="warning", id="room-bookmark")
                     yield textual.widgets.Button("Block \u2300", variant="error", id="room-block")
                     yield textual.widgets.Button("Home \u2302", variant="primary", id="room-home")
                     yield textual.widgets.Button("Mark \u27bd", variant="default", id="room-mark")
+                    yield textual.widgets.Button("View Content", variant="default", id="room-contents-view")
 
     def request_close(self, result: bool | None = None) -> None:
         """Dismiss the parent screen or exit the app."""
@@ -389,11 +394,16 @@ class RoomBrowserPane(textual.containers.Vertical):
 
         groups: dict[str, list[tuple[str, str, int, bool, str]]] = {}
         group_order: list[str] = []
+        contents_match_ids: set[str] = set()
+        if q and self.graph is not None:
+            contents_match_ids = set(self.graph.search_rooms_by_contents(query))
         for num, name, area, exits, bookmarked, lv, bl, hm, mk in self.all_rooms:
             if area_filter and area != area_filter:
                 continue
             display_name = telix.rooms.strip_exit_dirs(name)
-            if q and (q not in display_name.lower() and q not in area.lower() and q not in num.lower()):
+            name_match = q and (q in display_name.lower() or q in area.lower() or q in num.lower())
+            contents_match = q and num in contents_match_ids
+            if q and not name_match and not contents_match:
                 continue
             if display_name not in groups:
                 groups[display_name] = []
@@ -487,6 +497,60 @@ class RoomBrowserPane(textual.containers.Vertical):
             parts.append(f"{direction}[{name}]")
         return "Exits: " + ", ".join(parts)
 
+    def contents_text(self, room_num: str, search: str = "", width: int = 80) -> str:
+        """
+        Build a room contents summary line.
+
+        When *search* is empty, shows the first *width* columns of the room
+        contents with an ellipsis if truncated.  When *search* is provided and
+        matches, clips the contents to center the match within *width* columns,
+        with ellipses at the clipped edges.
+
+        :param room_num: Room number.
+        :param search: Active search query string.
+        :param width: Available display width in columns.
+        :returns: Formatted contents line or ``""``.
+        """
+        if self.graph is None:
+            return ""
+        text = self.graph.get_room_contents(room_num)
+        if not text:
+            return ""
+        text = " ".join(text.split())
+        total_cols = wcwidth.wcswidth(text)
+        if total_cols < 0:
+            return ""
+        label = "Contents: "
+        label_cols = len(label)
+        avail = max(width - label_cols, 20) if width > 0 else 120
+        if not search:
+            if total_cols <= avail:
+                return label + text
+            clipped = wcwidth.clip(text, 0, avail - 1, propagate_sgr=False)
+            return label + clipped + "\u2026"
+
+        q_lower = search.lower()
+        idx = text.lower().find(q_lower)
+        if idx == -1:
+            if total_cols <= avail:
+                return label + text
+            clipped = wcwidth.clip(text, 0, avail - 1, propagate_sgr=False)
+            return label + clipped + "\u2026"
+
+        match_col = wcwidth.wcswidth(text[:idx])
+        effective = avail - 2  # reserve for potential ellipses
+        half = effective // 2
+        start_col = max(0, match_col - half)
+        end_col = min(total_cols, start_col + effective)
+        prefix = "\u2026" if start_col > 0 else ""
+        suffix = "\u2026" if end_col < total_cols else ""
+        if not prefix:
+            end_col = min(total_cols, end_col + 1)
+        if not suffix:
+            start_col = max(0, start_col - 1)
+        clipped = wcwidth.clip(text, start_col, end_col, propagate_sgr=False)
+        return label + prefix + clipped + suffix
+
     def set_travel_buttons_disabled(self, disabled: bool) -> None:
         """Enable or disable the Travel button."""
         try:
@@ -499,6 +563,7 @@ class RoomBrowserPane(textual.containers.Vertical):
         self.cursor_just_moved = True
         dist_label = self.query_one("#room-distance", textual.widgets.Static)
         exits_label = self.query_one("#room-exits", textual.widgets.Static)
+        contents_label = self.query_one("#room-contents", textual.widgets.Static)
         node = event.node
         room_num = node.data if node.data is not None else None
         if room_num is None and node.children:
@@ -508,9 +573,13 @@ class RoomBrowserPane(textual.containers.Vertical):
         if room_num is None:
             dist_label.update("")
             exits_label.update("")
+            contents_label.update("")
             self.set_travel_buttons_disabled(True)
             return
         exits_label.update(self.exits_text(room_num))
+        search_val = self.query_one("#room-search", textual.widgets.Input).value
+        label_width = contents_label.size.width
+        contents_label.update(self.contents_text(room_num, search_val, label_width))
         if not self.current_room_file or self.graph is None:
             dist_label.update("")
             self.set_travel_buttons_disabled(True)
@@ -549,6 +618,7 @@ class RoomBrowserPane(textual.containers.Vertical):
             "room-block": self.do_toggle_block,
             "room-home": self.do_toggle_home,
             "room-mark": self.do_toggle_mark,
+            "room-contents-view": self.do_view_content,
             "room-help": self.action_show_help,
         }
         handler = handlers.get(event.button.id or "")
@@ -672,6 +742,31 @@ class RoomBrowserPane(textual.containers.Vertical):
     def action_toggle_mark(self) -> None:
         """Toggle mark on the selected room."""
         self.do_toggle_mark()
+
+    def action_view_content(self) -> None:
+        """Show room contents in a full-screen modal."""
+        self.do_view_content()
+
+    def do_view_content(self) -> None:
+        """Open a full-screen modal displaying the selected room's contents."""
+        num = self.get_selected_room_num()
+        if num is None or self.graph is None:
+            return
+
+        contents = self.graph.get_room_contents(num)
+        room = self.graph.get_room(num)
+        if room is None:
+            return
+        from .client_tui_dialogs import ContentViewerScreen
+
+        self.app.push_screen(
+            ContentViewerScreen(
+                room_num=num,
+                room_name=room.name,
+                area=room.area,
+                contents=contents,
+            )
+        )
 
     def do_toggle_marker(self, marker: str) -> None:
         """Toggle an exclusive marker on the currently selected room."""

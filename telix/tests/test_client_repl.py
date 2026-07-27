@@ -1458,7 +1458,7 @@ async def test_randomwalk_noncardinal_deprioritized(monkeypatch: pytest.MonkeyPa
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """With visit_level=2 the walk continues until every room is visited twice."""
+    """With visit_level=2 the walk continues past single visits until bounce/limit."""
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1468,10 +1468,6 @@ async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_slee
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50, visit_level=2)
 
-    visited_msgs = [m for m in writer.echo_log if "reachable rooms visited" in m]
-    assert len(visited_msgs) == 1
-    assert "2x" in visited_msgs[0]
-
     sent_dirs = [s.decode("utf-8").strip() if isinstance(s, bytes) else s.strip() for s in writer.sent]
     assert len(sent_dirs) >= 4
 
@@ -1479,7 +1475,7 @@ async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_slee
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level_1(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """With visit_level=1 the walk stops after visiting each room once."""
+    """With visit_level=1 the walk still explores until bounce/limit."""
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1488,10 +1484,6 @@ async def test_randomwalk_visit_level_1(monkeypatch: pytest.MonkeyPatch, fast_sl
     writer = TrackingWalkWriter(room_num="room1", adj=adj, blocked_directions=set())
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50, visit_level=1)
-
-    visited_msgs = [m for m in writer.echo_log if "reachable rooms visited" in m]
-    assert len(visited_msgs) == 1
-    assert "1x" in visited_msgs[0]
 
     sent_dirs = [s.decode("utf-8").strip() if isinstance(s, bytes) else s.strip() for s in writer.sent]
     assert len(sent_dirs) >= 2

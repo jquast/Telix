@@ -212,17 +212,22 @@ class TestZMP:
         assert client.zmp_check("room.info")
         assert client.zmp_check("zmp.ping")
 
-    def test_zmp_ident_sends_telix(self):
+    def test_zmp_ident_sends_telix_and_support(self):
         import types
         import logging
 
         client = mtts.TelixClient.__new__(mtts.TelixClient)
         client._zmp_ident_sent = False
+        client._zmp_supported_commands = {"char.login", "char.vitals"}
         client.log = logging.getLogger("test")
         sent = []
         client.writer = types.SimpleNamespace(send_zmp=lambda cmd, *args: sent.append((cmd, *args)))
         client.send_zmp_ident()
-        assert sent == [("zmp.ident", "Telix", mtts.version)]
+        assert sent == [
+            ("zmp.ident", "Telix", mtts.version),
+            ("zmp.support", "char.login"),
+            ("zmp.support", "char.vitals"),
+        ]
 
     def test_zmp_ident_not_sent_twice(self):
         import types

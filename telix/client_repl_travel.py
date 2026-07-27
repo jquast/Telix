@@ -68,28 +68,6 @@ async def settle_triggers(
             break
 
 
-def correct_room_edge(
-    graph: "RoomGraph | None", prev_num: str, old_target: str, new_target: str, direction: str
-) -> None:
-    """
-    Rewrite a graph exit so *direction* from *prev_num* points at *new_target*.
-
-    Called when a same-name room is reached under a different ID than expected. Only updates the exit if it currently
-    points at *old_target*.  Updates the in-memory adjacency cache so subsequent pathfinding sees the change.
-
-    :param graph: The room graph (RoomStore).
-    :param prev_num: Room from which the exit originates.
-    :param old_target: Expected target room ID.
-    :param new_target: Actual target room ID.
-    :param direction: Exit direction label.
-    """
-    if graph is None:
-        return
-    adj_exits = graph.adj.get(prev_num)
-    if adj_exits is not None and adj_exits.get(direction) == old_target:
-        adj_exits[direction] = new_target
-
-
 def repath(
     room_graph: "RoomGraph | None", destination: str, current: str, log_fn: Callable[[str], None]
 ) -> list[typing.Any]:
@@ -116,9 +94,8 @@ async def fast_travel(
     ctx: "TelixSessionContext",
     log: logging.Logger,
     destination: str = "",
-    correct_names: bool = True,
     noreply: bool = False,
-) -> None:
+) -> bool:
     """
     Execute travel by sending movement commands with GA/EOR pacing.
 
@@ -135,10 +112,10 @@ async def fast_travel(
     :param ctx: Session context for sending commands.
     :param log: Logger.
     :param destination: Final target room ID for re-pathfinding on detour.
-    :param correct_names: If True (default), rewrite graph edges when arriving at a same-name room with a different ID.
-        Set to ``False`` when distinct room IDs must be preserved.
     :param noreply: Completely disable the trigger engine during travel.
+    :returns: ``True`` if the destination was reached, ``False`` otherwise.
     """
+
     wait_fn = ctx.prompt.wait_fn
     echo_fn = ctx.prompt.echo
 
@@ -167,71 +144,6 @@ async def fast_travel(
                 return f"{room.name} ({num[:8]}...)"
         return num
 
-    # Track room IDs the graph already knew about before this travel
-    # started, so we can distinguish "ID rotation" (new hash for same
-    # room) from "different room with the same name" (cave grids).
-    pre_existing_rooms: set[str] = set()
-    graph = get_graph()
-    if graph is not None:
-        pre_existing_rooms = set(graph.rooms.keys())
-
-    def names_match(expected_num: str, actual_num: str) -> bool:
-        """
-        Check whether two room IDs likely refer to the same physical room.
-
-        This handles MUDs that rotate room IDs (same physical room, new hash
-        each visit).  Returns ``True`` only when:
-
-        1. Both rooms share the same name.
-        2. The *actual* room ID was **not** already in the graph before this
-           travel began.  Pre-existing rooms are distinct locations that
-           happen to share a name (e.g. a grid of "A cave" rooms).  A
-           rotated ID produces a hash the graph has never seen.
-        """
-        if actual_num in pre_existing_rooms:
-            return False
-        graph = get_graph()
-        if graph is None:
-            return False
-        expected = graph.rooms.get(expected_num)
-        actual = graph.rooms.get(actual_num)
-        if expected is None or actual is None:
-            return False
-        return expected.name == actual.name and bool(expected.name)
-
-    def correct_edge(
-        prev_num: str,
-        direction: str,
-        old_target: str,
-        new_target: str,
-        step_idx: int,
-        steps_list: list[tuple[str, str]],
-    ) -> None:
-        """
-        Update the graph edge and rewrite only the current step.
-
-        Earlier versions rewrote *all* remaining steps matching *old_target*, which corrupted paths through grids of
-        same-named rooms (e.g. a cave system where many rooms share the name "A cave" but are distinct locations with
-        different IDs).  Now only the step at *step_idx* is updated.
-        """
-        graph = get_graph()
-        correct_room_edge(graph, prev_num, old_target, new_target, direction)
-        if graph is not None:
-            adj_exits = graph.adj.get(prev_num)
-            if adj_exits is not None and adj_exits.get(direction) == new_target:
-                log.info(
-                    "%s: corrected exit %s of %s: %s -> %s",
-                    mode,
-                    direction,
-                    prev_num[:8],
-                    old_target[:8],
-                    new_target[:8],
-                )
-        if step_idx < len(steps_list):
-            d, r = steps_list[step_idx]
-            if r == old_target:
-                steps_list[step_idx] = (d, new_target)
-
     room_changed = ctx.room.changed
     max_retries = 3
     max_reroutes = 3
@@ -240,6 +152,7 @@ async def fast_travel(
         destination = steps[-1][1]
 
     blocked_exits: list[tuple[str, str, str]] = []
+    reached_destination = not steps or (destination and ctx.room.current == destination)
     try:
         step_idx = 0
         reroute_count = 0
@@ -316,27 +229,6 @@ async def fast_travel(
 
                 if actual == expected_room:
                     break
-                # Same-name room with different ID -- correct the edge
-                # and continue as if we arrived at the expected room.
-                # Skipped when correct_names=False to preserve distinct
-                # room IDs in grids of same-named rooms.
-                if (
-                    correct_names
-                    and expected_room
-                    and actual
-                    and actual != expected_room
-                    and names_match(expected_room, actual)
-                ):
-                    log.info(
-                        "%s: room ID changed for %s (%s -> %s), correcting",
-                        mode,
-                        room_name(actual),
-                        expected_room[:8],
-                        actual[:8],
-                    )
-                    correct_edge(prev_room, direction, expected_room, actual, step_idx, steps)
-                    expected_room = actual
-                    break
                 # Room didn't change -- server likely rejected move (rate limit).
                 # Retry unless we've exhausted attempts.
                 if actual == prev_room and attempt < max_retries:
@@ -370,6 +262,7 @@ async def fast_travel(
                         prev = graph.rooms.get(prev_room)
                         if prev is not None:
                             prev.exits[direction] = actual
+                            graph.adj.setdefault(prev_room, {})[direction] = actual
                             log.info("%s: updated edge %s of %s: -> %s", mode, direction, prev_room[:8], actual[:8])
 
                 if destination and actual and actual != destination and reroute_count < max_reroutes:
@@ -389,12 +282,17 @@ async def fast_travel(
 
                 expected_name = room_name(expected_room)
                 actual_name = room_name(actual)
-                msg = f"{mode} stopped: expected {expected_name} after '{direction}', got {actual_name}"
+                if move_blocked:
+                    msg = f"{mode} stopped: '{direction}' not available from {actual_name}"
+                else:
+                    msg = f"{mode} stopped: expected {expected_name} after '{direction}', got {actual_name}"
                 log.warning("%s", msg)
                 if echo_fn is not None:
                     echo_fn(msg)
                 break
             step_idx += 1
+            if destination and ctx.room.current == destination:
+                reached_destination = True
     finally:
         # Restore temporarily blocked exits so the graph stays accurate
         # for future pathfinding (the block may be transient, e.g. a
@@ -412,6 +310,7 @@ async def fast_travel(
             engine.enabled = engine_was_enabled
         if ctx.prompt.repaint_input is not None:
             ctx.prompt.repaint_input()
+    return reached_destination
 
 
 async def autodiscover(
@@ -484,6 +383,23 @@ async def autodiscover(
                 for gw, d, t in graph.find_branches(pos, blocked=blocked_rooms, strategy=strategy)
                 if (gw, d) not in tried and t not in inaccessible
             ]
+            if not branches and step_count > 0:
+                # Room.Writtenmap may not have been dispatched yet (it
+                # arrives after Room.Info but may be in a separate TCP
+                # segment).  Retry a few times with a short delay to
+                # give the GMCP callback time to populate exits.
+                for retry in range(10):
+                    await asyncio.sleep(0.3)
+                    branches = [
+                        (gw, d, t)
+                        for gw, d, t in graph.find_branches(pos, blocked=blocked_rooms, strategy=strategy)
+                        if (gw, d) not in tried and t not in inaccessible
+                    ]
+                    if branches:
+                        log.debug("autodiscover: found %d branches after retry %d", len(branches), retry + 1)
+                        break
+                    if retry == 0:
+                        log.debug("autodiscover: no branches at %s, waiting for Writtenmap", pos[:12])
             if not branches:
                 if echo_fn is not None:
                     echo_fn(f"AUTODISCOVER: complete, explored {step_count} exits")
@@ -507,12 +423,26 @@ async def autodiscover(
                 if echo_fn is not None:
                     echo_fn(f"AUTODISCOVER [{step_count}]: heading to gateway {gw_room[:8]}")
                 pre_travel = ctx.room.current
-                await fast_travel(steps, ctx, log, destination=gw_room)
-                actual = ctx.room.current
-                if actual != gw_room:
-                    tried.add((gw_room, direction))
-                    if target_num:
-                        inaccessible.add(target_num)
+                reached = await fast_travel(steps, ctx, log, destination=gw_room)
+                if not reached:
+                    actual = ctx.room.current
+                    # Same-name room with a different ID (e.g. cave grid).
+                    # If the actual room has the same name as
+                    # the expected gateway, treat this as a successful
+                    # arrival and update the gateway to the new hash.
+                    gw_name = graph.room_area(gw_room) if hasattr(graph, "room_area") else ""
+                    if not gw_name:
+                        gw_room_obj = graph.get_room(gw_room)
+                        gw_name = gw_room_obj.name if gw_room_obj else ""
+                    actual_obj = graph.get_room(actual)
+                    if actual_obj and gw_name and actual_obj.name == gw_name:
+                        log.debug("autodiscover: gateway %s rotated to %s (%s)",
+                                   gw_room[:12], actual[:12], actual_obj.name)
+                        gw_room = actual
+                    else:
+                        tried.add((gw_room, direction))
+                        if target_num:
+                            inaccessible.add(target_num)
                     # Identify the edge that blocked us: if the player
                     # didn't move at all, the first step of the path is
                     # impassable.  Remove it from the BFS adjacency
@@ -725,6 +655,8 @@ async def randomwalk(
         while q:
             node = q.popleft()
             for dst in adj.get(node, {}).values():
+                if dst in ("", "1"):
+                    continue
                 if dst not in seen:
                     seen.add(dst)
                     result.add(dst)
@@ -734,18 +666,15 @@ async def randomwalk(
     reachable = flood_reachable()
 
     ctx.walk.randomwalk_active = True
-    expected_total = visit_level * len(reachable) if reachable else limit
-    ctx.walk.randomwalk_total = min(limit, expected_total)
+    ctx.walk.randomwalk_total = limit
     ctx.walk.randomwalk_current = 0
     visited: set[str] = {current}
     if resume and ctx.walk.last_walk_mode == "randomwalk" and ctx.walk.last_walk_visited:
         visited |= ctx.walk.last_walk_visited
 
     def count_filled() -> int:
-        """Sum visits across reachable rooms, capped at visit_level per room."""
-        if not reachable:
-            return sum(min(int(v), visit_level) for v in walk_counts.values() if v != float("inf"))
-        return sum(min(int(walk_counts.get(r, 0)), visit_level) for r in reachable)
+        """Sum visits across all rooms encountered, capped at visit_level per room."""
+        return sum(min(int(v), visit_level) for v in walk_counts.values() if v != float("inf"))
 
     try:
         stuck_count = 0
@@ -759,16 +688,6 @@ async def randomwalk(
                 if echo_fn is not None:
                     echo_fn(
                         f"RANDOMWALK [{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}]: dead end, stopping"
-                    )
-                break
-
-            # Check if all reachable rooms have been visited enough times.
-            if reachable and all(walk_counts.get(r, 0) >= visit_level for r in reachable):
-                if echo_fn is not None:
-                    echo_fn(
-                        f"RANDOMWALK [{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}]: "
-                        f"all {len(reachable)} reachable rooms visited"
-                        f" {visit_level}x"
                     )
                 break
 
@@ -916,8 +835,6 @@ async def randomwalk(
             new_reachable = flood_reachable()
             if len(new_reachable) > len(reachable):
                 reachable = new_reachable
-                expected_total = visit_level * len(reachable)
-                ctx.walk.randomwalk_total = min(limit, expected_total)
 
             # Yield so on_prompt() (driven by GA/EOR already received
             # with the room output) can queue triggers.

@@ -16,6 +16,7 @@ from collections.abc import Callable
 
 # 3rd party
 import blessed
+import wcwidth
 import telnetlib3.telopt
 import blessed.line_editor
 import telnetlib3.client_shell
@@ -1472,6 +1473,16 @@ class ReplSession:
             if self.ctx.repl.erase_eol:
                 out = util.erase_eol(out)
             out = util.strip_decstbm(out)
+            current_room = self.ctx.room.current
+            if current_room:
+                stripped = wcwidth.strip_sequences(out).rstrip("\r\n")
+                prev_len = len(self.ctx.room.contents_buf)
+                new_len = prev_len + len(stripped)
+                if new_len > 4096:
+                    trim = new_len - 4096
+                    self.ctx.room.contents_buf = self.ctx.room.contents_buf[trim:] + stripped
+                else:
+                    self.ctx.room.contents_buf += stripped
             ts = self.ctx.typescript_file  # inherited from TelnetSessionContext
             if ts is not None:
                 ts.write(out)

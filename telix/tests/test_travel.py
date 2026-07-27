@@ -63,29 +63,6 @@ async def test_settle_triggers_waits_for_exclusive():
     assert iterations >= 2
 
 
-def test_correct_room_edge_updates_exit(tmp_path):
-    """correct_room_edge rewrites the adjacency cache to point at the new room ID."""
-    store = rooms.RoomStore(str(tmp_path / "rooms.db"))
-    store.update_room({"num": "A", "name": "Start", "exits": {"east": "B"}})
-    store.update_room({"num": "B", "name": "Room B", "exits": {}})
-    store.update_room({"num": "C", "name": "Room B", "exits": {}})
-
-    client_repl_travel.correct_room_edge(store, "A", "B", "C", "east")
-
-    assert store.adj["A"]["east"] == "C"
-    store.close()
-
-
-def test_correct_room_edge_no_room(tmp_path):
-    """correct_room_edge is a no-op when prev room has no adj entry."""
-    store = rooms.RoomStore(str(tmp_path / "rooms.db"))
-    store.update_room({"num": "B", "name": "Room B", "exits": {}})
-
-    client_repl_travel.correct_room_edge(store, "MISSING", "B", "C", "east")
-    assert "MISSING" not in store.adj
-    store.close()
-
-
 def test_repath_finds_new_route(tmp_path):
     """Repath returns a new path when one exists."""
     store = rooms.RoomStore(str(tmp_path / "rooms.db"))

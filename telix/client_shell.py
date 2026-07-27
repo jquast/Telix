@@ -166,10 +166,38 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
         num = rooms.room_id(data)
         if num is None:
             return
-        ctx.room.previous = ctx.room.current
+        prev = ctx.room.current
+        ctx.room.previous = prev
         ctx.room.current = num
+
+        if prev and num and num != prev and ctx.room.contents_buf:
+            graph_ = ctx.room.graph
+            if graph_ is not None:
+                graph_.save_room_contents(prev, ctx.room.contents_buf)
+                log.debug("room_info: saved %d chars of contents for %s", len(ctx.room.contents_buf), prev[:8])
+            ctx.room.contents_buf = ""
+
+        # If the player moved from a known room (prev) to a different room
+        # (num), and we know what direction was just sent, record the real
+        # edge in both the in-memory adjacency cache and the database so
+        # it survives Writtenmap re-processing (which would otherwise
+        # overwrite with "1" placeholders) and carries across sessions.
+        if prev and num and num != prev and ctx.walk.active_command:
+            direction = ctx.walk.active_command
+            graph_ = ctx.room.graph
+            if graph_ is not None:
+                graph_.adj.setdefault(prev, {})[direction] = num
+                graph_.conn.execute(
+                    "INSERT INTO exit (src_num, direction, dst_num)"
+                    " VALUES (?, ?, ?)"
+                    " ON CONFLICT(src_num, direction)"
+                    " DO UPDATE SET dst_num=excluded.dst_num",
+                    (prev, direction, num),
+                )
+                graph_.conn.commit()
+                log.debug("room_info: connected %s --%s--> %s", prev[:8], direction, num[:8])
+
         ctx.room.changed.set()
-        ctx.room.changed.clear()
         ctx.room.graph.update_room(data)
         rooms.write_current_room(ctx.room.current_file, num)
 

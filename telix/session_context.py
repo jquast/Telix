@@ -39,6 +39,7 @@ class RoomState:
     previous: str = ""
     arrival_timeout: float = 3.0
     changed: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+    contents_buf: str = ""
 
     @property
     def current(self) -> str:
@@ -382,6 +383,9 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             self.save_timer = None
         self.flush_timestamps()
         if self.room.graph is not None:
+            if self.room.current and self.room.contents_buf:
+                self.room.graph.save_room_contents(self.room.current, self.room.contents_buf)
+                self.room.contents_buf = ""
             self.room.graph.close()
             self.room.graph = None
         self.typescript_file = None

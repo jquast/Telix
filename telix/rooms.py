@@ -11,6 +11,7 @@ import json
 import random
 import typing
 import hashlib
+import logging
 import sqlite3
 import datetime
 import collections
@@ -28,6 +29,8 @@ EXIT_DIR_RE = re.compile(
 
 
 ROOM_ID_KEYS = ("num", "vnum", "id", "identifier")
+
+log = logging.getLogger(__name__)
 
 
 def room_id(info: dict[str, typing.Any]) -> str | None:
@@ -81,6 +84,8 @@ class Room:
     bookmarked: bool = False
     visit_count: int = 0
     last_visited: str = ""
+    x: int = 0
+    y: int = 0
     blocked: bool = False
     home: bool = False
     marked: bool = False
@@ -128,12 +133,23 @@ class RoomStore:
             DEFAULT '', environment TEXT NOT NULL DEFAULT '', bookmarked INTEGER NOT NULL DEFAULT 0, visit_count INTEGER
             NOT NULL DEFAULT 0,
 
-            last_visited TEXT NOT NULL DEFAULT '' ); CREATE TABLE IF NOT EXISTS exit ( src_num TEXT NOT NULL, direction
+            last_visited TEXT NOT NULL DEFAULT '', x INTEGER NOT NULL DEFAULT 0, y INTEGER NOT NULL DEFAULT 0 );
+            CREATE TABLE IF NOT EXISTS exit ( src_num TEXT NOT NULL, direction
             TEXT NOT NULL,     dst_num TEXT NOT NULL, PRIMARY KEY (src_num, direction) ); CREATE TABLE IF NOT EXISTS
             meta (     key TEXT PRIMARY KEY,     value TEXT NOT NULL );
             """
         )
         for col in ("blocked", "home", "marked"):
+            try:
+                self.conn.execute(f"ALTER TABLE room ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+        for col in ("contents",):
+            try:
+                self.conn.execute(f"ALTER TABLE room ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+        for col in ("x", "y"):
             try:
                 self.conn.execute(f"ALTER TABLE room ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
             except sqlite3.OperationalError:
@@ -145,7 +161,11 @@ class RoomStore:
         """Load full adjacency graph into memory for BFS."""
         self.adj.clear()
         try:
-            for src, direction, dst in self.conn.execute("SELECT src_num, direction, dst_num FROM exit"):
+            for src, direction, dst in self.conn.execute(
+                "SELECT src_num, direction, dst_num FROM exit"
+                " WHERE src_num IN (SELECT num FROM room)"
+                " AND dst_num IN (SELECT num FROM room)"
+            ):
                 self.adj.setdefault(src, {})[direction] = dst
         except sqlite3.OperationalError:
             pass
@@ -167,12 +187,14 @@ class RoomStore:
             bookmarked=bool(row[4]),
             visit_count=row[5],
             last_visited=row[6],
-            blocked=bool(row[7]),
-            home=bool(row[8]),
-            marked=bool(row[9]),
+            x=row[7],
+            y=row[8],
+            blocked=bool(row[9]),
+            home=bool(row[10]),
+            marked=bool(row[11]),
         )
 
-    ROOM_COLS = "num, name, area, environment, bookmarked, visit_count, last_visited, blocked, home, marked"
+    ROOM_COLS = "num, name, area, environment, bookmarked, visit_count, last_visited, x, y, blocked, home, marked"
 
     @property
     def rooms(self) -> dict[str, Room]:
@@ -218,7 +240,9 @@ class RoomStore:
         :param num: Room number.
         :returns: :class:`Room` or None if not found.
         """
-        row = self.conn.execute(f"SELECT {self.ROOM_COLS} FROM room WHERE num = ?", (num,)).fetchone()
+        row = self.conn.execute(
+            f"SELECT {self.ROOM_COLS} FROM room WHERE num = ?", (num,)
+        ).fetchone()
         if row is None:
             return None
         return self.row_to_room(row)
@@ -232,9 +256,15 @@ class RoomStore:
         """
         Update or create a room from a GMCP ``Room.Info`` payload.
 
+        When optional fields (``name``, ``area``, ``environment``) are absent
+        from *info*, the existing database values are preserved.
+
         :param info: GMCP Room.Info dict with a room identifier key.
         """
         num = room_id(info) or ""
+        if not num:
+            return
+
         has_exits = "exits" in info
         exits: dict[str, str]
         if has_exits:
@@ -251,6 +281,20 @@ class RoomStore:
         environment = str(info.get("environment", ""))
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+        # Preserve existing values for optional fields not present in this
+        # update -- prevents partial updates (e.g. from script exit-parsers
+        # that only pass {"identifier": ..., "exits": ...}) from zeroing out
+        # name/area/environment.
+        if "name" not in info or "area" not in info or "environment" not in info:
+            existing = self.get_room(num)
+            if existing is not None:
+                if "name" not in info:
+                    name = existing.name
+                if "area" not in info:
+                    area = existing.area
+                if "environment" not in info:
+                    environment = existing.environment
+
         self.conn.execute(
             "INSERT INTO room"
             " (num, name, area, environment, visit_count, last_visited)"
@@ -263,14 +307,134 @@ class RoomStore:
             (num, name, area, environment, now),
         )
         if has_exits:
-            self.conn.execute("DELETE FROM exit WHERE src_num = ?", (num,))
-            if exits:
-                self.conn.executemany(
-                    "INSERT INTO exit (src_num, direction, dst_num) VALUES (?, ?, ?)",
-                    [(num, d, dst) for d, dst in exits.items()],
+            # If the incoming exits contain placeholder values (e.g. "1"
+            # from Writtenmap parsers that don't know destination IDs),
+            # check whether this room already has corrected (non-placeholder)
+            # destinations for those directions and preserve them.
+            if any(v in ("", "1") for v in exits.values()):
+                # First, preserve non-placeholder destinations from the DB
+                # (persisted from previous sessions).
+                existing_exits = dict(
+                    self.conn.execute(
+                        "SELECT direction, dst_num FROM exit WHERE src_num = ?", (num,)
+                    ).fetchall()
+                )
+                # Also preserve non-placeholder destinations from the
+                # in-memory adj cache (corrected by movement in the
+                # current session, not yet in the DB).
+                adj_exits = self.adj.get(num, {})
+                for direction, dst in exits.items():
+                    if dst in ("", "1"):
+                        preserved = None
+                        if direction in existing_exits:
+                            preserved = existing_exits[direction]
+                        if (not preserved or preserved in ("", "1")) and direction in adj_exits:
+                            preserved = adj_exits[direction]
+                        if preserved and preserved not in ("", "1"):
+                            exits[direction] = preserved
+
+            # Upsert only the Writtenmap-provided exits so that any
+            # previously-recorded (movement-corrected) exits for directions
+            # not mentioned in this Writtenmap are preserved.
+            for direction, dst in exits.items():
+                self.conn.execute(
+                    "INSERT INTO exit (src_num, direction, dst_num)"
+                    " VALUES (?, ?, ?)"
+                    " ON CONFLICT(src_num, direction)"
+                    " DO UPDATE SET dst_num=excluded.dst_num",
+                    (num, direction, dst),
                 )
         self.conn.commit()
-        self.adj[num] = exits
+        # Merge Writtenmap exits into the in-memory adj cache rather than
+        # replacing it -- preserves movement-corrected edges for directions
+        # that the Writtenmap doesn't mention this time.
+        self.adj[num] = {**self.adj.get(num, {}), **exits}
+
+    def import_quowmap(self, quowmap_path: str) -> int:
+        """
+        Import rooms and exits from Quow's Discworld map database.
+
+        Reads the quowmap SQLite database (room_id, room_short, map_id,
+        room_type, xpos, ypos + room_exits table) and bulk-inserts into
+        the local RoomStore.  Sets the meta key ``quowmap_imported`` to
+        ``1`` on success.
+
+        :param quowmap_path: Path to the quowmap database file.
+        :returns: Number of rooms imported.
+        """
+        qconn = sqlite3.connect(quowmap_path)
+        try:
+            rooms = qconn.execute(
+                "SELECT room_id, room_short, map_id, room_type, xpos, ypos"
+                " FROM rooms"
+            ).fetchall()
+            exits = qconn.execute(
+                "SELECT room_id, exit, connect_id FROM room_exits"
+            ).fetchall()
+        finally:
+            qconn.close()
+
+        if not rooms:
+            return 0
+
+        self.conn.execute("BEGIN TRANSACTION")
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO room"
+            " (num, name, area, environment, x, y, visit_count, last_visited)"
+            " VALUES (?, ?, ?, ?, ?, ?, 0, '')",
+            [(r[0], r[1], str(r[2]), r[3], r[4], r[5]) for r in rooms],
+        )
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO exit (src_num, direction, dst_num)"
+            " VALUES (?, ?, ?)",
+            exits,
+        )
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta VALUES ('quowmap_imported', '1')"
+        )
+        self.conn.commit()
+        self.load_adjacency()
+        log.info("imported %d rooms and %d exits from quowmap", len(rooms), len(exits))
+        return len(rooms)
+
+    def save_room_contents(self, num: str, text: str) -> None:
+        """
+        Save or replace room contents text, trimming to 4096 characters.
+
+        :param num: Room number.
+        :param text: Plain text content (ANSI sequences already stripped).
+        """
+        text = text[:4096]
+        self.conn.execute(
+            "INSERT INTO room (num, contents) VALUES (?, ?)"
+            " ON CONFLICT(num) DO UPDATE SET contents=excluded.contents",
+            (num, text),
+        )
+        self.conn.commit()
+
+    def get_room_contents(self, num: str) -> str:
+        """
+        Return the stored contents text for a room.
+
+        :param num: Room number.
+        :returns: Contents string, or ``""`` if not found.
+        """
+        row = self.conn.execute("SELECT contents FROM room WHERE num = ?", (num,)).fetchone()
+        return row[0] if row and row[0] else ""
+
+    def search_rooms_by_contents(self, query: str) -> list[str]:
+        """
+        Return room IDs whose contents match *query*.
+
+        :param query: Case-insensitive substring.
+        :returns: List of matching room number strings.
+        """
+        q = f"%{query}%"
+        rows = self.conn.execute(
+            "SELECT num FROM room WHERE contents LIKE ? COLLATE NOCASE",
+            (q,),
+        ).fetchall()
+        return [r[0] for r in rows]
 
     MARKER_COLS = ("bookmarked", "blocked", "home", "marked")
 
@@ -447,6 +611,10 @@ class RoomStore:
         if not self.has_room(src):
             return []
 
+        adj_src = self.adj.get(src)
+        if not adj_src:
+            log.debug("find_branches: src %s has no exits in adj cache", src[:12])
+
         visited: set[str] = {src}
         queue: collections.deque[tuple[str, int]] = collections.deque([(src, 0)])
         branches: list[tuple[int, str, str, str]] = []
@@ -480,7 +648,7 @@ class RoomStore:
 
     def search(self, query: str) -> list[Room]:
         """
-        Case-insensitive substring search on room name, area, and ID.
+        Case-insensitive substring search on room name, area, ID, and contents.
 
         :param query: Search string.
         :returns: Matching rooms sorted bookmarked-first, then by name.
@@ -490,8 +658,9 @@ class RoomStore:
             f"SELECT {self.ROOM_COLS}"
             " FROM room WHERE name LIKE ? COLLATE NOCASE"
             " OR area LIKE ? COLLATE NOCASE"
-            " OR num LIKE ? COLLATE NOCASE",
-            (q, q, q),
+            " OR num LIKE ? COLLATE NOCASE"
+            " OR contents LIKE ? COLLATE NOCASE",
+            (q, q, q, q),
         ).fetchall()
         results = [self.row_to_room(r) for r in rows]
         results.sort(key=lambda r: (not r.bookmarked, r.name.lower()))
