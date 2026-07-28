@@ -1,6 +1,7 @@
 """Room browser, picker, and graph editor screens for the telix TUI."""
 
 # std imports
+import re
 import typing
 from typing import TYPE_CHECKING
 
@@ -34,6 +35,14 @@ ARROW_STYLE = "$primary"
 HOME_STYLE = "$accent"
 BLOCKED_STYLE = "$error"
 MARKED_STYLE = "$accent"
+
+
+def _area_sort_key(area: str) -> tuple[int | float, str]:
+    """Sort areas numerically when they start with a digit, else alphabetically."""
+    m = re.match(r"(\d+)", area)
+    if m:
+        return (int(m.group(1)), area.lower())
+    return (float("inf"), area.lower())
 
 
 class RoomTree(textual.widgets.Tree[str]):
@@ -131,10 +140,11 @@ class RoomBrowserPane(textual.containers.Vertical):
     #room-status { height: 1; margin-top: 0; }
     #room-count { width: auto; }
     #room-exits { height: 1; width: 100%; }
-    #room-contents { height: auto; width: 100%; margin-top: 0; color: $text-muted; }
+    #room-contents { height: auto; width: 100%; margin-top: 0; }
     #room-distance { width: 1fr; text-align: right; }
-    #room-marker-bar { height: auto; }
+    #room-marker-bar { height: 3; }
     #room-marker-bar Button { width: 13; min-width: 0; margin-right: 1; }
+    #room-contents-view { width: 16; }
     #room-total { height: 1; margin-top: 0; }
     Footer FooterLabel { margin: 0; }
     """
@@ -152,7 +162,7 @@ class RoomBrowserPane(textual.containers.Vertical):
         self.current_area: str = ""
         self.graph: RoomStore | None = None
         self.mounted = False
-        self.sort_mode: str = "name"
+        self.sort_mode: str = "last_visited"
         self.distances: dict[str, int] = {}
         self.last_visited: dict[str, str] = {}
         self.name_col: int = NAME_COL_BASE
@@ -320,7 +330,7 @@ class RoomBrowserPane(textual.containers.Vertical):
         for _, _, area, _, _, _, _, _, _ in self.all_rooms:
             if area:
                 areas.add(area)
-        sorted_areas = sorted(areas, key=str.lower)
+        sorted_areas = sorted(areas, key=lambda a: _area_sort_key(a))
         options = [(a, a) for a in sorted_areas]
         select = self.query_one("#room-area-select", textual.widgets.Select)
         select.set_options(options)
@@ -497,9 +507,13 @@ class RoomBrowserPane(textual.containers.Vertical):
             parts.append(f"{direction}[{name}]")
         return "Exits: " + ", ".join(parts)
 
-    def contents_text(self, room_num: str, search: str = "", width: int = 80) -> str:
+    def contents_text(self, room_num: str, search: str = "", width: int = 80) -> rich.text.Text:
         """
-        Build a room contents summary line.
+        Build a room contents summary line with styled segments.
+
+        The *Contents:* label is rendered in the foreground color, the contents
+        text in muted/grey, and any matching *search* term is highlighted in
+        the accent color.
 
         When *search* is empty, shows the first *width* columns of the room
         contents with an ellipsis if truncated.  When *search* is provided and
@@ -509,47 +523,77 @@ class RoomBrowserPane(textual.containers.Vertical):
         :param room_num: Room number.
         :param search: Active search query string.
         :param width: Available display width in columns.
-        :returns: Formatted contents line or ``""``.
+        :returns: Styled contents line or ``""``.
         """
         if self.graph is None:
-            return ""
+            return rich.text.Text("")
         text = self.graph.get_room_contents(room_num)
         if not text:
-            return ""
+            return rich.text.Text("")
         text = " ".join(text.split())
         total_cols = wcwidth.wcswidth(text)
         if total_cols < 0:
-            return ""
-        label = "Contents: "
-        label_cols = len(label)
+            return rich.text.Text("")
+
+        label_str = "Contents: "
+        label_cols = len(label_str)
         avail = max(width - label_cols, 20) if width > 0 else 120
+
+        label_style = None
+        muted_style = rich.style.Style(dim=True)
+        hl_style = rich.style.Style(bold=True)
+
+        build = rich.text.Text(label_str, style=label_style)
+
         if not search:
             if total_cols <= avail:
-                return label + text
-            clipped = wcwidth.clip(text, 0, avail - 1, propagate_sgr=False)
-            return label + clipped + "\u2026"
+                build.append(text, style=muted_style)
+            else:
+                build.append(wcwidth.clip(text, 0, avail - 1, propagate_sgr=False), style=muted_style)
+                build.append("\u2026", style=muted_style)
+            return build
 
         q_lower = search.lower()
         idx = text.lower().find(q_lower)
+
         if idx == -1:
             if total_cols <= avail:
-                return label + text
-            clipped = wcwidth.clip(text, 0, avail - 1, propagate_sgr=False)
-            return label + clipped + "\u2026"
+                build.append(text, style=muted_style)
+            else:
+                build.append(wcwidth.clip(text, 0, avail - 1, propagate_sgr=False), style=muted_style)
+                build.append("\u2026", style=muted_style)
+            return build
 
         match_col = wcwidth.wcswidth(text[:idx])
-        effective = avail - 2  # reserve for potential ellipses
+        effective = avail - 2
         half = effective // 2
         start_col = max(0, match_col - half)
         end_col = min(total_cols, start_col + effective)
-        prefix = "\u2026" if start_col > 0 else ""
-        suffix = "\u2026" if end_col < total_cols else ""
-        if not prefix:
+        prefix_ell = start_col > 0
+        suffix_ell = end_col < total_cols
+        if not prefix_ell:
             end_col = min(total_cols, end_col + 1)
-        if not suffix:
+        if not suffix_ell:
             start_col = max(0, start_col - 1)
+
         clipped = wcwidth.clip(text, start_col, end_col, propagate_sgr=False)
-        return label + prefix + clipped + suffix
+
+        if prefix_ell:
+            build.append("\u2026", style=muted_style)
+
+        ci = clipped.lower().find(q_lower)
+        if ci >= 0:
+            cj = ci + len(search)
+            build.append(clipped[:ci], style=muted_style)
+            build.append(clipped[ci:cj], style=hl_style)
+            build.append(clipped[cj:], style=muted_style)
+        else:
+            build.append(clipped, style=muted_style)
+
+        if suffix_ell:
+            build.append("\u2026", style=muted_style)
+
+        return build
 
     def set_travel_buttons_disabled(self, disabled: bool) -> None:
         """Enable or disable the Travel button."""

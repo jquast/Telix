@@ -654,11 +654,11 @@ class ScriptContext:
         :param sep: Separator string inserted between values (default " ").
         """
         text = sep.join(str(a) for a in args)
-        if self._ctx.prompt.echo:
-            self._ctx.prompt.echo(text)
+        if self._ctx.prompt.script_echo:
+            self._ctx.prompt.script_echo(text)
             return
         # pending text enqueued until ReplSession.register_callbacks() is ready
-        self._ctx.prompt.pending_echo.append(text)
+        self._ctx.prompt.pending_script_echo.append(text)
 
     def debug(self, msg: str) -> None:
         """

@@ -52,7 +52,7 @@ from telix.client_repl import (
 from telix.highlighter import RE_FLAGS, HighlightRule
 from telix.session_context import CommandQueue, TelixSessionContext
 from telix.client_repl_render import SEXTANT, scramble_password
-from telix.client_repl_travel import MAX_STUCK_RETRIES
+from telix.client_repl_travel import MAX_STUCK_RETRIES, RECOVERY_LIMIT
 from telix.client_repl_commands import (
     StepResult,
     DispatchHooks,
@@ -641,15 +641,17 @@ class WalkWriter:
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_stuck_room_stops(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """After 3 consecutive failed moves, randomwalk marks exits exhausted and stops."""
+    """After MAX_STUCK_RETRIES per recovery cycle and RECOVERY_LIMIT full clears, randomwalk stops."""
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50)
 
     retry_msgs = [m for m in writer.echo_log if "temporarily blocked" in m]
-    assert len(retry_msgs) == MAX_STUCK_RETRIES
-    stop_msgs = [m for m in writer.echo_log if "all exits blocked, stopping" in m]
+    assert len(retry_msgs) == MAX_STUCK_RETRIES * (RECOVERY_LIMIT + 1)
+    recovery_msgs = [m for m in writer.echo_log if "recovering" in m]
+    assert len(recovery_msgs) == RECOVERY_LIMIT
+    stop_msgs = [m for m in writer.echo_log if "recovery limit reached, stopping" in m]
     assert len(stop_msgs) == 1
     assert not writer.ctx.walk.randomwalk_active
 
@@ -699,7 +701,6 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
 
     no_change_msgs = [m for m in writer.echo_log if "no room change" in m]
     assert len(no_change_msgs) >= 1
-    assert ("room1", "north") in writer.ctx.walk.blocked_exits
 
 
 @pytest.mark.asyncio
@@ -1281,7 +1282,6 @@ async def test_randomwalk_blocked_exit_tries_other_direction(monkeypatch: pytest
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
 
-    assert ("room1", "north") in writer.ctx.walk.blocked_exits
     assert "room3" in writer.ctx.walk.last_walk_visited
 
 
@@ -1520,16 +1520,19 @@ async def test_randomwalk_skips_blocked_rooms(monkeypatch: pytest.MonkeyPatch, f
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_same_hash_rooms(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """Randomwalk detects arrival via room_changed event even when room ID is unchanged."""
+    """Same-hash rooms report no room change and trigger recovery instead of bounce."""
     adj: dict[str, dict[str, str]] = {"same": {"north": "same", "south": "same"}}
     writer = TrackingWalkWriter(room_num="same", adj=adj, blocked_directions=set())
-    writer.ctx.room.arrival_timeout = 1.0
+    writer.ctx.room.arrival_timeout = 0.005
 
-    await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
+    await randomwalk(writer.ctx, logging.getLogger("test"), limit=35)
 
     no_change = [m for m in writer.echo_log if "no room change" in m]
-    assert len(no_change) == 0
-    assert len(writer.sent) >= 4
+    assert len(no_change) > 5
+    recovery_msgs = [m for m in writer.echo_log if "recovering" in m]
+    assert len(recovery_msgs) >= RECOVERY_LIMIT
+    stop_msgs = [m for m in writer.echo_log if "recovery limit reached" in m]
+    assert len(stop_msgs) == 1
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1552,7 +1555,14 @@ async def test_home_travel_command(monkeypatch: pytest.MonkeyPatch, fast_sleep) 
     parts = ["`home`"]
     remainder = await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
     assert remainder == []
-    assert len(fast_travel_args) == 1
+    # fast_travel is launched as a background task; verify it was created.
+    assert writer.ctx.walk.travel_task is not None
+    writer.ctx.walk.travel_task.cancel()
+    # Suppress CancelledError noise in the event loop.
+    try:
+        await writer.ctx.walk.travel_task
+    except asyncio.CancelledError:
+        pass
 
 
 class MockHighlightEngine:
@@ -1879,6 +1889,8 @@ async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fas
 
     parts = ["`autodiscover noreply`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert len(captured_kw) == 1
     assert captured_kw[0]["noreply"] is True
@@ -1977,6 +1989,8 @@ async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sle
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_noreply == [True]
 
@@ -2000,6 +2014,8 @@ async def test_resume_inherits_room_change_cmd(monkeypatch, fast_sleep):
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_kw.get("room_change_cmd") == "`await fremen.hunt`"
 
@@ -2044,6 +2060,8 @@ async def test_resume_inherits_visit_level(monkeypatch, fast_sleep):
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_kw.get("visit_level") == 5
 

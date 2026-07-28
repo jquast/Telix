@@ -835,6 +835,17 @@ class ReplSession:
         cursor_col = self.editor_cursor()
         self.stdout.write(self.blessed_term.move_yx(self.scroll.input_row, cursor_col).encode())
 
+    def echo_script(self, text: str) -> None:
+        """Echo script output (cyan), never scrambled."""
+        assert self.scroll is not None
+        self.stdout.write(self.blessed_term.restore.encode())
+        colored = f"{self.blessed_term.cyan}{text}{self.blessed_term.normal}\r\n"
+        self.stdout.write(colored.encode())
+        self.replay_buf.append(colored.encode())
+        self.stdout.write(self.blessed_term.save.encode())
+        cursor_col = self.editor_cursor()
+        self.stdout.write(self.blessed_term.move_yx(self.scroll.input_row, cursor_col).encode())
+
     def repaint_input_line(self) -> None:
         """Re-render the input line from a background task (e.g. after travel)."""
         if self.scroll is None:
@@ -1343,6 +1354,7 @@ class ReplSession:
 
         self.ctx.prompt.wait_fn = self.wait_for_prompt
         self.ctx.prompt.echo = self.echo_trigger
+        self.ctx.prompt.script_echo = self.echo_script
         self.ctx.prompt.ready = self.prompt_ready
         self.ctx.prompt.repaint_input = self.repaint_input_line
         self.ctx.on_trigger_activity = self.on_trigger_activity
@@ -1351,6 +1363,10 @@ class ReplSession:
         if (pending := self.ctx.prompt.pending_echo):
             for text in pending:
                 self.ctx.prompt.echo(text)
+            pending.clear()
+        if (pending := self.ctx.prompt.pending_script_echo):
+            for text in pending:
+                self.ctx.prompt.script_echo(text)
             pending.clear()
 
         self.refresh_trigger_engine()

@@ -28,6 +28,7 @@ STANDARD_DIRS = frozenset(
 BOUNCE_THRESHOLD = 3  # cancel randomwalk after this many consecutive returns to a recently-visited room
 MAX_STUCK_RETRIES = 3
 STUCK_RETRY_DELAY = 5.0
+RECOVERY_LIMIT = 3  # full blocked-exit clears before giving up
 # Delay after wait_fn() in settle loops to allow read_server to process
 # the prompt text and call on_prompt() before checking trigger flags.
 SETTLE_YIELD_DELAY = 0.05
@@ -145,7 +146,7 @@ async def fast_travel(
         return num
 
     room_changed = ctx.room.changed
-    max_retries = 3
+    max_retries = 0
     max_reroutes = 3
 
     if not destination and steps:
@@ -306,6 +307,7 @@ async def fast_travel(
                         prev.exits[exit_dir] = target
                     graph.adj.setdefault(room_num, {})[exit_dir] = target
         ctx.walk.active_command = None
+        ctx.walk.travel_task = None
         if noreply and engine is not None:
             engine.enabled = engine_was_enabled
         if ctx.prompt.repaint_input is not None:
@@ -493,10 +495,12 @@ async def autodiscover(
                 ctx.writer.write((direction + "\r\n").encode("utf-8"))
             if room_changed is not None:
                 try:
-                    await asyncio.wait_for(room_changed.wait(), timeout=ctx.room.arrival_timeout)
-                    arrived = True
+                    await asyncio.wait_for(
+                        room_changed.wait(), timeout=ctx.room.arrival_timeout
+                    )
                 except asyncio.TimeoutError:
-                    arrived = ctx.room.current != gw_room
+                    pass
+                arrived = ctx.room.current != gw_room
             else:
                 for wait in range(30):
                     await asyncio.sleep(0.3)
@@ -680,6 +684,7 @@ async def randomwalk(
         stuck_count = 0
         retry_count = 0
         bounce_count = 0
+        recovery_count = 0
         prev_room: str | None = None
         for step in range(limit):
             current = ctx.room.current
@@ -705,10 +710,18 @@ async def randomwalk(
                 scored.append((walk_counts.get(dst, 0) + penalty, d, dst))
 
             if not scored:
+                recovery_count += 1
+                if recovery_count > RECOVERY_LIMIT:
+                    if echo_fn is not None:
+                        rw = f"{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}"
+                        echo_fn(f"RANDOMWALK [{rw}]: all exits blocked, recovery limit reached, stopping")
+                    break
+                for d in list(exits):
+                    ctx.walk.blocked_exits.discard((current, d))
                 if echo_fn is not None:
                     rw = f"{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}"
-                    echo_fn(f"RANDOMWALK [{rw}]: all exits blocked, stopping")
-                break
+                    echo_fn(f"RANDOMWALK [{rw}]: all exits blocked, recovering ({recovery_count}/{RECOVERY_LIMIT})")
+                continue
 
             min_count = min(s[0] for s in scored)
             best = [(d, dst) for cnt, d, dst in scored if cnt == min_count]
@@ -736,10 +749,12 @@ async def randomwalk(
                 ctx.writer.write((direction + "\r\n").encode("utf-8"))
             if room_changed is not None:
                 try:
-                    await asyncio.wait_for(room_changed.wait(), timeout=ctx.room.arrival_timeout)
-                    arrived = True
+                    await asyncio.wait_for(
+                        room_changed.wait(), timeout=ctx.room.arrival_timeout
+                    )
                 except asyncio.TimeoutError:
-                    arrived = ctx.room.current != current
+                    pass
+                arrived = ctx.room.current != current
             else:
                 for tick in range(30):
                     await asyncio.sleep(0.3)
@@ -761,12 +776,24 @@ async def randomwalk(
                 if all_blocked:
                     retry_count += 1
                     if retry_count > MAX_STUCK_RETRIES:
+                        recovery_count += 1
+                        if recovery_count > RECOVERY_LIMIT:
+                            if echo_fn is not None:
+                                echo_fn(
+                                    f"RANDOMWALK [{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}]: "
+                                    f"all exits blocked, recovery limit reached, stopping"
+                                )
+                            break
+                        for d in list(adj.get(current, {})):
+                            ctx.walk.blocked_exits.discard((current, d))
                         if echo_fn is not None:
                             echo_fn(
                                 f"RANDOMWALK [{ctx.walk.randomwalk_current}/{ctx.walk.randomwalk_total}]: "
-                                f"all exits blocked, stopping"
+                                f"all exits blocked, recovering ({recovery_count}/{RECOVERY_LIMIT})"
                             )
-                        break
+                        retry_count = 0
+                        await asyncio.sleep(STUCK_RETRY_DELAY)
+                        continue
                     for d in list(adj.get(current, {})):
                         ctx.walk.blocked_exits.discard((current, d))
                     if echo_fn is not None:
@@ -817,11 +844,30 @@ async def randomwalk(
                             )
                         all_blocked = all((actual, d) in ctx.walk.blocked_exits for d in adj.get(actual, {}))
                         if all_blocked:
+                            recovery_count += 1
+                            if recovery_count > RECOVERY_LIMIT:
+                                if echo_fn is not None:
+                                    step = ctx.walk.randomwalk_current
+                                    total = ctx.walk.randomwalk_total
+                                    echo_fn(
+                                        f"RANDOMWALK [{step}/{total}]: "
+                                        f"all exits blocked after bounce, "
+                                        f"recovery limit reached, stopping"
+                                    )
+                                break
+                            for d in list(adj.get(actual, {})):
+                                ctx.walk.blocked_exits.discard((actual, d))
+                            for d in list(adj.get(current, {})):
+                                ctx.walk.blocked_exits.discard((current, d))
                             if echo_fn is not None:
                                 step = ctx.walk.randomwalk_current
                                 total = ctx.walk.randomwalk_total
-                                echo_fn(f"RANDOMWALK [{step}/{total}]: all exits blocked after bounce, stopping")
-                            break
+                                echo_fn(
+                                    f"RANDOMWALK [{step}/{total}]: "
+                                    f"all exits blocked after bounce, "
+                                    f"recovering ({recovery_count}/{RECOVERY_LIMIT})"
+                                )
+                            continue
                     bounce_count = 0
             else:
                 bounce_count = 0
@@ -917,6 +963,14 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
     :param log: Logger.
     :returns: Commands that still need to be sent to the server.
     """
+
+    def _repaint_on_done(ctx: "TelixSessionContext") -> Callable[["asyncio.Task[None]"], None]:
+        """Return a done callback that repaints the input line."""
+        def _done(task: "asyncio.Task[None]") -> None:
+            if ctx.prompt.repaint_input is not None:
+                ctx.prompt.repaint_input()
+        return _done
+
     for idx, cmd in enumerate(parts):
         m = client_repl_commands.TRAVEL_RE.match(cmd)
         if not m:
@@ -952,7 +1006,11 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                 if echo_fn is not None:
                     echo_fn(f"HOME: no path to home room {home_num}")
                 return parts[idx + 1 :]
-            await fast_travel(path, ctx, log, destination=home_num)
+            task = asyncio.ensure_future(
+                fast_travel(path, ctx, log, destination=home_num)
+            )
+            task.add_done_callback(_repaint_on_done(ctx))
+            ctx.walk.travel_task = task
             return parts[idx + 1 :]
 
         if verb in ("autodiscover", "randomwalk", "resume"):
@@ -1013,21 +1071,34 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                 do_resume = ctx.walk.last_walk_mode == verb and ctx.walk.last_walk_room == ctx.room.current
 
             if verb == "autodiscover":
-                await autodiscover(
-                    ctx,
-                    log,
-                    limit=walk_limit,
-                    resume=do_resume,
-                    strategy=walk_strategy,
-                    noreply=noreply,
-                    room_change_cmd=room_change_cmd,
+                task = asyncio.ensure_future(
+                    autodiscover(
+                        ctx,
+                        log,
+                        limit=walk_limit,
+                        resume=do_resume,
+                        strategy=walk_strategy,
+                        noreply=noreply,
+                        room_change_cmd=room_change_cmd,
+                    )
                 )
+                task.add_done_callback(_repaint_on_done(ctx))
+                ctx.walk.discover_task = task
 
             else:
                 ctx.walk.randomwalk_room_change_cmd = room_change_cmd
-                await randomwalk(
-                    ctx, log, limit=walk_limit, resume=do_resume, visit_level=walk_visit_level, noreply=noreply
+                task = asyncio.ensure_future(
+                    randomwalk(
+                        ctx,
+                        log,
+                        limit=walk_limit,
+                        resume=do_resume,
+                        visit_level=walk_visit_level,
+                        noreply=noreply,
+                    )
                 )
+                task.add_done_callback(_repaint_on_done(ctx))
+                ctx.walk.randomwalk_task = task
             return parts[idx + 1 :]
 
         is_return = verb == "return"
@@ -1067,7 +1138,11 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
             log.warning("no path from %s to %s", current, room_id)
             break
 
-        await fast_travel(path, ctx, log, destination=room_id, noreply=noreply)
+        task = asyncio.ensure_future(
+            fast_travel(path, ctx, log, destination=room_id, noreply=noreply)
+        )
+        task.add_done_callback(_repaint_on_done(ctx))
+        ctx.walk.travel_task = task
         return parts[idx + 1 :]
 
     return parts

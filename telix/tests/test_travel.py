@@ -101,6 +101,7 @@ def make_travel_ctx(graph=None, current=""):
     walk = types.SimpleNamespace(
         active_command=None,
         active_command_time=0.0,
+        command_delay=0.0,
         discover_active=False,
         discover_current=0,
         randomwalk_active=False,
@@ -150,3 +151,46 @@ async def test_fast_travel_calls_repaint_on_empty_path():
     await client_repl_travel.fast_travel([], ctx, logging.getLogger("test"))
     assert repaint_calls
     assert ctx.walk.active_command is None
+
+
+@pytest.mark.asyncio()
+async def test_fast_travel_blocks_bad_exit_and_reroutes(tmp_path):
+    """When a step fails (room unchanged), the exit is blocked and travel re-routes."""
+    import logging
+
+    store = rooms.RoomStore(str(tmp_path / "rooms.db"))
+    store.update_room({"num": "A", "name": "Start", "exits": {"read sign": "X", "east": "B"}})
+    store.update_room({"num": "X", "name": "DeadEnd", "exits": {}})
+    store.update_room({"num": "B", "name": "Mid1", "exits": {"east": "C", "west": "A"}})
+    store.update_room({"num": "C", "name": "Mid2", "exits": {"east": "D", "west": "B"}})
+    store.update_room({"num": "D", "name": "Dest", "exits": {"west": "C"}})
+
+    ctx, repaint_calls = make_travel_ctx(graph=store, current="A")
+    original_write = ctx.writer.write
+
+    def fake_write(s):
+        original_write(s)
+        cmd = s.strip()
+        current = ctx.room.current
+        if cmd == "east" and current == "A":
+            ctx.room.current = "B"
+            ctx.room.changed.set()
+        elif cmd == "east" and current == "B":
+            ctx.room.current = "C"
+            ctx.room.changed.set()
+        elif cmd == "east" and current == "C":
+            ctx.room.current = "D"
+            ctx.room.changed.set()
+
+    ctx.writer.write = fake_write
+
+    path = [("read sign", "X")]
+    await client_repl_travel.fast_travel(path, ctx, logging.getLogger("test"), destination="D")
+    store.close()
+
+    # Travel reached the destination via re-route (A→east→B→east→C→east→D)
+    assert ctx.room.current == "D"
+    assert ctx.walk.active_command is None
+    # The blocked exit ("read sign") is restored to the graph by the
+    # finally block so it remains available for future travel sessions.
+    assert "read sign" in store.adj.get("A", {})

@@ -53,6 +53,17 @@ _DIRECTIONS = [
     "up", "down", "in", "out",
 ]
 
+_ABBREV: dict[str, str] = {
+    "north": "n",
+    "south": "s",
+    "east": "e",
+    "west": "w",
+    "northeast": "ne",
+    "northwest": "nw",
+    "southeast": "se",
+    "southwest": "sw",
+}
+
 _NUMBER_PATTERN = r"(?:a |an |the |" + "|".join(_NUMBER_WORDS) + r" )"
 _OF_RE = re.compile(
     r"(" + "|".join(_DIRECTIONS) + r")\s+of\s+here\b"
@@ -66,6 +77,7 @@ def _parse_writtenmap(text: str, ctx: ScriptContext) -> None:
     exits = {}
     for match in _OF_RE.finditer(text):
         direction = (match.group(1) or match.group(2)).lower()
+        direction = _ABBREV.get(direction, direction)
         if direction not in exits:
             exits[direction] = "1"
 
