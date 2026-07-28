@@ -571,7 +571,11 @@ def fill_toolbar(
     left: list["ToolbarSlot"], right: list["ToolbarSlot"], cols: int
 ) -> tuple[list["ToolbarSlot"], list["ToolbarSlot"], int]:
     """
-    Distribute extra horizontal space across growable slots and separators.
+    Distribute extra horizontal space across growable slots.
+
+    All available extra width is added to growable bar slots.  Separator widths
+    always stay at ``DISPLAY.SEPARATOR_WIDTH`` so that the ``pad`` calculation
+    in ``paint`` remains correct.
 
     :returns: (left_slots, right_slots, sep_width) with expanded bars.
     """
@@ -586,15 +590,7 @@ def fill_toolbar(
     if not growable or extra <= 0:
         return (left, right, DISPLAY.SEPARATOR_WIDTH)
 
-    n_expandable_seps = n_right_seps
-    if n_expandable_seps > 0:
-        sep_bonus = extra // 4
-        per_sep = sep_bonus // n_expandable_seps
-        sep_width = DISPLAY.SEPARATOR_WIDTH + per_sep
-        remaining = extra - per_sep * n_expandable_seps
-    else:
-        sep_width = DISPLAY.SEPARATOR_WIDTH
-        remaining = extra
+    remaining = extra
 
     per_bar = remaining // len(growable)
     leftover = remaining - per_bar * len(growable)
@@ -641,7 +637,7 @@ def fill_toolbar(
 
     new_left = [expand(s) for s in left]
     new_right = [expand(s) for s in right]
-    return (new_left, new_right, sep_width)
+    return (new_left, new_right, DISPLAY.SEPARATOR_WIDTH)
 
 
 class VitalTracker:

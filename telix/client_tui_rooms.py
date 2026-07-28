@@ -206,7 +206,7 @@ class RoomBrowserPane(textual.containers.Vertical):
                     yield textual.widgets.Button("Block \u2300", variant="error", id="room-block")
                     yield textual.widgets.Button("Home \u2302", variant="primary", id="room-home")
                     yield textual.widgets.Button("Mark \u27bd", variant="default", id="room-mark")
-                    yield textual.widgets.Button("View Content", variant="default", id="room-contents-view")
+                    yield textual.widgets.Button("View", variant="success", id="room-contents-view")
 
     def request_close(self, result: bool | None = None) -> None:
         """Dismiss the parent screen or exit the app."""

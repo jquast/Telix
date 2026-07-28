@@ -81,6 +81,20 @@ def _parse_writtenmap(text: str, ctx: ScriptContext) -> None:
         if direction not in exits:
             exits[direction] = "1"
 
+    # Catch compound "X and Y of here" patterns where the main regex
+    # only catches the second direction (the one adjacent to "of here").
+    # E.g. "Doors north and south of here" → main regex catches "south"
+    # from "south of here" but misses "north" because "north and south"
+    # separates it from "of here".
+    _COMPOUND_RE = re.compile(
+        r'\b(' + '|'.join(_DIRECTIONS) + r')\s+and\s+('
+        + '|'.join(_DIRECTIONS) + r')\s+of\s+here\b', re.IGNORECASE,
+    )
+    for m in _COMPOUND_RE.finditer(text):
+        d = _ABBREV.get(m.group(1).lower(), m.group(1).lower())
+        if d not in exits:
+            exits[d] = "1"
+
     if not exits:
         return
 

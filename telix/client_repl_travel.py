@@ -146,7 +146,7 @@ async def fast_travel(
         return num
 
     room_changed = ctx.room.changed
-    max_retries = 0
+    max_retries = 2
     max_reroutes = 3
 
     if not destination and steps:
@@ -157,14 +157,21 @@ async def fast_travel(
     try:
         step_idx = 0
         reroute_count = 0
+        # Track the monotonic time of the last sent command to diagnose
+        # server movement cooldown rejections.
+        last_command_time: float | None = None
         while step_idx < len(steps):
             direction, expected_room = steps[step_idx]
             prev_room = ctx.room.current
 
             for attempt in range(max_retries + 1):
                 # Delay between steps (and retries) for server rate limits.
-                if step_idx > 0 or attempt > 0:
-                    await asyncio.sleep(ctx.walk.command_delay or client_repl_commands.COMMAND_DELAY)
+                delay = ctx.walk.command_delay or client_repl_commands.COMMAND_DELAY
+                if attempt > 0:
+                    # Back off aggressively on retries - the server may
+                    # still be in a movement cooldown window.
+                    delay *= 2 ** attempt
+                await asyncio.sleep(delay)
 
                 if room_changed is not None:
                     room_changed.clear()
@@ -193,6 +200,7 @@ async def fast_travel(
 
                 ctx.walk.active_command = direction
                 ctx.walk.active_command_time = time.monotonic()
+                last_command_time = ctx.walk.active_command_time
                 ctx.writer.write(direction + "\r\n")
 
                 if wait_fn is not None:
@@ -246,6 +254,9 @@ async def fast_travel(
                     # all retries).  Temporarily remove it from both the
                     # Room.exits dict and the BFS adjacency cache so
                     # re-routing won't try it again.
+                    elapsed = ""
+                    if last_command_time is not None:
+                        elapsed = f" dt={time.monotonic() - last_command_time:.3f}s"
                     graph = get_graph()
                     if graph is not None:
                         prev = graph.rooms.get(prev_room)
@@ -255,7 +266,7 @@ async def fast_travel(
                             adj_exits = graph.adj.get(prev_room)
                             if adj_exits is not None:
                                 adj_exits.pop(direction, None)
-                            log.info("%s: blocked exit %s of %s (impassable)", mode, direction, prev_room[:8])
+                            log.info("%s: blocked exit %s of %s (impassable%s)", mode, direction, prev_room[:8], elapsed)
                 else:
                     # Update graph edge to reflect actual connection.
                     graph = get_graph()
@@ -266,20 +277,28 @@ async def fast_travel(
                             graph.adj.setdefault(prev_room, {})[direction] = actual
                             log.info("%s: updated edge %s of %s: -> %s", mode, direction, prev_room[:8], actual[:8])
 
-                if destination and actual and actual != destination and reroute_count < max_reroutes:
-
-                    def log_reroute(msg: str) -> None:
-                        log.info("%s", msg)
-                        if echo_fn is not None:
-                            echo_fn(msg)
-
-                    new_steps = repath(get_graph(), destination, actual, log_reroute)
-                    if new_steps:
-                        reroute_count += 1
-                        log_reroute(f"{mode}: re-routing from {room_name(actual)} ({reroute_count}/{max_reroutes})")
-                        steps = new_steps
-                        step_idx = 0
-                        continue
+                if destination and actual and actual != destination:
+                    # A successful move that arrived at a wrong room is
+                    # not a routing failure.  Re-route silently without
+                    # counting against the budget so stale edges from
+                    # external data sources do not exhaust re-routes.
+                    # Only blocked exits (move_blocked) consume the
+                    # budget.
+                    if not move_blocked or reroute_count < max_reroutes:
+                        new_steps = repath(get_graph(), destination, actual, lambda _: None)
+                        if new_steps:
+                            if move_blocked:
+                                reroute_count += 1
+                            log.info("%s: re-routing from %s (%s/%s)",
+                                      mode, room_name(actual),
+                                      reroute_count if move_blocked else "?",
+                                      max_reroutes)
+                            if echo_fn is not None:
+                                echo_fn(f"{mode}: re-routing from {room_name(actual)}"
+                                        f" ({reroute_count if move_blocked else '?'}/{max_reroutes})")
+                            steps = new_steps
+                            step_idx = 0
+                            continue
 
                 expected_name = room_name(expected_room)
                 actual_name = room_name(actual)
