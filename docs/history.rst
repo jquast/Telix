@@ -5,7 +5,12 @@ History
 --------------------
 
 - enhancement: ``on_gmcp`` registration hooks for scripting
-- enhancement: bundle demonstration scripts, ``discworld_rooms.py``, ``dunemud_fremen.py``.
+- enhancement: bundle ``discworld_rooms.py`` and ``dunemud_fremen.py`` demonstration scripts
+- enhancement: Discworld mapping imports Quow's map database on first run, for instant access to pre-mapped rooms
+- enhancement: triggers can hide matching lines from the display
+- enhancement: new `` `cr` `` command to send a bare carriage return, e.g. to dismiss prompts
+- enhancement: session editor gains "on-connect command" and "extra GMCP modules" fields
+- bugfix: correct terminal window size is now reported to servers
 - change: press any key, not just return, to stop any automatic commands
 
 0.1.10 -- 2026-07-15

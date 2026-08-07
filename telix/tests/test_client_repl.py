@@ -220,7 +220,7 @@ async def test_adjusted_naws_active_scroll() -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_adjusted_naws_telnet_callback_active_scroll() -> None:
-    """telnet _send_naws() uses _ext_send_callback[NAWS], not handle_send_naws."""
+    """Telnet _send_naws() uses _ext_send_callback[NAWS], not handle_send_naws."""
     from telnetlib3.telopt import NAWS
 
     writer, stdout, _, term = scaffold_env()
@@ -707,11 +707,7 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "task_field, msg_prefix",
-    [
-        ("discover_task", "AUTODISCOVER"),
-        ("randomwalk_task", "RANDOMWALK"),
-        ("travel_task", "TRAVEL"),
-    ],
+    [("discover_task", "AUTODISCOVER"), ("randomwalk_task", "RANDOMWALK"), ("travel_task", "TRAVEL")],
 )
 async def test_cancel_walks_on_keypress(task_field, msg_prefix) -> None:
     """Any keypress cancels an active walk and echoes the appropriate message."""
@@ -722,14 +718,17 @@ async def test_cancel_walks_on_keypress(task_field, msg_prefix) -> None:
 
     task = asyncio.ensure_future(walk_task())
     await asyncio.sleep(0)
-    walk_kw = dict(discover_task=None, randomwalk_task=None, travel_task=None, walk_cancelled_by_input=False, cancel_event=asyncio.Event())
+    walk_kw = {
+        "discover_task": None,
+        "randomwalk_task": None,
+        "travel_task": None,
+        "walk_cancelled_by_input": False,
+        "cancel_event": asyncio.Event(),
+    }
     walk_kw[task_field] = task
     walk_state = types.SimpleNamespace(**walk_kw)
     mock_self = types.SimpleNamespace(
-        ctx=types.SimpleNamespace(
-            prompt=types.SimpleNamespace(echo=echo_log.append),
-            walk=walk_state,
-        ),
+        ctx=types.SimpleNamespace(prompt=types.SimpleNamespace(echo=echo_log.append), walk=walk_state),
         trigger_engine=None,
         log=logging.getLogger("test"),
     )
@@ -1688,9 +1687,7 @@ class TestLineHoldBufferHide:
 
     def make_buf(self, hide: Callable[[str], bool] | None = None):
         engine = MockHighlightEngine()
-        return LineHoldBuffer(
-            lambda: engine, hide_checker=hide
-        )
+        return LineHoldBuffer(lambda: engine, hide_checker=hide)
 
     def test_hide_checker_none(self) -> None:
         buf = self.make_buf(None)
@@ -1701,6 +1698,7 @@ class TestLineHoldBufferHide:
     def test_hide_checker_matches_hides_line(self) -> None:
         def hide(stripped: str) -> bool:
             return "hide" in stripped or "MORE" in stripped
+
         buf = self.make_buf(hide)
         emit, held = buf.add("--- MORE (89%) - press return, h for help.\n")
         assert emit == ""
@@ -1709,6 +1707,7 @@ class TestLineHoldBufferHide:
     def test_hide_checker_non_matching_passes(self) -> None:
         def hide(stripped: str) -> bool:
             return "hide" in stripped or "MORE" in stripped
+
         buf = self.make_buf(hide)
         emit, held = buf.add("visible line here\n")
         assert emit == "[visible line here]\n"
@@ -1717,6 +1716,7 @@ class TestLineHoldBufferHide:
     def test_hide_checker_mixed_lines(self) -> None:
         def hide(stripped: str) -> bool:
             return "MORE" in stripped
+
         buf = self.make_buf(hide)
         emit, held = buf.add("visible1\n--- MORE (50%) ---\nvisible2\n")
         assert "visible1" in emit
@@ -1725,8 +1725,10 @@ class TestLineHoldBufferHide:
 
     def test_hide_checker_incomplete_line_not_hidden(self) -> None:
         """Hide checker only applies to complete lines, not the held-back fragment."""
+
         def hide(stripped: str) -> bool:
             return "hide" in stripped
+
         buf = self.make_buf(hide)
         emit, held = buf.add("visible\nwaiting for more info")
         assert emit == "[visible]\n"
@@ -1735,6 +1737,7 @@ class TestLineHoldBufferHide:
     def test_hide_checker_flush_for_prompt(self) -> None:
         def hide(stripped: str) -> bool:
             return "hide" in stripped
+
         buf = self.make_buf(hide)
         buf.add("this line hides the output")
         text = buf.flush_for_prompt()
@@ -1752,8 +1755,10 @@ class TestLineHoldBufferHide:
 
     def test_feed_text_preserved_when_line_hidden(self) -> None:
         """feed_text returns the raw text even when lines are hidden from display."""
+
         def hide(stripped: str) -> bool:
             return "HIDE" in stripped
+
         buf = self.make_buf(hide)
         buf.add("visible\nthis should be HIDEden\nmore visible\n")
         assert "visible" in buf.feed_text
@@ -1761,8 +1766,10 @@ class TestLineHoldBufferHide:
 
     def test_feed_text_after_flush_for_prompt(self) -> None:
         """flush_for_prompt sets feed_text to the raw held text."""
+
         def hide(stripped: str) -> bool:
             return "HIDE" in stripped
+
         buf = self.make_buf(hide)
         buf.add("visible\npending HIDE")
         held_text = buf.flush_for_prompt()
@@ -2510,9 +2517,7 @@ async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol,
     repl.stdout = stdout
     repl.dialogs_mod = types.SimpleNamespace(subprocess_is_active=False, subprocess_buffer=[])
     repl.line_hold = types.SimpleNamespace(
-        add=lambda text: line_hold_calls.append(text) or ("", ""),
-        flush_raw=lambda: "",
-        feed_text="",
+        add=lambda text: line_hold_calls.append(text) or ("", ""), flush_raw=lambda: "", feed_text=""
     )
     repl.refresh_trigger_engine = lambda: None
     repl.refresh_highlight_engine = lambda: None

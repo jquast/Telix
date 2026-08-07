@@ -390,8 +390,9 @@ class TriggerEditPane(client_tui_base.EditListPane):
                 self.notify(f"Invalid regex: {exc}", severity="error")
                 return
         lf = self.rules[self.editing_idx].last_fired if self.editing_idx is not None else ""
-        entry = TriggerTuple(pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive,
-                             hide_line=hide_line)
+        entry = TriggerTuple(
+            pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive, hide_line=hide_line
+        )
         self.finalize_edit(entry, bool(pattern_val))
 
     def on_select_changed(self, event: textual.widgets.Select.Changed) -> None:

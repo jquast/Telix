@@ -306,9 +306,8 @@ class ScriptContext:
         """
         Update or create a room in the graph from a dict.
 
-        The dict must contain a room identifier key (``identifier``, ``num``,
-        ``id``, ``room_id``, or ``key``) and may contain ``exits`` as a dict of
-        direction→room-id mappings.
+        The dict must contain a room identifier key (``num``, ``vnum``, ``id``, or ``identifier``) and may contain
+        ``exits`` as a dict of direction to room-id mappings.
 
         This is the scripting counterpart of :meth:`rooms.RoomStore.update_room`.
         """
@@ -877,12 +876,7 @@ class ScriptManager:
     :param log: Logger instance.
     """
 
-    def __init__(
-        self,
-        scripts_dir: str = "",
-        bundled_dir: str = "",
-        log: "logging.Logger | None" = None,
-    ) -> None:
+    def __init__(self, scripts_dir: str = "", bundled_dir: str = "", log: "logging.Logger | None" = None) -> None:
         """Initialize ScriptManager."""
         self.scripts_dir = scripts_dir
         self.bundled_dir = bundled_dir

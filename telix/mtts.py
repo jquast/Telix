@@ -101,8 +101,12 @@ class TelixClient(telnetlib3.client.TelnetClient):
     mnes_env: dict[str, str] | None = None
     gmcp_hello: dict[str, str] | None = None
     _zmp_supported_commands: set[str] = {
-        "char.login", "char.info", "char.vitals",
-        "room.info", "room.map", "room.writtenmap",
+        "char.login",
+        "char.info",
+        "char.vitals",
+        "room.info",
+        "room.map",
+        "room.writtenmap",
     }
 
     def send_ttype(self) -> str:

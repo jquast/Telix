@@ -21,7 +21,7 @@ from collections.abc import Callable, Awaitable
 import wcwidth
 
 # local
-from . import util, client_repl_render
+from . import util
 
 if TYPE_CHECKING:
     from .session_context import TelixSessionContext
@@ -717,9 +717,7 @@ class TriggerEngine:
         self.status: str = ""
         self.until_start: float = 0.0
         self.until_deadline: float = 0.0
-        self._hide_patterns: list[re.Pattern[str]] = [
-            r.pattern for r in rules if r.hide_line and r.enabled
-        ]
+        self._hide_patterns: list[re.Pattern[str]] = [r.pattern for r in rules if r.hide_line and r.enabled]
 
     def pop_condition_failed(self) -> tuple[int, str] | None:
         """
@@ -995,8 +993,8 @@ class TriggerEngine:
         """
         Send a single command line to the server.
 
-        :param cmd: Command text (without line ending).  An empty or whitespace-only command sends a bare
-            ``\\r\\n`` (i.e. presses Enter with no text).
+        :param cmd: Command text (without line ending). An empty or whitespace-only command sends a bare ``\\r\\n``
+            (i.e. presses Enter with no text).
         """
         payload = cmd.strip()
         if not payload:

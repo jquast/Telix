@@ -131,8 +131,8 @@ def test_collapse_runs_start_parameter():
 
 def test_macro_send_does_not_set_active_command():
     """macro_send must not set walk.active_command to prevent graph edge pollution."""
-    import logging
     import types
+    import logging
 
     log = logging.getLogger("test")
     ctx = types.SimpleNamespace()

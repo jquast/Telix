@@ -519,14 +519,12 @@ class RoomBrowserPane(textual.containers.Vertical):
         """
         Build a room contents summary line with styled segments.
 
-        The *Contents:* label is rendered in the foreground color, the contents
-        text in muted/grey, and any matching *search* term is highlighted in
-        the accent color.
+        The *Contents:* label is rendered in the foreground color, the contents text in muted/grey, and any matching
+        *search* term is highlighted in the accent color.
 
-        When *search* is empty, shows the first *width* columns of the room
-        contents with an ellipsis if truncated.  When *search* is provided and
-        matches, clips the contents to center the match within *width* columns,
-        with ellipses at the clipped edges.
+        When *search* is empty, shows the first *width* columns of the room contents with an ellipsis if truncated. When
+        *search* is provided and matches, clips the contents to center the match within *width* columns, with ellipses
+        at the clipped edges.
 
         :param room_num: Room number.
         :param search: Active search query string.
@@ -812,14 +810,7 @@ class RoomBrowserPane(textual.containers.Vertical):
         from .client_tui_dialogs import ContentViewerScreen
 
         area_label = self._area_display(room.area) if room.area else ""
-        self.app.push_screen(
-            ContentViewerScreen(
-                room_num=num,
-                room_name=room.name,
-                area=area_label,
-                contents=contents,
-            )
-        )
+        self.app.push_screen(ContentViewerScreen(room_num=num, room_name=room.name, area=area_label, contents=contents))
 
     def do_toggle_marker(self, marker: str) -> None:
         """Toggle an exclusive marker on the currently selected room."""

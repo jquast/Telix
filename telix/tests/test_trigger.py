@@ -646,13 +646,7 @@ def test_save_triggers_field_roundtrip(tmp_path, rule_kwargs, field, exp0, exp1,
         assert json_key not in entries[1]
 
 
-@pytest.mark.parametrize(
-    "rule_kwargs,exp_hide",
-    [
-        ({}, False),
-        ({"hide_line": True}, True),
-    ],
-)
+@pytest.mark.parametrize("rule_kwargs,exp_hide", [({}, False), ({"hide_line": True}, True)])
 def test_save_triggers_hide_line_roundtrip(tmp_path, rule_kwargs, exp_hide):
     fp = tmp_path / "triggers.json"
     rules = [TriggerRule(pattern=re.compile(r"press return"), reply="", **rule_kwargs)]

@@ -2,13 +2,13 @@
 
 import time
 import types
-import logging
 import asyncio
+import logging
 import collections
 
 import pytest
 
-from telix import rooms, client_repl_travel, client_shell
+from telix import rooms, client_shell, client_repl_travel
 
 
 class FakeEngine:

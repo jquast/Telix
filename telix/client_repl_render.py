@@ -573,9 +573,8 @@ def fill_toolbar(
     """
     Distribute extra horizontal space across growable slots.
 
-    All available extra width is added to growable bar slots.  Separator widths
-    always stay at ``DISPLAY.SEPARATOR_WIDTH`` so that the ``pad`` calculation
-    in ``paint`` remains correct.
+    All available extra width is added to growable bar slots.  Separator widths always stay at
+    ``DISPLAY.SEPARATOR_WIDTH`` so that the ``pad`` calculation in ``paint`` remains correct.
 
     :returns: (left_slots, right_slots, sep_width) with expanded bars.
     """

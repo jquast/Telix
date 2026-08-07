@@ -9,7 +9,7 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport, rooms
+from . import mslp, rooms, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
 from .telix_config import TelixConfig
 
 if typing.TYPE_CHECKING:

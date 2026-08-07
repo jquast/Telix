@@ -180,6 +180,36 @@ it automatically.  Any variables defined at the top of that file go back to
 their initial values, so accumulated data is lost.  If you need data to
 survive a reload, keep it in a file or database instead.
 
+GMCP and room data
+------------------
+
+Scripts can react to GMCP packages from the server and update the room
+graph directly.
+
+:samp:`\`ctx.on_gmcp(package, callback)\``
+    Register a callback that runs whenever the server sends *package*.
+    Multiple callbacks may be registered for the same package; they fire
+    in registration order.  The callback runs inside the telnet data
+    handler, so it must not block::
+
+        ctx.on_gmcp("Room.Writtenmap", lambda data: ctx.print(f"[map] {data}"))
+
+    The bundled ``discworld_rooms`` script is a complete example: it
+    parses ``Room.Writtenmap`` and feeds the exits into the room graph.
+
+:samp:`\`ctx.update_room(data)\``
+    Update or create a room in the graph from a dict.  The dict needs a
+    room identifier key (``num``, ``vnum``, ``id``, or ``identifier``)
+    and may include ``exits`` as a mapping of direction to room-id::
+
+        ctx.update_room({"identifier": "123", "exits": {"north": "124"}})
+
+:samp:`\`ctx.area_names\``
+    A dict mapping area identifiers to display names.  Assign to it so
+    the room browser shows the friendly name::
+
+        ctx.area_names["1"] = "Ankh-Morpork"
+
 Complete examples
 -----------------
 
@@ -227,17 +257,25 @@ Wait for a pattern then react::
 Bundled scripts
 ---------------
 
-Telix ships with a few scripts for common tasks.  They are loaded by name
-like any other script::
+Telix ships with a few scripts for common tasks, loaded by name like any
+other script::
 
     `async discworld_rooms`
+    `async dunemud_fremen`
 
 Bundled scripts have the lowest lookup priority -- you can override them by
 placing a file with the same name in ``~/.config/telix/scripts/`` or the
 current working directory.
 
-- **discworld_rooms** -- Parses ``Room.Writtenmap`` GMCP messages (Discworld
-  MUD sends exit information as prose rather than structured data) and feeds
-  exits into the room graph so that ``randomwalk`` and ``autodiscover`` work.
-  Start it at the beginning of a Discworld session as a background daemon.
+- **discworld_rooms** -- Discworld room mapping.  Parses ``Room.Writtenmap``
+  GMCP messages (Discworld sends exit information as prose rather than
+  structured data) and feeds exits into the room graph so that
+  ``randomwalk`` and ``autodiscover`` work.  On first run it downloads
+  Quow's map database and imports all known rooms and exits, for instant
+  access to 18,000+ pre-mapped rooms.
+
+- **dunemud_fremen** -- DuneMUD helper.  ``await fremen`` schedules
+  background jobs, ``await fremen.hunt`` runs as a room-change command
+  to hunt and kill, and ``await fremen.loot`` evaluates room contents
+  for looting.
 

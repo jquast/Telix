@@ -91,12 +91,12 @@ def repath(
 
 
 def _drop_pending(ctx: "TelixSessionContext", direction: str) -> None:
-    """Remove all pending FIFO entries for *direction*.
+    """
+    Remove all pending FIFO entries for *direction*.
 
-    Called when a walk concludes a move was blocked (server rejected it
-    after retries).  A blocked move never produces a room change, so its
-    pending entry would otherwise be consumed by the next room change
-    and misattribute the wrong direction.
+    Called when a walk concludes a move was blocked (server rejected it after retries).  A blocked move never produces a
+    room change, so its pending entry would otherwise be consumed by the next room change and misattribute the wrong
+    direction.
     """
     queue = ctx.walk.pending_directions
     if not queue:
@@ -131,9 +131,8 @@ async def fast_travel(
     :param log: Logger.
     :param destination: Final target room ID for re-pathfinding on detour.
     :param noreply: Completely disable the trigger engine during travel.
-    :returns: ``True`` if the destination was reached, ``False`` otherwise.
+    :returns:``True`` if the destination was reached, ``False`` otherwise.
     """
-
     wait_fn = ctx.prompt.wait_fn
     echo_fn = ctx.prompt.echo
 
@@ -297,31 +296,30 @@ async def fast_travel(
                             log.info(
                                 "%s: blocked exit %s of %s (impassable%s)", mode, direction, prev_room[:8], elapsed
                             )
-                else:
-                    # Update graph edge to reflect actual connection, but
-                    # only when this room change is attributable to this
-                    # step's command.  The server queues movement
-                    # commands, so a room change observed during this
-                    # step may be the delayed response to an older
-                    # command (on_room_info consumed an older pending
-                    # direction).  In that case the edge for this
-                    # step's direction must not be "corrected" to the
-                    # older command's destination.
-                    if ctx.walk.last_consumed_direction in (None, direction):
-                        graph = get_graph()
-                        if graph is not None:
-                            prev = graph.rooms.get(prev_room)
-                            if prev is not None:
-                                prev.exits[direction] = actual
-                                graph.adj.setdefault(prev_room, {})[direction] = actual
-                                log.info(
-                                    "%s: updated edge %s of %s: -> %s (expected %s)",
-                                    mode,
-                                    direction,
-                                    prev_room[:8],
-                                    actual[:8],
-                                    expected_room[:8],
-                                )
+                # Update graph edge to reflect actual connection, but
+                # only when this room change is attributable to this
+                # step's command.  The server queues movement
+                # commands, so a room change observed during this
+                # step may be the delayed response to an older
+                # command (on_room_info consumed an older pending
+                # direction).  In that case the edge for this
+                # step's direction must not be "corrected" to the
+                # older command's destination.
+                elif ctx.walk.last_consumed_direction in (None, direction):
+                    graph = get_graph()
+                    if graph is not None:
+                        prev = graph.rooms.get(prev_room)
+                        if prev is not None:
+                            prev.exits[direction] = actual
+                            graph.adj.setdefault(prev_room, {})[direction] = actual
+                            log.info(
+                                "%s: updated edge %s of %s: -> %s (expected %s)",
+                                mode,
+                                direction,
+                                prev_room[:8],
+                                actual[:8],
+                                expected_room[:8],
+                            )
 
                 if destination and actual and actual != destination:
                     # A successful move that arrived at a wrong room is

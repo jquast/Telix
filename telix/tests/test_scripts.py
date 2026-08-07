@@ -314,7 +314,7 @@ class TestScriptContextOnGmcp:
     def test_dispatched_from_gmcp_handler(self):
         ctx, sctx = make_script_ctx()
         received = []
-        ctx.on_gmcp("Char.Vitals", lambda data: received.append(data))
+        ctx.on_gmcp("Char.Vitals", received.append)
         callbacks = sctx.gmcp.script_callbacks.get("Char.Vitals", [])
         data = {"hp": 50}
         for cb in callbacks:

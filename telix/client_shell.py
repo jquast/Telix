@@ -20,9 +20,9 @@ import time
 import shlex
 import codecs
 import typing
-import pathlib
 import asyncio
 import logging
+import pathlib
 import contextlib
 
 # 3rd party
@@ -43,13 +43,13 @@ from . import (
     trigger,
     terminal,
     client_repl,
-    client_repl_commands,
     highlighter,
     progressbars,
     ws_transport,
     raw_transport,
     ssh_transport,
     session_context,
+    client_repl_commands,
 )
 from .telix_config import TelixConfig
 
@@ -113,11 +113,9 @@ def consume_edge_direction(walk: typing.Any, log: logging.Logger) -> str | None:
     """
     Pick the direction to attribute a room change to.
 
-    The server may queue movement commands and respond slowly, so a room
-    change can arrive long after its command was sent, while newer
-    commands are already in flight.  The Nth room change is the response
-    to the Nth oldest sent command, so the oldest live pending direction
-    is consumed; when no walk command is outstanding, the current
+    The server may queue movement commands and respond slowly, so a room change can arrive long after its command was
+    sent, while newer commands are already in flight.  The Nth room change is the response to the Nth oldest sent
+    command, so the oldest live pending direction is consumed; when no walk command is outstanding, the current
     active_command is used instead.
 
     :param walk: The session WalkState.

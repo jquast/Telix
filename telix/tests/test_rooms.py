@@ -708,4 +708,3 @@ def test_room_summaries_includes_new_fields(store: RoomStore) -> None:
     assert s[6] is False
     assert s[7] is False
     assert s[8] is True
-

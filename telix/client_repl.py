@@ -125,9 +125,9 @@ PASSWORD_CHAR = "\u273b"
 log = logging.getLogger(__name__)
 
 # Register TRACE log level for per-keystroke diagnostic logging.
-#TRACE_LEVEL = 5
-#logging.addLevelName(TRACE_LEVEL, "TRACE")
-#if not hasattr(logging.Logger, "trace"):
+# TRACE_LEVEL = 5
+# logging.addLevelName(TRACE_LEVEL, "TRACE")
+# if not hasattr(logging.Logger, "trace"):
 #
 #    def _trace(self, msg, *args, **kwargs):
 #        if self.isEnabledFor(TRACE_LEVEL):
@@ -665,9 +665,7 @@ class LineHoldBuffer:
     """
 
     def __init__(
-        self,
-        highlight_engine_getter: Callable[[], typing.Any],
-        hide_checker: Callable[[str], bool] | None = None,
+        self, highlight_engine_getter: Callable[[], typing.Any], hide_checker: Callable[[str], bool] | None = None
     ) -> None:
         self._pending: str = ""
         self.get_engine = highlight_engine_getter
@@ -1443,11 +1441,11 @@ class ReplSession:
         self.ctx.on_trigger_activity = self.on_trigger_activity
 
         # release any output printed by scripts before registration
-        if (pending := self.ctx.prompt.pending_echo):
+        if pending := self.ctx.prompt.pending_echo:
             for text in pending:
                 self.ctx.prompt.echo(text)
             pending.clear()
-        if (pending := self.ctx.prompt.pending_script_echo):
+        if pending := self.ctx.prompt.pending_script_echo:
             for text in pending:
                 self.ctx.prompt.script_echo(text)
             pending.clear()
@@ -1456,18 +1454,20 @@ class ReplSession:
         self.refresh_highlight_engine()
 
         assert self.scroll is not None
-        self.ctx.repl.actions.update({
-            "help": lambda: show_help(replay_buf=self.replay_buf),
-            "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
-            "captures": lambda: launch_unified_editor("captures", self.ctx, self.replay_buf),
-            "toggle_highlights": self.toggle_highlights,
-            "toggle_triggers": self.toggle_triggers,
-            "disconnect": self.reg_close,
-            "repaint": self._repaint,
-            "randomwalk_dialog": self.randomwalk_mode,
-            "autodiscover_dialog": self.discover_mode,
-            "resume_walk": self.resume_last_walk,
-        })
+        self.ctx.repl.actions.update(
+            {
+                "help": lambda: show_help(replay_buf=self.replay_buf),
+                "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
+                "captures": lambda: launch_unified_editor("captures", self.ctx, self.replay_buf),
+                "toggle_highlights": self.toggle_highlights,
+                "toggle_triggers": self.toggle_triggers,
+                "disconnect": self.reg_close,
+                "repaint": self._repaint,
+                "randomwalk_dialog": self.randomwalk_mode,
+                "autodiscover_dialog": self.discover_mode,
+                "resume_walk": self.resume_last_walk,
+            }
+        )
 
         self.dispatch.register("KEY_TAB", self.mslp_tab)
         self.dispatch.register("KEY_BTAB", self.mslp_shift_tab)
@@ -1724,8 +1724,9 @@ class ReplSession:
                     self.tty_shell._resize_pending.clear()
                     self.fire_resize()
 
-                log.trace("keypress: name=%r str=%r code=%r",
-                          getattr(key, "name", None), str(key), getattr(key, "code", None))
+                log.trace(
+                    "keypress: name=%r str=%r code=%r", getattr(key, "name", None), str(key), getattr(key, "code", None)
+                )
                 self.cancel_walks_on_keypress()
 
                 action = self.dispatch.lookup(key)
@@ -1735,8 +1736,9 @@ class ReplSession:
                         self.telnet_writer.write(seq)  # type: ignore[arg-type]
                         continue
                 if action is not None:
-                    log.trace("keypress: dispatch found handler for key name=%r str=%r",
-                              getattr(key, "name", None), str(key))
+                    log.trace(
+                        "keypress: dispatch found handler for key name=%r str=%r", getattr(key, "name", None), str(key)
+                    )
                     result = action()
                     if asyncio.iscoroutine(result):
                         await result
@@ -1862,10 +1864,7 @@ class ReplSession:
                         ft_task.cancel()
                         self.ctx.walk.travel_task = None
                     if disc_task or rw_task or ft_task:
-                        if any(
-                            t is not None and not t.done()
-                            for t in (disc_task, rw_task, ft_task)
-                        ):
+                        if any(t is not None and not t.done() for t in (disc_task, rw_task, ft_task)):
                             self.ctx.walk.cancel_event.set()
                     elif self.ctx.command_queue is not None:
                         self.ctx.walk.cancel_event.set()

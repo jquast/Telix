@@ -167,10 +167,10 @@ class RoomStore:
             DEFAULT '', environment TEXT NOT NULL DEFAULT '', bookmarked INTEGER NOT NULL DEFAULT 0, visit_count INTEGER
             NOT NULL DEFAULT 0,
 
-            last_visited TEXT NOT NULL DEFAULT '', x INTEGER NOT NULL DEFAULT 0, y INTEGER NOT NULL DEFAULT 0 );
-            CREATE TABLE IF NOT EXISTS exit ( src_num TEXT NOT NULL, direction
-            TEXT NOT NULL,     dst_num TEXT NOT NULL, PRIMARY KEY (src_num, direction) ); CREATE TABLE IF NOT EXISTS
-            meta (     key TEXT PRIMARY KEY,     value TEXT NOT NULL );
+            last_visited TEXT NOT NULL DEFAULT '', x INTEGER NOT NULL DEFAULT 0, y INTEGER NOT NULL DEFAULT 0 ); CREATE
+            TABLE IF NOT EXISTS exit ( src_num TEXT NOT NULL, direction TEXT NOT NULL,     dst_num TEXT NOT NULL,
+            PRIMARY KEY (src_num, direction) ); CREATE TABLE IF NOT EXISTS meta (     key TEXT PRIMARY KEY,     value
+            TEXT NOT NULL );
             """
         )
         for col in ("blocked", "home", "marked"):
@@ -288,8 +288,8 @@ class RoomStore:
         """
         Update or create a room from a GMCP ``Room.Info`` payload.
 
-        When optional fields (``name``, ``area``, ``environment``) are absent
-        from *info*, the existing database values are preserved.
+        When optional fields (``name``, ``area``, ``environment``) are absent from *info*, the existing database values
+        are preserved.
 
         :param info: GMCP Room.Info dict with a room identifier key.
         """
@@ -385,10 +385,8 @@ class RoomStore:
         """
         Import rooms and exits from Quow's Discworld map database.
 
-        Reads the quowmap SQLite database (room_id, room_short, map_id,
-        room_type, xpos, ypos + room_exits table) and bulk-inserts into
-        the local RoomStore.  Sets the meta key ``quowmap_imported`` to
-        ``1`` on success.
+        Reads the quowmap SQLite database (room_id, room_short, map_id, room_type, xpos, ypos + room_exits table) and
+        bulk-inserts into the local RoomStore.  Sets the meta key ``quowmap_imported`` to ``1`` on success.
 
         :param quowmap_path: Path to the quowmap database file.
         :returns: Number of rooms imported.
@@ -429,10 +427,8 @@ class RoomStore:
         """
         Remove exits whose direction is not a recognised movement command.
 
-        Non-movement exit directions (e.g. ``look in corpse``) can leak
-        into a quowmap import or be recorded when ``active_command`` is
-        stale.  After calling this the in-memory adjacency cache is
-        reloaded.
+        Non-movement exit directions (e.g. ``look in corpse``) can leak into a quowmap import or be recorded when
+        ``active_command`` is stale.  After calling this the in-memory adjacency cache is reloaded.
 
         :returns: Number of rows deleted.
         """

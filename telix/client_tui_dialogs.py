@@ -421,9 +421,7 @@ def confirm_dialog_main(title: str, body: str, warning: str = "", result_file: s
 class ContentViewerScreen(textual.screen.Screen[None]):
     """Full-screen modal for viewing room contents text."""
 
-    BINDINGS = [
-        textual.binding.Binding("escape", "dismiss", "Close", show=False),
-    ]
+    BINDINGS = [textual.binding.Binding("escape", "dismiss", "Close", show=False)]
 
     DEFAULT_CSS = """
     ContentViewerScreen {
