@@ -27,6 +27,39 @@ EXIT_DIR_RE = re.compile(
     r"\s*$"
 )
 
+MOVEMENT_DIRS = frozenset(
+    {
+        "n",
+        "s",
+        "e",
+        "w",
+        "ne",
+        "nw",
+        "se",
+        "sw",
+        "north",
+        "south",
+        "east",
+        "west",
+        "northeast",
+        "northwest",
+        "southeast",
+        "southwest",
+        "port",
+        "starboard",
+        "fore",
+        "aft",
+        "port fore",
+        "port aft",
+        "starboard fore",
+        "starboard aft",
+        "up",
+        "down",
+        "in",
+        "out",
+    }
+)
+
 
 ROOM_ID_KEYS = ("num", "vnum", "id", "identifier")
 
@@ -123,6 +156,7 @@ class RoomStore:
                 self.conn.execute("INSERT OR REPLACE INTO meta VALUES ('session_key', ?)", (session_key,))
                 self.conn.commit()
         self.adj: dict[str, dict[str, str]] = {}
+        self.area_names: dict[str, str] = {}
         self.load_adjacency()
 
     def create_tables(self) -> None:
@@ -240,9 +274,7 @@ class RoomStore:
         :param num: Room number.
         :returns: :class:`Room` or None if not found.
         """
-        row = self.conn.execute(
-            f"SELECT {self.ROOM_COLS} FROM room WHERE num = ?", (num,)
-        ).fetchone()
+        row = self.conn.execute(f"SELECT {self.ROOM_COLS} FROM room WHERE num = ?", (num,)).fetchone()
         if row is None:
             return None
         return self.row_to_room(row)
@@ -315,9 +347,7 @@ class RoomStore:
                 # First, preserve non-placeholder destinations from the DB
                 # (persisted from previous sessions).
                 existing_exits = dict(
-                    self.conn.execute(
-                        "SELECT direction, dst_num FROM exit WHERE src_num = ?", (num,)
-                    ).fetchall()
+                    self.conn.execute("SELECT direction, dst_num FROM exit WHERE src_num = ?", (num,)).fetchall()
                 )
                 # Also preserve non-placeholder destinations from the
                 # in-memory adj cache (corrected by movement in the
@@ -332,6 +362,7 @@ class RoomStore:
                             preserved = adj_exits[direction]
                         if preserved and preserved not in ("", "1"):
                             exits[direction] = preserved
+                            log.debug("update_room: preserved %s exit of %s -> %s", direction, num[:8], preserved[:8])
 
             # Upsert only the Writtenmap-provided exits so that any
             # previously-recorded (movement-corrected) exits for directions
@@ -364,13 +395,8 @@ class RoomStore:
         """
         qconn = sqlite3.connect(quowmap_path)
         try:
-            rooms = qconn.execute(
-                "SELECT room_id, room_short, map_id, room_type, xpos, ypos"
-                " FROM rooms"
-            ).fetchall()
-            exits = qconn.execute(
-                "SELECT room_id, exit, connect_id FROM room_exits"
-            ).fetchall()
+            rooms = qconn.execute("SELECT room_id, room_short, map_id, room_type, xpos, ypos FROM rooms").fetchall()
+            exits = qconn.execute("SELECT room_id, exit, connect_id FROM room_exits").fetchall()
         finally:
             qconn.close()
 
@@ -384,18 +410,40 @@ class RoomStore:
             " VALUES (?, ?, ?, ?, ?, ?, 0, '')",
             [(r[0], r[1], str(r[2]), r[3], r[4], r[5]) for r in rooms],
         )
-        self.conn.executemany(
-            "INSERT OR REPLACE INTO exit (src_num, direction, dst_num)"
-            " VALUES (?, ?, ?)",
-            exits,
-        )
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta VALUES ('quowmap_imported', '1')"
-        )
+        valid_exits = [e for e in exits if e[1] in MOVEMENT_DIRS]
+        skipped = len(exits) - len(valid_exits)
+        if skipped:
+            log.info(
+                "import_quowmap: skipped %d non-movement exits (e.g. %s)",
+                skipped,
+                ", ".join(repr(e[1]) for e in exits if e[1] not in MOVEMENT_DIRS)[:120],
+            )
+        self.conn.executemany("INSERT OR REPLACE INTO exit (src_num, direction, dst_num) VALUES (?, ?, ?)", valid_exits)
+        self.conn.execute("INSERT OR REPLACE INTO meta VALUES ('quowmap_imported', '1')")
         self.conn.commit()
         self.load_adjacency()
         log.info("imported %d rooms and %d exits from quowmap", len(rooms), len(exits))
         return len(rooms)
+
+    def cleanup_bogus_edges(self) -> int:
+        """
+        Remove exits whose direction is not a recognised movement command.
+
+        Non-movement exit directions (e.g. ``look in corpse``) can leak
+        into a quowmap import or be recorded when ``active_command`` is
+        stale.  After calling this the in-memory adjacency cache is
+        reloaded.
+
+        :returns: Number of rows deleted.
+        """
+        placeholders = ",".join("?" * len(MOVEMENT_DIRS))
+        cur = self.conn.execute(f"DELETE FROM exit WHERE direction NOT IN ({placeholders})", tuple(MOVEMENT_DIRS))
+        self.conn.commit()
+        count = cur.rowcount
+        if count:
+            log.info("cleanup: removed %d bogus edges", count)
+        self.load_adjacency()
+        return count
 
     def save_room_contents(self, num: str, text: str) -> None:
         """
@@ -406,8 +454,7 @@ class RoomStore:
         """
         text = text[:4096]
         self.conn.execute(
-            "INSERT INTO room (num, contents) VALUES (?, ?)"
-            " ON CONFLICT(num) DO UPDATE SET contents=excluded.contents",
+            "INSERT INTO room (num, contents) VALUES (?, ?) ON CONFLICT(num) DO UPDATE SET contents=excluded.contents",
             (num, text),
         )
         self.conn.commit()
@@ -430,10 +477,7 @@ class RoomStore:
         :returns: List of matching room number strings.
         """
         q = f"%{query}%"
-        rows = self.conn.execute(
-            "SELECT num FROM room WHERE contents LIKE ? COLLATE NOCASE",
-            (q,),
-        ).fetchall()
+        rows = self.conn.execute("SELECT num FROM room WHERE contents LIKE ? COLLATE NOCASE", (q,)).fetchall()
         return [r[0] for r in rows]
 
     MARKER_COLS = ("bookmarked", "blocked", "home", "marked")

@@ -107,6 +107,7 @@ String comparisons work with ``=`` and ``!=``.
 | `Please enter your ship.` | `enter ship` | Board shuttle (Immediate) |
 | `(^You catch\|^You fail to catch)` | `bait hook;fish with rod` | Auto-fishing loop |
 | `Try searching\\.` | `search;gl` | Auto-search when prompted |
+| `return to continue, h for help\\.` | `` `cr` `` | Dismiss "press Enter" prompt |
 
 ### Keyboard Shortcuts
 

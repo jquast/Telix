@@ -83,6 +83,15 @@ Same as `until` but the pattern match is **case-sensitive**.
 |---------|--------|
 | `` `untils 2 DEAD` `` | Wait up to 2s for exactly "DEAD" |
 
+### Press Enter (Carriage Return)
+
+Send just a carriage return (equivalent to pressing Enter with no text).
+Useful for triggers that need to dismiss "press return to continue" prompts.
+
+| Example | Effect |
+|---------|--------|
+| `` `cr` `` | Send a bare carriage return |
+
 ### Travel
 
 Navigate to a room by its GMCP room ID.  Triggers fire in each room

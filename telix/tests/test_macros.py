@@ -323,7 +323,7 @@ def test_builtin_stopscript_macro():
         ("`captures`", True),
         ("`CAPTURES`", True),
         ("`HELP`", True),
-        ("`look`", False),
+        ("`look`", True),
         ("help", False),
     ],
 )

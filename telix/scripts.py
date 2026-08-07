@@ -267,6 +267,24 @@ class ScriptContext:
         return self._ctx.room.graph
 
     @property
+    def area_names(self) -> dict[str, str]:
+        """
+        Area name overrides registered by scripts.
+
+        Maps area identifiers (e.g. ``"1"``, ``"17"``) to human-readable names.
+        Scripts may assign to this dict directly::
+
+            ctx.area_names["1"] = "Ankh-Morpork"
+            ctx.area_names["17"] = "Bes Pelargic"
+
+        The Room Browser will display the mapped name when available.
+        """
+        rg = self._ctx.room.graph
+        if rg is None:
+            return {}
+        return rg.area_names
+
+    @property
     def captures(self) -> dict[str, typing.Any]:
         """Highlight capture variables for this session."""
         return self._ctx.highlights.captures
@@ -965,8 +983,9 @@ class ScriptManager:
             mod = self._load_module(module_path)
         except Exception:
             script_log.exception("script %r failed to import", task_key)
+            ctx.print(f" Error: script {task_key!r} failed to import")
             for line in traceback.format_exc().splitlines():
-                ctx.print(line)
+                ctx.print(f"   {line}")
 
             async def _noop() -> None:
                 pass

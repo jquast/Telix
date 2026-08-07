@@ -90,6 +90,23 @@ def repath(
     return []
 
 
+def _drop_pending(ctx: "TelixSessionContext", direction: str) -> None:
+    """Remove all pending FIFO entries for *direction*.
+
+    Called when a walk concludes a move was blocked (server rejected it
+    after retries).  A blocked move never produces a room change, so its
+    pending entry would otherwise be consumed by the next room change
+    and misattribute the wrong direction.
+    """
+    queue = ctx.walk.pending_directions
+    if not queue:
+        return
+    kept = collections.deque((d, t) for d, t in queue if d != direction)
+    if len(kept) != len(queue):
+        ctx.walk.pending_directions.clear()
+        ctx.walk.pending_directions.extend(kept)
+
+
 async def fast_travel(
     steps: list[tuple[str, str]],
     ctx: "TelixSessionContext",
@@ -161,6 +178,8 @@ async def fast_travel(
         # server movement cooldown rejections.
         last_command_time: float | None = None
         while step_idx < len(steps):
+            if ctx.walk.cancel_event.is_set():
+                break
             direction, expected_room = steps[step_idx]
             prev_room = ctx.room.current
 
@@ -170,7 +189,7 @@ async def fast_travel(
                 if attempt > 0:
                     # Back off aggressively on retries - the server may
                     # still be in a movement cooldown window.
-                    delay *= 2 ** attempt
+                    delay *= 2**attempt
                 await asyncio.sleep(delay)
 
                 if room_changed is not None:
@@ -201,6 +220,14 @@ async def fast_travel(
                 ctx.walk.active_command = direction
                 ctx.walk.active_command_time = time.monotonic()
                 last_command_time = ctx.walk.active_command_time
+                ctx.walk.pending_directions.append((direction, time.monotonic()))
+
+                # Yield to scripts processing the current room.
+                # Scripts acquire walk.busy_lock during activity; we
+                # poll until it's released so commands don't interleave.
+                while ctx.walk.busy_lock.locked():
+                    await asyncio.sleep(0.25)
+
                 ctx.writer.write(direction + "\r\n")
 
                 if wait_fn is not None:
@@ -211,21 +238,10 @@ async def fast_travel(
                 await asyncio.sleep(0)
 
                 engine = get_engine()
-                cond_cancelled = False
                 if engine is not None:
                     while engine.reply_pending:
                         await asyncio.sleep(0.05)
-                    failed = engine.pop_condition_failed()
-                    if failed is not None:
-                        rule_idx, desc = failed
-                        msg = f"Travel mode cancelled - failed conditional in TRIGGER #{rule_idx} [{desc}]"
-                        log.warning("%s", msg)
-                        if echo_fn is not None:
-                            echo_fn(msg)
-                        cond_cancelled = True
                     await settle_triggers(engine, wait_fn, noreply=False)
-                if cond_cancelled:
-                    break
 
                 # GMCP Room.Info may arrive after the EOR.  Wait for it.
                 actual = ctx.room.current
@@ -238,6 +254,19 @@ async def fast_travel(
 
                 if actual == expected_room:
                     break
+                # The server may queue movement commands and process
+                # them slowly, so a missing room change within the
+                # short GMCP timeout does not mean the move failed.
+                # Wait longer before concluding anything, rather than
+                # re-sending and flooding the server's command queue.
+                if actual == prev_room and room_changed is not None:
+                    try:
+                        await asyncio.wait_for(room_changed.wait(), timeout=ctx.room.arrival_timeout)
+                    except asyncio.TimeoutError:
+                        pass
+                    actual = ctx.room.current
+                if actual == expected_room:
+                    break
                 # Room didn't change -- server likely rejected move (rate limit).
                 # Retry unless we've exhausted attempts.
                 if actual == prev_room and attempt < max_retries:
@@ -245,8 +274,6 @@ async def fast_travel(
                 # Arrived at wrong room -- try to re-route.
                 break
 
-            if cond_cancelled:
-                break
             if expected_room and actual and actual != expected_room:
                 move_blocked = actual == prev_room
                 if move_blocked:
@@ -254,6 +281,7 @@ async def fast_travel(
                     # all retries).  Temporarily remove it from both the
                     # Room.exits dict and the BFS adjacency cache so
                     # re-routing won't try it again.
+                    _drop_pending(ctx, direction)
                     elapsed = ""
                     if last_command_time is not None:
                         elapsed = f" dt={time.monotonic() - last_command_time:.3f}s"
@@ -266,16 +294,34 @@ async def fast_travel(
                             adj_exits = graph.adj.get(prev_room)
                             if adj_exits is not None:
                                 adj_exits.pop(direction, None)
-                            log.info("%s: blocked exit %s of %s (impassable%s)", mode, direction, prev_room[:8], elapsed)
+                            log.info(
+                                "%s: blocked exit %s of %s (impassable%s)", mode, direction, prev_room[:8], elapsed
+                            )
                 else:
-                    # Update graph edge to reflect actual connection.
-                    graph = get_graph()
-                    if graph is not None:
-                        prev = graph.rooms.get(prev_room)
-                        if prev is not None:
-                            prev.exits[direction] = actual
-                            graph.adj.setdefault(prev_room, {})[direction] = actual
-                            log.info("%s: updated edge %s of %s: -> %s", mode, direction, prev_room[:8], actual[:8])
+                    # Update graph edge to reflect actual connection, but
+                    # only when this room change is attributable to this
+                    # step's command.  The server queues movement
+                    # commands, so a room change observed during this
+                    # step may be the delayed response to an older
+                    # command (on_room_info consumed an older pending
+                    # direction).  In that case the edge for this
+                    # step's direction must not be "corrected" to the
+                    # older command's destination.
+                    if ctx.walk.last_consumed_direction in (None, direction):
+                        graph = get_graph()
+                        if graph is not None:
+                            prev = graph.rooms.get(prev_room)
+                            if prev is not None:
+                                prev.exits[direction] = actual
+                                graph.adj.setdefault(prev_room, {})[direction] = actual
+                                log.info(
+                                    "%s: updated edge %s of %s: -> %s (expected %s)",
+                                    mode,
+                                    direction,
+                                    prev_room[:8],
+                                    actual[:8],
+                                    expected_room[:8],
+                                )
 
                 if destination and actual and actual != destination:
                     # A successful move that arrived at a wrong room is
@@ -289,13 +335,18 @@ async def fast_travel(
                         if new_steps:
                             if move_blocked:
                                 reroute_count += 1
-                            log.info("%s: re-routing from %s (%s/%s)",
-                                      mode, room_name(actual),
-                                      reroute_count if move_blocked else "?",
-                                      max_reroutes)
+                            log.info(
+                                "%s: re-routing from %s (%s/%s)",
+                                mode,
+                                room_name(actual),
+                                reroute_count if move_blocked else "?",
+                                max_reroutes,
+                            )
                             if echo_fn is not None:
-                                echo_fn(f"{mode}: re-routing from {room_name(actual)}"
-                                        f" ({reroute_count if move_blocked else '?'}/{max_reroutes})")
+                                echo_fn(
+                                    f"{mode}: re-routing from {room_name(actual)}"
+                                    f" ({reroute_count if move_blocked else '?'}/{max_reroutes})"
+                                )
                             steps = new_steps
                             step_idx = 0
                             continue
@@ -396,6 +447,8 @@ async def autodiscover(
     stuck_retries = 0
     try:
         while step_count < limit:
+            if ctx.walk.cancel_event.is_set():
+                break
             pos = ctx.room.current
             # Re-discover from current position each iteration -- picks up
             # newly revealed exits from rooms we just visited, nearest-first.
@@ -457,8 +510,9 @@ async def autodiscover(
                         gw_name = gw_room_obj.name if gw_room_obj else ""
                     actual_obj = graph.get_room(actual)
                     if actual_obj and gw_name and actual_obj.name == gw_name:
-                        log.debug("autodiscover: gateway %s rotated to %s (%s)",
-                                   gw_room[:12], actual[:12], actual_obj.name)
+                        log.debug(
+                            "autodiscover: gateway %s rotated to %s (%s)", gw_room[:12], actual[:12], actual_obj.name
+                        )
                         gw_room = actual
                     else:
                         tried.add((gw_room, direction))
@@ -497,6 +551,7 @@ async def autodiscover(
             await asyncio.sleep(ctx.walk.command_delay or client_repl_commands.COMMAND_DELAY)
             ctx.walk.active_command = direction
             ctx.walk.active_command_time = time.monotonic()
+            ctx.walk.pending_directions.append((direction, time.monotonic()))
             prompt_ready = ctx.prompt.ready
             if prompt_ready is not None:
                 prompt_ready.clear()
@@ -505,6 +560,11 @@ async def autodiscover(
             arrived = False
             if room_changed is not None:
                 room_changed.clear()
+
+            # Yield to scripts processing the current room.
+            while ctx.walk.busy_lock.locked():
+                await asyncio.sleep(0.25)
+
             send = ctx.repl.send_line
             if send is not None:
                 send(direction)
@@ -512,11 +572,15 @@ async def autodiscover(
                 ctx.writer.write(direction + "\r\n")
             else:
                 ctx.writer.write((direction + "\r\n").encode("utf-8"))
+            # Pace on the server prompt: the server queues movement
+            # commands and may take a long time to process them, so
+            # without prompt pacing we would flood the queue and time
+            # out on moves that are merely queued, not blocked.
+            if wait_fn is not None:
+                await wait_fn()
             if room_changed is not None:
                 try:
-                    await asyncio.wait_for(
-                        room_changed.wait(), timeout=ctx.room.arrival_timeout
-                    )
+                    await asyncio.wait_for(room_changed.wait(), timeout=ctx.room.arrival_timeout)
                 except asyncio.TimeoutError:
                     pass
                 arrived = ctx.room.current != gw_room
@@ -706,6 +770,8 @@ async def randomwalk(
         recovery_count = 0
         prev_room: str | None = None
         for step in range(limit):
+            if ctx.walk.cancel_event.is_set():
+                break
             current = ctx.room.current
             exits = dict(adj.get(current, {}))
             if not exits:
@@ -754,6 +820,7 @@ async def randomwalk(
 
             ctx.walk.active_command = direction
             ctx.walk.active_command_time = time.monotonic()
+            ctx.walk.pending_directions.append((direction, time.monotonic()))
             if wait_fn is not None:
                 await wait_fn()
 
@@ -762,15 +829,18 @@ async def randomwalk(
             arrived = False
             if room_changed is not None:
                 room_changed.clear()
+
+            # Yield to scripts processing the current room.
+            while ctx.walk.busy_lock.locked():
+                await asyncio.sleep(0.25)
+
             if isinstance(ctx.writer, telnetlib3.stream_writer.TelnetWriterUnicode):
                 ctx.writer.write(direction + "\r\n")
             else:
                 ctx.writer.write((direction + "\r\n").encode("utf-8"))
             if room_changed is not None:
                 try:
-                    await asyncio.wait_for(
-                        room_changed.wait(), timeout=ctx.room.arrival_timeout
-                    )
+                    await asyncio.wait_for(room_changed.wait(), timeout=ctx.room.arrival_timeout)
                 except asyncio.TimeoutError:
                     pass
                 arrived = ctx.room.current != current
@@ -985,9 +1055,11 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
 
     def _repaint_on_done(ctx: "TelixSessionContext") -> Callable[["asyncio.Task[None]"], None]:
         """Return a done callback that repaints the input line."""
+
         def _done(task: "asyncio.Task[None]") -> None:
             if ctx.prompt.repaint_input is not None:
                 ctx.prompt.repaint_input()
+
         return _done
 
     for idx, cmd in enumerate(parts):
@@ -1025,9 +1097,11 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                 if echo_fn is not None:
                     echo_fn(f"HOME: no path to home room {home_num}")
                 return parts[idx + 1 :]
-            task = asyncio.ensure_future(
-                fast_travel(path, ctx, log, destination=home_num)
-            )
+            old = ctx.walk.travel_task
+            if old is not None and not old.done():
+                old.cancel()
+            ctx.walk.cancel_event.clear()
+            task = asyncio.ensure_future(fast_travel(path, ctx, log, destination=home_num))
             task.add_done_callback(_repaint_on_done(ctx))
             ctx.walk.travel_task = task
             return parts[idx + 1 :]
@@ -1089,6 +1163,12 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                 # same room, carry over visited/tried state.
                 do_resume = ctx.walk.last_walk_mode == verb and ctx.walk.last_walk_room == ctx.room.current
 
+            # Cancelled by a keypress that was also a walk-triggering
+            # macro/dispatch -- don't start a new walk from the same input.
+            if ctx.walk.walk_cancelled_by_input:
+                ctx.walk.walk_cancelled_by_input = False
+                return parts[idx + 1 :]
+
             if verb == "autodiscover":
                 task = asyncio.ensure_future(
                     autodiscover(
@@ -1102,21 +1182,24 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
                     )
                 )
                 task.add_done_callback(_repaint_on_done(ctx))
+                old = ctx.walk.discover_task
+                if old is not None and not old.done():
+                    old.cancel()
+                ctx.walk.cancel_event.clear()
                 ctx.walk.discover_task = task
 
             else:
                 ctx.walk.randomwalk_room_change_cmd = room_change_cmd
                 task = asyncio.ensure_future(
                     randomwalk(
-                        ctx,
-                        log,
-                        limit=walk_limit,
-                        resume=do_resume,
-                        visit_level=walk_visit_level,
-                        noreply=noreply,
+                        ctx, log, limit=walk_limit, resume=do_resume, visit_level=walk_visit_level, noreply=noreply
                     )
                 )
                 task.add_done_callback(_repaint_on_done(ctx))
+                old = ctx.walk.randomwalk_task
+                if old is not None and not old.done():
+                    old.cancel()
+                ctx.walk.cancel_event.clear()
                 ctx.walk.randomwalk_task = task
             return parts[idx + 1 :]
 
@@ -1139,28 +1222,30 @@ async def handle_travel_commands(parts: list[str], ctx: "TelixSessionContext", l
 
         if not room_id:
             log.warning("travel command with no room id: %r", cmd)
-            break
+            return parts[idx + 1 :]
 
         current = ctx.room.current
         if not current:
             log.warning("no current room -- cannot travel")
-            break
+            return parts[idx + 1 :]
 
         graph = ctx.room.graph
         if graph is None:
             log.warning("no room graph -- cannot travel")
-            break
+            return parts[idx + 1 :]
 
         blocked = graph.blocked_rooms()
         path = graph.find_path_with_rooms(current, room_id, blocked=blocked)
         if path is None:
             log.warning("no path from %s to %s", current, room_id)
-            break
+            return parts[idx + 1 :]
 
-        task = asyncio.ensure_future(
-            fast_travel(path, ctx, log, destination=room_id, noreply=noreply)
-        )
+        task = asyncio.ensure_future(fast_travel(path, ctx, log, destination=room_id, noreply=noreply))
         task.add_done_callback(_repaint_on_done(ctx))
+        old = ctx.walk.travel_task
+        if old is not None and not old.done():
+            old.cancel()
+        ctx.walk.cancel_event.clear()
         ctx.walk.travel_task = task
         return parts[idx + 1 :]
 

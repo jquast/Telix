@@ -85,3 +85,16 @@ fire in each room along the path unless `noreply` is given.
 Use `` `return [noreply]` `` to travel back to the room where the
 current macro started, or `` `home` `` to travel to the home room of
 the current area.
+
+### Telemapper Integration
+
+The companion `telemapper` tool renders the room graph as a terminal
+graphics map.  Right-clicking a room in telemapper writes a telix
+travel command (`` `travel <room_id>` ``) to
+``$XDG_DATA_HOME/telix/.telix-cmd-<slug>``.
+
+A background bridge script forwards those commands to the MUD.  If
+you run ``discworld_thief`` it starts automatically; otherwise
+start it manually::
+
+    `async fastravel_bridge

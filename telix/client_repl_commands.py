@@ -32,7 +32,7 @@ WHEN_RE = re.compile(r"^`when\s+([\w.]+%?)\s*(!=|>=|<=|>|<|=)\s*(.+?)`$", re.IGN
 UNTIL_RE = re.compile(r"^`until(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 UNTILS_RE = re.compile(r"^`untils(?:\s+(\d+(?:\.\d+)?))?\s+(.+)`$")
 
-REPL_ACTION_RE = re.compile(r"^`(help|disconnect|repaint|captures)`$", re.IGNORECASE)
+REPL_ACTION_RE = re.compile(r"^`(\w+)`$", re.IGNORECASE)
 ASYNC_CMD_RE = re.compile(r"^`async\s+(.+)`$", re.IGNORECASE)
 AWAIT_CMD_RE = re.compile(r"^`await\s+(.+)`$", re.IGNORECASE)
 STOPSCRIPT_CMD_RE = re.compile(r"^`stopscript(?:\s+(\S+))?`$", re.IGNORECASE)
@@ -40,6 +40,7 @@ SCRIPTS_CMD_RE = re.compile(r"^`scripts`$", re.IGNORECASE)
 EDIT_RE = re.compile(r"^`edit\s+(\w+)`$", re.IGNORECASE)
 TOGGLE_RE = re.compile(r"^`toggle\s+(\w+)`$", re.IGNORECASE)
 WALK_DIALOG_RE = re.compile(r"^`(randomwalk|autodiscover|resume)\s+(?:dialog|walk)`$", re.IGNORECASE)
+CR_RE = re.compile(r"^`cr`$", re.IGNORECASE)
 
 
 class StepResult(enum.Enum):
@@ -362,6 +363,14 @@ async def dispatch_one(
             else:
                 echo("[scripts] no scripts running")
         return StepResult.HANDLED
+
+    if CR_RE.match(cmd):
+        hooks.send_fn("")
+        if hooks.on_send is not None:
+            hooks.on_send("")
+        if hooks.echo_fn is not None:
+            hooks.echo_fn("")
+        return StepResult.SENT
 
     if sent_count > 0 and idx not in immediate_set:
         if hooks.on_status is not None:
@@ -730,10 +739,6 @@ def macro_send(ctx: "TelixSessionContext", log: logging.Logger, cmd: str) -> Non
     :param cmd: Command text.
     """
     log.info("macro: sending %r", cmd)
-    if ctx.writer is not None and getattr(ctx.writer, "will_echo", False):
-        ctx.walk.active_command = "\u2593" * len(cmd)
-    else:
-        ctx.walk.active_command = cmd
     ctx.walk.active_command_time = time.monotonic()
     ctx.writer.write(cmd + "\r\n")
 

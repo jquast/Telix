@@ -127,3 +127,18 @@ def test_collapse_runs_start_parameter():
     runs = client_repl_commands.collapse_runs(["e", "e", "e", "n", "n"], start=3)
     assert len(runs) == 1
     assert runs[0] == ("2\u00d7n", 3, 4)
+
+
+def test_macro_send_does_not_set_active_command():
+    """macro_send must not set walk.active_command to prevent graph edge pollution."""
+    import logging
+    import types
+
+    log = logging.getLogger("test")
+    ctx = types.SimpleNamespace()
+    ctx.walk = types.SimpleNamespace(active_command=None, active_command_time=0.0)
+    ctx.writer = types.SimpleNamespace(write=lambda s: None, will_echo=False)
+
+    client_repl_commands.macro_send(ctx, log, "get jewellery from corpse")
+
+    assert ctx.walk.active_command is None

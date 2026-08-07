@@ -16,6 +16,7 @@ import io
 import os
 import re
 import sys
+import time
 import shlex
 import codecs
 import typing
@@ -108,6 +109,35 @@ def _apply_atascii_return(stdin: typing.Any) -> None:
     stdin.read = _cr_to_atascii_eol  # type: ignore[method-assign]
 
 
+def consume_edge_direction(walk: typing.Any, log: logging.Logger) -> str | None:
+    """
+    Pick the direction to attribute a room change to.
+
+    The server may queue movement commands and respond slowly, so a room
+    change can arrive long after its command was sent, while newer
+    commands are already in flight.  The Nth room change is the response
+    to the Nth oldest sent command, so the oldest live pending direction
+    is consumed; when no walk command is outstanding, the current
+    active_command is used instead.
+
+    :param walk: The session WalkState.
+    :param log: Logger.
+    :returns: Direction to record the edge under, or None.
+    """
+    direction = walk.active_command
+    if walk.pending_directions:
+        now = time.monotonic()
+        while walk.pending_directions:
+            pending_dir, pending_time = walk.pending_directions[0]
+            if now - pending_time <= PENDING_COMMAND_STALE:
+                break
+            log.debug("room_info: dropping stale pending command %r", pending_dir)
+            walk.pending_directions.popleft()
+        if walk.pending_directions:
+            direction = walk.pending_directions.popleft()[0]
+    return direction
+
+
 def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     """
     Create config/data directories and load all per-session config files into *ctx*.
@@ -182,20 +212,26 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
         # edge in both the in-memory adjacency cache and the database so
         # it survives Writtenmap re-processing (which would otherwise
         # overwrite with "1" placeholders) and carries across sessions.
-        if prev and num and num != prev and ctx.walk.active_command:
-            direction = ctx.walk.active_command
-            graph_ = ctx.room.graph
-            if graph_ is not None:
-                graph_.adj.setdefault(prev, {})[direction] = num
-                graph_.conn.execute(
-                    "INSERT INTO exit (src_num, direction, dst_num)"
-                    " VALUES (?, ?, ?)"
-                    " ON CONFLICT(src_num, direction)"
-                    " DO UPDATE SET dst_num=excluded.dst_num",
-                    (prev, direction, num),
+        if prev and num and num != prev:
+            direction = consume_edge_direction(ctx.walk, log)
+            ctx.walk.last_consumed_direction = direction
+            if direction:
+                graph_ = ctx.room.graph
+                if graph_ is not None:
+                    graph_.adj.setdefault(prev, {})[direction] = num
+                    graph_.conn.execute(
+                        "INSERT INTO exit (src_num, direction, dst_num)"
+                        " VALUES (?, ?, ?)"
+                        " ON CONFLICT(src_num, direction)"
+                        " DO UPDATE SET dst_num=excluded.dst_num",
+                        (prev, direction, num),
+                    )
+                    graph_.conn.commit()
+                    log.debug("room_info: connected %s --%s--> %s", prev[:8], direction, num[:8])
+            else:
+                log.debug(
+                    "room_info: room change %s -> %s with no active command, edge not recorded", prev[:8], num[:8]
                 )
-                graph_.conn.commit()
-                log.debug("room_info: connected %s --%s--> %s", prev[:8], direction, num[:8])
 
         ctx.room.changed.set()
         ctx.room.graph.update_room(data)
@@ -209,9 +245,7 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
     scripts_dir = str(paths.xdg_config_dir() / "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
     bundled_dir = str(pathlib.Path(__file__).parent / "bundled-scripts")
-    ctx.scripts.manager = scripts_mod.ScriptManager(
-        scripts_dir=scripts_dir, bundled_dir=bundled_dir, log=log
-    )
+    ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, bundled_dir=bundled_dir, log=log)
 
 
 # ED 2 (erase display) without an adjacent HOME -- inject HOME before it.
@@ -219,6 +253,15 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
 ED2 = b"\x1b[2J"
 HOME = b"\x1b[H"
 HOME_ED2 = b"\x1b[H\x1b[2J"
+
+# Max age of a pending walk direction before it is considered stale.
+# Discworld queues movement commands and can take minutes to complete a
+# burst (e.g. 10 wests can take up to 2 minutes), so a delayed room
+# change is legitimate well past the arrival timeout.  The bound must
+# exceed the longest plausible queue delay; entries that never produce a
+# room change (genuinely blocked moves) are discarded once stale so they
+# cannot misattribute a later room change.
+PENDING_COMMAND_STALE = 240.0
 
 
 def inject_home_before_clear(data: bytes) -> bytes:
@@ -680,7 +723,9 @@ async def telix_client_shell(
 
     on_connect = getattr(ctx.color_args, "on_connect_command", "") if ctx.color_args is not None else ""
     if on_connect and (mgr := ctx.scripts.manager) is not None:
-        if m := client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(on_connect):
+        if m := client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(
+            on_connect
+        ):
             on_connect = m.group(1)
         try:
             mgr.start_script(ctx, on_connect)

@@ -9,9 +9,9 @@ if TYPE_CHECKING:
     from .rooms import RoomStore
 
 # 3rd party
+import wcwidth
 import rich.text
 import rich.style
-import wcwidth
 import textual.app
 import textual.events
 import textual.screen
@@ -324,14 +324,22 @@ class RoomBrowserPane(textual.containers.Vertical):
             self.graph.close()
             self.graph = None
 
+    def _area_display(self, area: str) -> str:
+        """Return the display label for an area, using the mapped name when available."""
+        if self.graph is not None:
+            mapped = self.graph.area_names.get(area)
+            if mapped:
+                return f"{area} - {mapped}"
+        return area
+
     def populate_area_dropdown(self) -> None:
         """Populate the area dropdown from loaded rooms."""
         areas: set[str] = set()
         for _, _, area, _, _, _, _, _, _ in self.all_rooms:
             if area:
                 areas.add(area)
-        sorted_areas = sorted(areas, key=lambda a: _area_sort_key(a))
-        options = [(a, a) for a in sorted_areas]
+        sorted_areas = sorted(areas, key=_area_sort_key)
+        options = [(self._area_display(a), a) for a in sorted_areas]
         select = self.query_one("#room-area-select", textual.widgets.Select)
         select.set_options(options)
         if self.current_area and self.current_area in areas:
@@ -803,11 +811,12 @@ class RoomBrowserPane(textual.containers.Vertical):
             return
         from .client_tui_dialogs import ContentViewerScreen
 
+        area_label = self._area_display(room.area) if room.area else ""
         self.app.push_screen(
             ContentViewerScreen(
                 room_num=num,
                 room_name=room.name,
-                area=room.area,
+                area=area_label,
                 contents=contents,
             )
         )

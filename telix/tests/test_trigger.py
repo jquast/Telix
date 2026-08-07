@@ -400,7 +400,7 @@ def test_trigger_engine_cancel_when_idle():
     assert engine.reply_chain is None
 
 
-@pytest.mark.parametrize("command, expected_written", [("", []), ("   ", []), ("look", ["look\r\n"])])
+@pytest.mark.parametrize("command, expected_written", [("", ["\r\n"]), ("   ", ["\r\n"]), ("look", ["look\r\n"])])
 def test_send_command(command, expected_written):
     writer, written = mock_writer()
     engine = TriggerEngine([], writer, writer.log)
@@ -646,6 +646,29 @@ def test_save_triggers_field_roundtrip(tmp_path, rule_kwargs, field, exp0, exp1,
         assert json_key not in entries[1]
 
 
+@pytest.mark.parametrize(
+    "rule_kwargs,exp_hide",
+    [
+        ({}, False),
+        ({"hide_line": True}, True),
+    ],
+)
+def test_save_triggers_hide_line_roundtrip(tmp_path, rule_kwargs, exp_hide):
+    fp = tmp_path / "triggers.json"
+    rules = [TriggerRule(pattern=re.compile(r"press return"), reply="", **rule_kwargs)]
+    save_triggers(str(fp), rules, SK)
+    loaded = load_triggers(str(fp), SK)
+    assert loaded[0].hide_line is exp_hide
+
+    with open(str(fp), encoding="utf-8") as fh:
+        data = json.load(fh)
+    entries = data[SK]["triggers"]
+    if exp_hide:
+        assert entries[0].get("hide_line") is True
+    else:
+        assert "hide_line" not in entries[0]
+
+
 @pytest.mark.asyncio
 async def test_exclusive_suppresses_feed_while_chain_active():
     writer, written = mock_writer()
@@ -792,6 +815,47 @@ async def test_prompt_cycle_dedup_always_rule():
     engine.on_prompt()
     await asyncio.sleep(0.02)
     assert sum(1 for w in written if "loot\r\n" in w) == 2
+
+
+def test_should_hide_line_empty_patterns():
+    ctx, _ = mock_writer()
+    engine = TriggerEngine([], ctx, logging.getLogger("test"))
+    assert engine.should_hide_line("any line") is False
+
+
+def test_should_hide_line_matches():
+    ctx, _ = mock_writer()
+    rules = [TriggerRule(pattern=re.compile(r"press return"), reply="", hide_line=True)]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
+    assert engine.should_hide_line("--- MORE From 47 to 69 of 77 (89%) - press return, h for help.") is True
+    assert engine.should_hide_line("normal line") is False
+    assert engine.should_hide_line("--- press return more junk") is True
+
+
+def test_should_hide_line_disabled_engine():
+    ctx, _ = mock_writer()
+    rules = [TriggerRule(pattern=re.compile(r"press return"), reply="", hide_line=True)]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
+    engine.enabled = False
+    assert engine.should_hide_line("--- press return, h for help.") is False
+
+
+def test_should_hide_line_disabled_rule():
+    ctx, _ = mock_writer()
+    rules = [TriggerRule(pattern=re.compile(r"press return"), reply="", hide_line=True, enabled=False)]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
+    assert engine.should_hide_line("--- press return, h for help.") is False
+
+
+def test_should_hide_line_hide_on_non_hide_rules():
+    """Only rules with hide_line=True should trigger hiding."""
+    ctx, _ = mock_writer()
+    rules = [
+        TriggerRule(pattern=re.compile(r"press return"), reply="x"),
+        TriggerRule(pattern=re.compile(r"press return"), reply="", hide_line=True),
+    ]
+    engine = TriggerEngine(rules, ctx, logging.getLogger("test"))
+    assert engine.should_hide_line("--- press return, h for help.") is True
 
 
 def test_search_buffer_clear_resets_lines_and_position():
@@ -1535,3 +1599,20 @@ async def test_status_text_masks_send_when_will_echo():
     await asyncio.sleep(0.05)
     assert "secret" not in engine.status_text
     engine.cancel()
+
+
+def test_trigger_send_does_not_set_active_command():
+    """TriggerEngine.send_command must not set walk.active_command."""
+    import types
+
+    log = logging.getLogger("test")
+    ctx = types.SimpleNamespace()
+    ctx.walk = types.SimpleNamespace(active_command=None, active_command_time=0.0)
+    ctx.writer = types.SimpleNamespace(write=lambda s: None, will_echo=False)
+    ctx.prompt = types.SimpleNamespace(echo=None)
+
+    engine = TriggerEngine([], ctx, log)
+    engine.echo_fn = None
+    engine.send_command("bury corpse")
+
+    assert ctx.walk.active_command is None

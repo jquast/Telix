@@ -71,6 +71,25 @@ class WalkState:
     await_script: str = ""
     active_command: str | None = None
     active_command_time: float = 0.0
+    # FIFO of (direction, monotonic-time) pairs sent by walk systems
+    # whose room change has not yet been observed.  The server may
+    # queue movement commands (Discworld can take minutes to complete a
+    # burst), so multiple responses can arrive long after their commands
+    # were sent.  The Nth room change corresponds to the Nth oldest
+    # pending direction, not to whatever active_command happens to hold
+    # when the GMCP Room.Info arrives.  on_room_info pops the oldest
+    # live entry and attributes the edge to it, preventing wrong-
+    # direction edges.  Entries older than a stale bound (a move that
+    # was genuinely blocked never produces a room change) are discarded
+    # so they cannot misattribute a later room change.
+    pending_directions: collections.deque[tuple[str, float]] = dataclasses.field(default_factory=collections.deque)
+    # Direction on_room_info most recently consumed from pending_directions
+    # (or active_command when the FIFO was empty).  Walk loops compare
+    # this against their current step's direction: when they differ, the
+    # observed room change was the delayed response to an older queued
+    # command, so the walk must not attribute or correct the edge for
+    # its own step's direction.
+    last_consumed_direction: str | None = None
     blocked_exits: set[tuple[str, str]] = dataclasses.field(default_factory=set)
     macro_start_room: str = ""
     last_walk_mode: str = ""
@@ -82,6 +101,17 @@ class WalkState:
     last_walk_visited: set[str] = dataclasses.field(default_factory=set)
     last_walk_tried: set[tuple[str, str]] = dataclasses.field(default_factory=set)
     command_delay: float = 0.0
+    # Set momentarily by cancel_walks_on_keypress() so that walk-starting
+    # code (dispatch actions, macro handlers) triggered by the same keypress
+    # does not launch a new walk after cancelling the current one.
+    walk_cancelled_by_input: bool = False
+    # Event-based cancellation signal for fast_travel/autodiscover/randomwalk.
+    # Set by cancel_walks_on_keypress(), checked between loop iterations.
+    cancel_event: "asyncio.Event" = dataclasses.field(default_factory=asyncio.Event)
+    # Lock acquired by scripts while processing the current room (e.g.
+    # combat/evaluation cycles).  Walk systems check this before moving
+    # to the next room and yield until the script releases the lock.
+    busy_lock: "asyncio.Lock" = dataclasses.field(default_factory=asyncio.Lock)
 
 
 @dataclasses.dataclass

@@ -1,7 +1,7 @@
 History
 =======
 
-0.1.11 -- 2026-07-??
+0.1.11 -- 2026-08-07
 --------------------
 
 - enhancement: ``on_gmcp`` registration hooks for scripting

@@ -102,6 +102,7 @@ from .client_repl_commands import (  # noqa: F401  # noqa: F401
     send_chained,
     collapse_runs,
     clear_command_queue,
+    dispatch_repl_action,
     render_command_queue,
     render_active_command,
 )
@@ -122,6 +123,17 @@ EDIT_THEME_RE = re.compile(r"^`edit\s+theme`$", re.IGNORECASE)
 PASSWORD_CHAR = "\u273b"
 
 log = logging.getLogger(__name__)
+
+# Register TRACE log level for per-keystroke diagnostic logging.
+#TRACE_LEVEL = 5
+#logging.addLevelName(TRACE_LEVEL, "TRACE")
+#if not hasattr(logging.Logger, "trace"):
+#
+#    def _trace(self, msg, *args, **kwargs):
+#        if self.isEnabledFor(TRACE_LEVEL):
+#            self._log(TRACE_LEVEL, msg, args, **kwargs)
+#
+#    logging.Logger.trace = _trace  # type: ignore[attr-defined]
 
 
 def load_history(history: "blessed.line_editor.LineHistory", path: str) -> None:
@@ -648,11 +660,34 @@ class LineHoldBuffer:
     to emit" (complete lines terminated by ``\n``) and a held-back trailing fragment.
 
     :param highlight_engine_getter: callable returning the current :class:`HighlightEngine` (or None).
+    :param hide_checker: optional callable ``(stripped_line: str) -> bool`` returning True when a line should be
+        suppressed from display.
     """
 
-    def __init__(self, highlight_engine_getter: Callable[[], typing.Any]) -> None:
+    def __init__(
+        self,
+        highlight_engine_getter: Callable[[], typing.Any],
+        hide_checker: Callable[[str], bool] | None = None,
+    ) -> None:
         self._pending: str = ""
         self.get_engine = highlight_engine_getter
+        self._hide_checker = hide_checker
+        self._last_feed: str = ""
+
+    @property
+    def feed_text(self) -> str:
+        """
+        The raw text (before hide filtering) from the most recent :meth:`add` or :meth:`flush_for_prompt` call.
+
+        Use this to feed the trigger engine or script manager so that hide_line triggers still fire their replies.
+        """
+        return self._last_feed
+
+    def _should_hide(self, line: str) -> bool:
+        """Return True when *line* should be suppressed from display."""
+        if self._hide_checker is None:
+            return False
+        return self._hide_checker(line)
 
     def add(self, text: str) -> tuple[str, str]:
         r"""
@@ -661,14 +696,18 @@ class LineHoldBuffer:
         Complete lines (everything up to and including the last ``\n``) are run through the highlight engine and
         returned as *emit_now*. The trailing incomplete fragment is stored internally and returned as *held_back* (for
         the caller to decide whether to schedule a timer).
+
+        The raw text (before hide filtering) is available via :attr:`feed_text` for feeding the trigger engine.
         """
         combined = self._pending + text
         nl_pos = combined.rfind("\n")
         if nl_pos == -1:
             self._pending = combined
+            self._last_feed = ""
             return ("", combined)
         emit_raw = combined[: nl_pos + 1]
         self._pending = combined[nl_pos + 1 :]
+        self._last_feed = emit_raw
         emit_now = self.highlight_lines(emit_raw)
         return (emit_now, self._pending)
 
@@ -683,7 +722,9 @@ class LineHoldBuffer:
         text = self._pending
         self._pending = ""
         if not text:
+            self._last_feed = ""
             return ""
+        self._last_feed = text
         return self.highlight_lines(text)
 
     @property
@@ -692,7 +733,7 @@ class LineHoldBuffer:
         return self._pending
 
     def highlight_lines(self, text: str) -> str:
-        """Run each complete line through the highlight engine."""
+        """Run each complete line through the highlight engine and suppress hidden lines."""
         engine = self.get_engine()
         if engine is None or not engine.enabled:
             return text
@@ -701,15 +742,18 @@ class LineHoldBuffer:
         result: list[str] = []
         for i, part in enumerate(parts):
             is_last = i == len(parts) - 1
+            stripped = wcwidth.strip_sequences(part).rstrip("\r")
             if is_last:
                 if part:
                     highlighted, matched = engine.process_line(part)
-                    result.append(highlighted)
+                    if not self._should_hide(stripped):
+                        result.append(highlighted)
                 else:
                     result.append(part)
             else:
                 highlighted, matched = engine.process_line(part)
-                result.append(highlighted)
+                if not self._should_hide(stripped):
+                    result.append(highlighted)
         return "\n".join(result)
 
 
@@ -773,9 +817,15 @@ class ReplSession:
         self.macro_defs: list[Macro] | None = None
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
         self.dialogs_mod: typing.Any = None
-        self.line_hold: LineHoldBuffer = LineHoldBuffer(lambda: self.ctx.highlights.engine)
+        self.line_hold: LineHoldBuffer = LineHoldBuffer(
+            lambda: self.ctx.highlights.engine,
+            hide_checker=lambda stripped_line: (
+                self.trigger_engine is not None and self.trigger_engine.should_hide_line(stripped_line)
+            ),
+        )
         self.line_hold_timer: asyncio.TimerHandle | None = None
         self.mslp_index: int | None = None
+        self._last_inkey_ts: float = 0.0
 
         if sys.platform == "win32":
             self.ctx.repl.ansi_keys = True
@@ -1052,6 +1102,9 @@ class ReplSession:
             if task is not None:
                 task.cancel()
             return
+        if self.ctx.walk.walk_cancelled_by_input:
+            self.ctx.walk.walk_cancelled_by_input = False
+            return
         cmd = autodiscover_dialog(replay_buf=self.replay_buf, session_key=self.ctx.session_key)
         if cmd is None:
             return
@@ -1072,6 +1125,9 @@ class ReplSession:
         if self.ctx.walk.last_walk_room != self.ctx.room.current:
             if echo_fn is not None:
                 echo_fn("RESUME: room changed since last walk, cannot resume")
+            return
+        if self.ctx.walk.walk_cancelled_by_input:
+            self.ctx.walk.walk_cancelled_by_input = False
             return
         if mode == "autodiscover":
             if self.ctx.walk.discover_active:
@@ -1114,29 +1170,53 @@ class ReplSession:
 
     def cancel_walks_on_keypress(self) -> None:
         """Cancel any active automated walk when the user presses a key."""
+        w = self.ctx.walk
+        w.walk_cancelled_by_input = False
         echo_fn = self.ctx.prompt.echo
         cancelled = False
-        disc_task = self.ctx.walk.discover_task
+        disc_task = w.discover_task
         if disc_task is not None and not disc_task.done():
+            log.trace("cancel_walks: AUTODISCOVER task %s", disc_task)
             if echo_fn is not None:
                 echo_fn("AUTODISCOVER: cancelled by input")
             disc_task.cancel()
+            w.discover_task = None
             cancelled = True
-        rw_task = self.ctx.walk.randomwalk_task
+        rw_task = w.randomwalk_task
         if rw_task is not None and not rw_task.done():
+            log.trace("cancel_walks: RANDOMWALK task %s", rw_task)
             if echo_fn is not None:
                 echo_fn("RANDOMWALK: cancelled by input")
             rw_task.cancel()
+            w.randomwalk_task = None
             cancelled = True
-        ft_task = self.ctx.walk.travel_task
+
+        # -- Travel task: also check the chained command queue.  The bridge
+        #    script sends travel commands via ctx.send() which goes through
+        #    handle_travel_commands() and creates a fast_travel task.  The
+        #    travel_task reference should point at it, but also check for
+        #    any running tasks that may not have been tracked.
+        ft_task = w.travel_task
         if ft_task is not None and not ft_task.done():
+            log.trace("cancel_walks: TRAVEL task %s", ft_task)
             if echo_fn is not None:
                 echo_fn("TRAVEL: cancelled by input")
             ft_task.cancel()
-            self.ctx.walk.travel_task = None
+            w.travel_task = None
             cancelled = True
-        if cancelled and self.trigger_engine is not None:
-            self.trigger_engine.cancel()
+
+        # Also zap pending chained send (submit_command_queue).
+        cq = getattr(self.ctx, "command_queue", None)
+        if cq is not None and not cq.cancel_event.is_set():
+            log.trace("cancel_walks: command_queue cancel")
+            cq.cancel_event.set()
+            cancelled = True
+
+        if cancelled:
+            w.cancel_event.set()
+            w.walk_cancelled_by_input = True
+            if self.trigger_engine is not None:
+                self.trigger_engine.cancel()
 
     def randomwalk_mode(self) -> None:
         """Launch or cancel random walk mode."""
@@ -1144,6 +1224,9 @@ class ReplSession:
             task = self.ctx.walk.randomwalk_task
             if task is not None:
                 task.cancel()
+            return
+        if self.ctx.walk.walk_cancelled_by_input:
+            self.ctx.walk.walk_cancelled_by_input = False
             return
         cmd = randomwalk_dialog(replay_buf=self.replay_buf, session_key=self.ctx.session_key)
         if cmd is None:
@@ -1373,7 +1456,7 @@ class ReplSession:
         self.refresh_highlight_engine()
 
         assert self.scroll is not None
-        self.ctx.repl.actions = {
+        self.ctx.repl.actions.update({
             "help": lambda: show_help(replay_buf=self.replay_buf),
             "edit": lambda tab: launch_unified_editor(tab, self.ctx, self.replay_buf),
             "captures": lambda: launch_unified_editor("captures", self.ctx, self.replay_buf),
@@ -1384,7 +1467,7 @@ class ReplSession:
             "randomwalk_dialog": self.randomwalk_mode,
             "autodiscover_dialog": self.discover_mode,
             "resume_walk": self.resume_last_walk,
-        }
+        })
 
         self.dispatch.register("KEY_TAB", self.mslp_tab)
         self.dispatch.register("KEY_BTAB", self.mslp_shift_tab)
@@ -1430,6 +1513,7 @@ class ReplSession:
         esc_hold = b""
         while not self.server_done:
             out = await self.telnet_reader.read(2**24)
+            t0 = time.monotonic()
             if not out:
                 if self.telnet_reader.at_eof():
                     local_close = self.server_done
@@ -1462,6 +1546,7 @@ class ReplSession:
                 if self.prompt_pending:
                     self.cancel_line_hold_timer()
                     held = self.line_hold.flush_for_prompt()
+                    held_feed = self.line_hold.feed_text
                     if held:
                         self.stdout.write(bt.restore.encode())
                         held_enc = held.encode()
@@ -1470,14 +1555,15 @@ class ReplSession:
                         self.stdout.write(bt.save.encode())
                     self.prompt_pending = False
                     if self.trigger_engine is not None:
-                        if held:
-                            self.trigger_engine.feed(held)
+                        if held_feed:
+                            self.trigger_engine.feed(held_feed)
                         self.trigger_engine.on_prompt()
                     if self.ctx.scripts.manager is not None:
-                        if held:
-                            self.ctx.scripts.manager.feed(held)
+                        if held_feed:
+                            self.ctx.scripts.manager.feed(held_feed)
                         self.ctx.scripts.manager.on_prompt()
                     self.update_input_style()
+                await asyncio.sleep(0)
                 continue
             if isinstance(out, bytes):
                 out = out.decode("utf-8", errors="replace")
@@ -1510,14 +1596,18 @@ class ReplSession:
                 self.dialogs_mod.subprocess_buffer.append(out.encode())
                 continue
             emit_now, held_back = self.line_hold.add(out)
+            feed_text = self.line_hold.feed_text
             if held_back and is_prompt:
                 self.cancel_line_hold_timer()
+                raw_held = self.line_hold.pending
                 emit_now += self.line_hold.flush_for_prompt()
+                feed_text += raw_held
                 held_back = ""
                 self.prompt_pending = False
             if held_back:
                 self.schedule_line_hold_flush()
             if not emit_now and not self.dialogs_mod.subprocess_buffer:
+                await asyncio.sleep(0)
                 continue
             if emit_now and not held_back:
                 self.cancel_line_hold_timer()
@@ -1535,12 +1625,12 @@ class ReplSession:
                 self.replay_buf.append(encoded)
             self.stdout.write(bt.save.encode())
             if self.trigger_engine is not None:
-                self.trigger_engine.feed(emit_now)
+                self.trigger_engine.feed(feed_text)
                 if is_prompt:
                     self.trigger_engine.on_prompt()
                     self.prompt_pending = False
             if self.ctx.scripts.manager is not None:
-                self.ctx.scripts.manager.feed(emit_now)
+                self.ctx.scripts.manager.feed(feed_text)
                 if is_prompt:
                     self.ctx.scripts.manager.on_prompt()
             cq_s = self.ctx.command_queue
@@ -1587,6 +1677,10 @@ class ReplSession:
                 self.toolbar.flash_active = True
                 self.toolbar.schedule_flash(self.loop, self.trigger_engine, self.editor, bt)
             self.show_cursor(scroll.input_row, cursor_col)
+            elapsed = time.monotonic() - t0
+            if elapsed > 0.1:
+                log.debug("read_server sync work: %.0fms", elapsed * 1000)
+            await asyncio.sleep(0)
             if self.telnet_writer.mode != "local":
                 self.mode_switched = True
                 self.server_done = True
@@ -1602,6 +1696,13 @@ class ReplSession:
         chained_task_ref: list[asyncio.Task[None] | None] = [None]
         with bt.raw(), bt.notify_on_resize():
             while not self.server_done:
+                now = time.monotonic()
+                last = getattr(self, "_last_inkey_ts", 0.0)
+                if last:
+                    gap = now - last
+                    if gap > 0.2:
+                        log.debug("input starved: %.0fms since last async_inkey", gap * 1000)
+                self._last_inkey_ts = now
                 key = await bt.async_inkey(timeout=0.1)
 
                 if key.name == "RESIZE_EVENT":
@@ -1623,6 +1724,8 @@ class ReplSession:
                     self.tty_shell._resize_pending.clear()
                     self.fire_resize()
 
+                log.trace("keypress: name=%r str=%r code=%r",
+                          getattr(key, "name", None), str(key), getattr(key, "code", None))
                 self.cancel_walks_on_keypress()
 
                 action = self.dispatch.lookup(key)
@@ -1632,6 +1735,8 @@ class ReplSession:
                         self.telnet_writer.write(seq)  # type: ignore[arg-type]
                         continue
                 if action is not None:
+                    log.trace("keypress: dispatch found handler for key name=%r str=%r",
+                              getattr(key, "name", None), str(key))
                     result = action()
                     if asyncio.iscoroutine(result):
                         await result
@@ -1743,17 +1848,27 @@ class ReplSession:
                         if echo_fn is not None:
                             echo_fn("AUTODISCOVER: cancelled by input")
                         disc_task.cancel()
+                        self.ctx.walk.discover_task = None
                     rw_task = self.ctx.walk.randomwalk_task
                     if rw_task is not None and not rw_task.done():
                         if echo_fn is not None:
                             echo_fn("RANDOMWALK: cancelled by input")
                         rw_task.cancel()
+                        self.ctx.walk.randomwalk_task = None
                     ft_task = self.ctx.walk.travel_task
                     if ft_task is not None and not ft_task.done():
                         if echo_fn is not None:
                             echo_fn("TRAVEL: cancelled by input")
                         ft_task.cancel()
                         self.ctx.walk.travel_task = None
+                    if disc_task or rw_task or ft_task:
+                        if any(
+                            t is not None and not t.done()
+                            for t in (disc_task, rw_task, ft_task)
+                        ):
+                            self.ctx.walk.cancel_event.set()
+                    elif self.ctx.command_queue is not None:
+                        self.ctx.walk.cancel_event.set()
 
                     if self.ga_detected:
                         try:
@@ -1846,6 +1961,8 @@ class ReplSession:
                                     self.prompt_ready.clear()
                                 if len(remainder) > 1:
                                     self.submit_command_queue(remainder, chained_task_ref)
+                        elif parts and dispatch_repl_action(parts[0], self.ctx, self.telnet_writer.log):
+                            pass
                         elif parts:
                             self.telnet_writer.write(parts[0] + "\r\n")  # type: ignore[arg-type]
                             self.ctx.commands.record(parts[0])

@@ -529,7 +529,7 @@ class EditListPane(textual.containers.Vertical):
         "btn-delay": "`delay 1s`",
         "delay": "`delay 1s`",
         "btn-randomwalk": "`randomwalk`",
-        "return": "`return`",
+        "return": "`cr`",
         "autodiscover": "`autodiscover`",
     }
 

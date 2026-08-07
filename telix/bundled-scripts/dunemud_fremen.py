@@ -7,7 +7,7 @@ import asyncio
 from typing import Optional
 from telix.scripts import ScriptContext
 
-BG_TASKS = ['fremen.fungus_loop', 'fremen.drink_loop', 'fremen.mode_loop']
+BG_TASKS = ['dunemud_fremen.fungus_loop', 'dunemud_fremen.drink_loop', 'dunemud_fremen.mode_loop']
 
 mud_lock = asyncio.Lock()
 things_seen: dict[str, Thing] = {}
