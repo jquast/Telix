@@ -1,6 +1,9 @@
-# run `await fremen` to schedule background jobs
-# run `await fremen.hunt` as a 'Room change command'
-# run `await fremen.loot` to evaluate room contents for looting (triggered by hunt)
+"""
+DuneMUD automation: hunting, looting, and background job loops.
+
+Run ``await fremen`` to schedule background jobs.  Run ``await fremen.hunt`` as a 'Room change command', and ``await
+fremen.loot`` to evaluate room contents for looting (triggered by hunt).
+"""
 
 from __future__ import annotations
 

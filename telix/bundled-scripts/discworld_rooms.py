@@ -377,8 +377,11 @@ _AREA_NAMES: dict[str, str] = {
 
 
 async def run(ctx: ScriptContext) -> None:
-    """Register a Room.Writtenmap callback, start the text-based exit watcher and sign reader, register area name
-    mappings, and keep the script alive."""
+    """
+    Register a Room.Writtenmap callback, the text-based exit watcher, and the sign reader.
+
+    Also register area name mappings and keep the script alive.
+    """
     await _import_quowmap(ctx)
     ctx.area_names.update(_AREA_NAMES)
     ctx.on_gmcp("Room.Writtenmap", lambda data: _parse_writtenmap(data, ctx))

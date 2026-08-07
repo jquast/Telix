@@ -990,7 +990,7 @@ class TriggerEngine:
         self.status = ""
 
     def send_command(self, cmd: str) -> None:
-        """
+        r"""
         Send a single command line to the server.
 
         :param cmd: Command text (without line ending). An empty or whitespace-only command sends a bare ``\\r\\n``
