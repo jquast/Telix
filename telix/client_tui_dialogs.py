@@ -418,6 +418,80 @@ def confirm_dialog_main(title: str, body: str, warning: str = "", result_file: s
     app.run()
 
 
+class ContentViewerScreen(textual.screen.Screen[None]):
+    """Full-screen modal for viewing room contents text."""
+
+    BINDINGS = [textual.binding.Binding("escape", "dismiss", "Close", show=False)]
+
+    DEFAULT_CSS = """
+    ContentViewerScreen {
+        align: center middle;
+    }
+    #cv-container {
+        width: 90%;
+        height: 90%;
+        border: round $surface-lighten-2;
+        background: $surface;
+        padding: 1 2;
+    }
+    #cv-title {
+        text-style: bold;
+        text-align: center;
+        margin-bottom: 1;
+        height: 1;
+    }
+    #cv-content {
+        width: 1fr;
+        height: 1fr;
+        margin-bottom: 1;
+        padding: 1 1;
+        border: solid $primary-background;
+        overflow-y: auto;
+    }
+    #cv-content:focus {
+        border: solid $accent;
+    }
+    #cv-buttons {
+        height: 3;
+        align-horizontal: center;
+    }
+    #cv-buttons Button {
+        width: auto;
+        min-width: 12;
+    }
+    """
+
+    def __init__(self, room_num: str, room_name: str, area: str, contents: str) -> None:
+        """Initialize content viewer with room details and contents text."""
+        super().__init__()
+        self.room_num = room_num
+        self.room_name = room_name
+        self.area = area
+        self.contents = contents
+
+    def compose(self) -> textual.app.ComposeResult:
+        """Build the content viewer layout."""
+        title = f"Room Contents: {self.room_name} (#{self.room_num}{' - ' + self.area if self.area else ''})"
+        with textual.containers.Vertical(id="cv-container"):
+            yield textual.widgets.Static(title, id="cv-title")
+            yield textual.widgets.Static(self.contents or "(no contents)", id="cv-content")
+            with textual.containers.Horizontal(id="cv-buttons"):
+                yield textual.widgets.Button("OK", variant="primary", id="cv-ok")
+
+    def on_mount(self) -> None:
+        """Focus the content area on mount so it can be scrolled."""
+        self.query_one("#cv-content", textual.widgets.Static).focus()
+
+    def on_button_pressed(self, event: textual.widgets.Button.Pressed) -> None:
+        """Handle OK button press."""
+        if event.button.id == "cv-ok":
+            self.dismiss(None)
+
+    def action_dismiss(self) -> None:
+        """Handle Escape key."""
+        self.dismiss(None)
+
+
 class RandomwalkDialogScreen(textual.screen.Screen[bool]):
     """Random walk confirmation dialog with visit-level parameter."""
 

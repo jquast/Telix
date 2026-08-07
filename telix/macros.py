@@ -293,6 +293,7 @@ def build_macro_dispatch(macros: list[Macro], ctx: "TelixSessionContext", log: l
         macro_ref = macro
 
         async def handler(m: Macro = macro_ref) -> None:
+            log.debug("macro fired: key=%r text=%r toggle=%s", m.key, m.text, m.toggle)
             if m.toggle:
                 text = m.toggle_text if m.toggle_state else m.text
                 m.toggle_state = not m.toggle_state

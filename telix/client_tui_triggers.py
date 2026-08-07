@@ -27,6 +27,7 @@ class TriggerTuple(typing.NamedTuple):
     immediate: bool = False
     last_fired: str = ""
     case_sensitive: bool = False
+    hide_line: bool = False
 
 
 class TriggerEditPane(client_tui_base.EditListPane):
@@ -45,7 +46,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
     DEFAULT_CSS = (
         client_tui_base.EditListPane.DEFAULT_CSS
         + """#trigger-form { padding: 0 0 0 4; } #trigger-form .form-label { width: 12; } #trigger-form .form-label-mid
-          { width: 9; } #trigger-form .insert-btn { margin: 0; padding: 0 1; } #trigger-cond-source { width: 22; }
+          { width: 9; } #trigger-form .insert-btn { margin-right: 1; padding: 0 1; } #trigger-cond-source { width: 22; }
           #trigger-cond-vital { width: 23; } #trigger-cond-op { width: 8; } #trigger-cond-val { width: 9; border: tall
           grey; } #trigger-cond-val:focus { border: tall $accent; } .command-text-area { height: 1fr; min-height: 3;
           }"""
@@ -121,6 +122,11 @@ class TriggerEditPane(client_tui_base.EditListPane):
                             cs.tooltip = "Case-sensitive pattern matching"
                             yield textual.widgets.Label("Case Sensitive:", classes="toggle-label")
                             yield cs
+                            yield textual.widgets.Label("", classes="toggle-gap")
+                            hide_sw = textual.widgets.Switch(value=False, id="trigger-hide-line")
+                            hide_sw.tooltip = "Hide matching lines from output"
+                            yield textual.widgets.Label("Hide Line:", classes="toggle-label")
+                            yield hide_sw
                         with textual.containers.Horizontal(classes="field-row"):
                             yield textual.widgets.Label("Pattern", classes="form-label-short")
                             yield textual.widgets.Input(placeholder="regex pattern", id="trigger-pattern")
@@ -254,6 +260,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
                     r.immediate,
                     r.last_fired,
                     r.case_sensitive,
+                    hide_line=r.hide_line,
                 )
                 for r in rules
             ]
@@ -289,6 +296,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
                         "A" if rule.always else "",
                         "I" if rule.immediate else "",
                         "C" if rule.case_sensitive else "",
+                        "H" if rule.hide_line else "",
                         "W" if rule.when else "",
                     ],
                 )
@@ -313,6 +321,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
         immediate: bool = False,
         last_fired: str = "",
         case_sensitive: bool = False,
+        hide_line: bool = False,
     ) -> None:
         self.query_one("#trigger-pattern", textual.widgets.Input).value = pattern_val
         self.query_one("#trigger-reply", textual.widgets.TextArea).text = reply_val
@@ -320,6 +329,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
         self.query_one("#trigger-enabled", textual.widgets.Switch).value = enabled
         self.query_one("#trigger-immediate", textual.widgets.Switch).value = immediate
         self.query_one("#trigger-case-sensitive", textual.widgets.Switch).value = case_sensitive
+        self.query_one("#trigger-hide-line", textual.widgets.Switch).value = hide_line
         cond_source, cond_vital, cond_op, cond_val = "", "", ">", "99"
         if when:
             vital = next(iter(when), "")
@@ -362,6 +372,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
         enabled = self.query_one("#trigger-enabled", textual.widgets.Switch).value
         immediate = self.query_one("#trigger-immediate", textual.widgets.Switch).value
         case_sensitive = self.query_one("#trigger-case-sensitive", textual.widgets.Switch).value
+        hide_line = self.query_one("#trigger-hide-line", textual.widgets.Switch).value
         cond_vital = self.query_one("#trigger-cond-vital", textual.widgets.Select).value
         cond_op = self.query_one("#trigger-cond-op", textual.widgets.Select).value
         cond_val = self.query_one("#trigger-cond-val", textual.widgets.Input).value.strip()
@@ -379,7 +390,9 @@ class TriggerEditPane(client_tui_base.EditListPane):
                 self.notify(f"Invalid regex: {exc}", severity="error")
                 return
         lf = self.rules[self.editing_idx].last_fired if self.editing_idx is not None else ""
-        entry = TriggerTuple(pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive)
+        entry = TriggerTuple(
+            pattern_val, reply_val, always, enabled, when, immediate, lf, case_sensitive, hide_line=hide_line
+        )
         self.finalize_edit(entry, bool(pattern_val))
 
     def on_select_changed(self, event: textual.widgets.Select.Changed) -> None:
@@ -424,6 +437,7 @@ class TriggerEditPane(client_tui_base.EditListPane):
                     immediate=t.immediate,
                     last_fired=t.last_fired,
                     case_sensitive=t.case_sensitive,
+                    hide_line=t.hide_line,
                 )
             )
         trigger.save_triggers(self.path, rules, self.session_key)

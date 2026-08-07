@@ -98,6 +98,8 @@ def build_telix_parser() -> argparse.ArgumentParser:
     parser.add_argument("--font-id", type=int, default=None, dest="font_id", help="font id for graphics rendering")
     parser.add_argument("--local-echo", action="store_true", default=False, dest="local_echo")
     parser.add_argument("--remote-echo", action="store_true", default=False, dest="remote_echo")
+    parser.add_argument("--on-connect", default="", dest="on_connect_command")
+    parser.add_argument("--gmcp-modules-extra", default="", dest="gmcp_modules_extra")
     return parser
 
 
@@ -176,6 +178,12 @@ def build_help_parser() -> argparse.ArgumentParser:
     conn.add_argument("--encoding", default="utf-8", help="encoding name (default: utf-8)")
     conn.add_argument("--encoding-errors", default="replace", help="handler for encoding errors (default: replace)")
     conn.add_argument("--gmcp-modules", metavar="MODULES", help="comma-separated list of GMCP modules to request")
+    conn.add_argument(
+        "--gmcp-modules-extra",
+        metavar="MODULES",
+        default="",
+        help="comma-separated GMCP modules appended to the defaults (weaker than --gmcp-modules)",
+    )
     conn.add_argument("--line-mode", action="store_true", help="force line-mode input (default: auto-detect)")
     conn.add_argument("--logfile", metavar="FILE", help="write log to FILE")
     conn.add_argument(
@@ -186,6 +194,9 @@ def build_help_parser() -> argparse.ArgumentParser:
     )
     conn.add_argument("--loglevel", help="logging level (default: warn)")
     conn.add_argument("--no-repl", action="store_true", help="disable the interactive REPL (raw I/O only)")
+    conn.add_argument(
+        "--on-connect", metavar="CMD", help="commands to execute after connection, e.g. `async discworld_rooms`"
+    )
     conn.add_argument("--raw-mode", action="store_true", help="force raw-mode input (default: auto-detect)")
     conn.add_argument(
         "--send-environ", metavar="VARS", help="comma-separated environment variables to send via NEW-ENVIRON"
@@ -346,6 +357,10 @@ def handle_websocket(server_type: str) -> None:
     always_dont = parse_option_list(args.always_dont)
     always_wont = parse_option_list(args.always_wont)
     gmcp_modules = [m.strip() for m in args.gmcp_modules.split(",") if m.strip()] if args.gmcp_modules else None
+    if gmcp_modules is None:
+        gmcp_extra = [m.strip() for m in args.gmcp_modules_extra.split(",") if m.strip()]
+        if gmcp_extra:
+            gmcp_modules = list(telnetlib3.client._DEFAULT_GMCP_MODULES) + gmcp_extra
     send_environ = tuple(e.strip() for e in args.send_environ.split(",") if e.strip()) if args.send_environ else None
     run_connection(
         ws_client.run_ws_client,
@@ -486,6 +501,13 @@ def main() -> None:
 
     # Parse and strip telix-specific flags so telnetlib3 doesn't see them.
     telix_args = strip_telix_args()
+
+    if "--gmcp-modules" not in sys.argv:
+        gmcp_extra = [m.strip() for m in telix_args.gmcp_modules_extra.split(",") if m.strip()]
+        if gmcp_extra:
+            gmcp_modules = list(telnetlib3.client._DEFAULT_GMCP_MODULES) + gmcp_extra
+            sys.argv.extend(["--gmcp-modules", ",".join(gmcp_modules)])
+
     config = TelixConfig.from_args(telix_args, echo_mode=resolve_echo_mode(telix_args))
 
     # Inject the telix shell so telnetlib3 uses our REPL-aware shell.

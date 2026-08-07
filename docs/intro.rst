@@ -96,14 +96,14 @@ For a full list of CLI options:
                  [--always-wont OPT] [--ansi-keys] [--ascii-eol] [--compression]
                  [--connect-maxwait N] [--connect-minwait N] [--connect-timeout N]
                  [--encoding ENCODING] [--encoding-errors ENCODING_ERRORS]
-                 [--gmcp-modules MODULES] [--line-mode] [--logfile FILE]
-                 [--logfile-mode {append,rewrite}] [--loglevel LOGLEVEL]
-                 [--no-repl] [--raw-mode] [--send-environ VARS] [--shell SHELL]
-                 [--speed N] [--ssl] [--ssl-cafile PATH] [--ssl-no-verify]
-                 [--term TERM] [--typescript FILE]
-                 [--typescript-mode {append,rewrite}] [--key-file FILE]
-                 [--username USER] [--background-color COLOR] [--bbs]
-                 [--color-brightness N] [--color-contrast N]
+                 [--gmcp-modules MODULES] [--gmcp-modules-extra MODULES]
+                 [--line-mode] [--logfile FILE] [--logfile-mode {append,rewrite}]
+                 [--loglevel LOGLEVEL] [--no-repl] [--on-connect CMD] [--raw-mode]
+                 [--send-environ VARS] [--shell SHELL] [--speed N] [--ssl]
+                 [--ssl-cafile PATH] [--ssl-no-verify] [--term TERM]
+                 [--typescript FILE] [--typescript-mode {append,rewrite}]
+                 [--key-file FILE] [--username USER] [--background-color COLOR]
+                 [--bbs] [--color-brightness N] [--color-contrast N]
                  [--colormatch PALETTE] [--mud] [--clear-homes-cursor]
                  [--ff-clears-screen] [--graphics-font [MODE]]
                  [--graphics-columns N] [--graphics-rows N] [--no-ice-colors]
@@ -144,12 +144,17 @@ For a full list of CLI options:
                             handler for encoding errors (default: replace)
       --gmcp-modules MODULES
                             comma-separated list of GMCP modules to request
+      --gmcp-modules-extra MODULES
+                            comma-separated GMCP modules appended to the defaults
+                            (weaker than --gmcp-modules)
       --line-mode           force line-mode input (default: auto-detect)
       --logfile FILE        write log to FILE
       --logfile-mode {append,rewrite}
-                            log file write mode (default: append)
+                            log file write mode (default: rewrite)
       --loglevel LOGLEVEL   logging level (default: warn)
       --no-repl             disable the interactive REPL (raw I/O only)
+      --on-connect CMD      commands to execute after connection, e.g. `async
+                            discworld_rooms`
       --raw-mode            force raw-mode input (default: auto-detect)
       --send-environ VARS   comma-separated environment variables to send via NEW-
                             ENVIRON

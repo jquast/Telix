@@ -12,6 +12,7 @@ import asyncio
 import logging
 import threading
 from typing import Any
+from collections.abc import Callable
 
 # 3rd party
 import pytest
@@ -52,7 +53,7 @@ from telix.client_repl import (
 from telix.highlighter import RE_FLAGS, HighlightRule
 from telix.session_context import CommandQueue, TelixSessionContext
 from telix.client_repl_render import SEXTANT, scramble_password
-from telix.client_repl_travel import MAX_STUCK_RETRIES
+from telix.client_repl_travel import RECOVERY_LIMIT, MAX_STUCK_RETRIES
 from telix.client_repl_commands import (
     StepResult,
     DispatchHooks,
@@ -187,8 +188,16 @@ def test_scramble_password_per_char_replacement() -> None:
 def scaffold_env(handler=None):
     """Build writer, stdout, term for repl_scaffold tests."""
     pytest.importorskip("blessed")
+    from telnetlib3.telopt import NAWS
+
     writer = mock_writer()
     writer.handle_send_naws = handler or (lambda: (24, 80))
+    writer._ext_send_callback = {NAWS: writer.handle_send_naws}
+
+    def set_ext_send_callback(cmd, func):
+        writer._ext_send_callback[cmd] = func
+
+    writer.set_ext_send_callback = set_ext_send_callback
     writer.local_option = types.SimpleNamespace(enabled=lambda _: False)
     writer.is_closing = lambda: False
     stdout, transport = mock_stdout()
@@ -206,6 +215,54 @@ async def test_adjusted_naws_active_scroll() -> None:
         assert isinstance(result, tuple)
         assert len(result) == 2
         assert result[0] == scroll.scroll_rows
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_active_scroll() -> None:
+    """Telnet _send_naws() uses _ext_send_callback[NAWS], not handle_send_naws."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    async with repl_scaffold(writer, term, stdout) as (scroll, _):
+        result = writer._ext_send_callback[NAWS]()
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == scroll.scroll_rows
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_restored_on_exception() -> None:
+    """_ext_send_callback[NAWS] is restored even if repl_scaffold body raises."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    orig_callback = writer._ext_send_callback[NAWS]
+
+    with pytest.raises(RuntimeError, match="injected"):
+        async with repl_scaffold(writer, term, stdout):
+            raise RuntimeError("injected")
+
+    assert writer._ext_send_callback[NAWS] is orig_callback
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_adjusted_naws_telnet_callback_restored_on_normal_exit() -> None:
+    """_ext_send_callback[NAWS] is restored after normal scaffold exit."""
+    from telnetlib3.telopt import NAWS
+
+    writer, stdout, _, term = scaffold_env()
+
+    orig_callback = writer._ext_send_callback[NAWS]
+
+    async with repl_scaffold(writer, term, stdout) as (scroll, rc):
+        assert writer._ext_send_callback[NAWS] is not orig_callback
+
+    assert writer._ext_send_callback[NAWS] is orig_callback
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -516,7 +573,10 @@ class DynamicRoomState:
             val = next(seq_iter, None)
             if val is not None:
                 object.__setattr__(self, "room_val", val)
-        return object.__getattribute__(self, "room_val")
+        room_val = object.__getattribute__(self, "room_val")
+        if room_val:
+            return room_val
+        return object.__getattribute__(self, "_real").current
 
     @current.setter
     def current(self, value: str) -> None:
@@ -582,15 +642,17 @@ class WalkWriter:
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_stuck_room_stops(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """After 3 consecutive failed moves, randomwalk marks exits exhausted and stops."""
+    """After MAX_STUCK_RETRIES per recovery cycle and RECOVERY_LIMIT full clears, randomwalk stops."""
     adj: dict[str, dict[str, str]] = {"room1": {"north": "room2"}}
     writer = WalkWriter(room_num="room1", adj=adj)
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50)
 
     retry_msgs = [m for m in writer.echo_log if "temporarily blocked" in m]
-    assert len(retry_msgs) == MAX_STUCK_RETRIES
-    stop_msgs = [m for m in writer.echo_log if "all exits blocked, stopping" in m]
+    assert len(retry_msgs) == MAX_STUCK_RETRIES * (RECOVERY_LIMIT + 1)
+    recovery_msgs = [m for m in writer.echo_log if "recovering" in m]
+    assert len(recovery_msgs) == RECOVERY_LIMIT
+    stop_msgs = [m for m in writer.echo_log if "recovery limit reached, stopping" in m]
     assert len(stop_msgs) == 1
     assert not writer.ctx.walk.randomwalk_active
 
@@ -640,7 +702,41 @@ async def test_randomwalk_resets_stuck_on_success(monkeypatch: pytest.MonkeyPatc
 
     no_change_msgs = [m for m in writer.echo_log if "no room change" in m]
     assert len(no_change_msgs) >= 1
-    assert ("room1", "north") in writer.ctx.walk.blocked_exits
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "task_field, msg_prefix",
+    [("discover_task", "AUTODISCOVER"), ("randomwalk_task", "RANDOMWALK"), ("travel_task", "TRAVEL")],
+)
+async def test_cancel_walks_on_keypress(task_field, msg_prefix) -> None:
+    """Any keypress cancels an active walk and echoes the appropriate message."""
+    echo_log: list[str] = []
+
+    async def walk_task() -> None:
+        await asyncio.sleep(100)
+
+    task = asyncio.ensure_future(walk_task())
+    await asyncio.sleep(0)
+    walk_kw = {
+        "discover_task": None,
+        "randomwalk_task": None,
+        "travel_task": None,
+        "walk_cancelled_by_input": False,
+        "cancel_event": asyncio.Event(),
+    }
+    walk_kw[task_field] = task
+    walk_state = types.SimpleNamespace(**walk_kw)
+    mock_self = types.SimpleNamespace(
+        ctx=types.SimpleNamespace(prompt=types.SimpleNamespace(echo=echo_log.append), walk=walk_state),
+        trigger_engine=None,
+        log=logging.getLogger("test"),
+    )
+    ReplSession.cancel_walks_on_keypress(mock_self)
+    await asyncio.sleep(0)
+    assert task.cancelled()
+    assert f"{msg_prefix}: cancelled by input" in echo_log
+    assert walk_state.walk_cancelled_by_input is True
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1188,7 +1284,6 @@ async def test_randomwalk_blocked_exit_tries_other_direction(monkeypatch: pytest
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
 
-    assert ("room1", "north") in writer.ctx.walk.blocked_exits
     assert "room3" in writer.ctx.walk.last_walk_visited
 
 
@@ -1365,7 +1460,7 @@ async def test_randomwalk_noncardinal_deprioritized(monkeypatch: pytest.MonkeyPa
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """With visit_level=2 the walk continues until every room is visited twice."""
+    """With visit_level=2 the walk continues past single visits until bounce/limit."""
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1375,10 +1470,6 @@ async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_slee
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50, visit_level=2)
 
-    visited_msgs = [m for m in writer.echo_log if "reachable rooms visited" in m]
-    assert len(visited_msgs) == 1
-    assert "2x" in visited_msgs[0]
-
     sent_dirs = [s.decode("utf-8").strip() if isinstance(s, bytes) else s.strip() for s in writer.sent]
     assert len(sent_dirs) >= 4
 
@@ -1386,7 +1477,7 @@ async def test_randomwalk_visit_level(monkeypatch: pytest.MonkeyPatch, fast_slee
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_visit_level_1(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """With visit_level=1 the walk stops after visiting each room once."""
+    """With visit_level=1 the walk still explores until bounce/limit."""
     adj: dict[str, dict[str, str]] = {
         "room1": {"north": "room2"},
         "room2": {"south": "room1", "east": "room3"},
@@ -1395,10 +1486,6 @@ async def test_randomwalk_visit_level_1(monkeypatch: pytest.MonkeyPatch, fast_sl
     writer = TrackingWalkWriter(room_num="room1", adj=adj, blocked_directions=set())
 
     await randomwalk(writer.ctx, logging.getLogger("test"), limit=50, visit_level=1)
-
-    visited_msgs = [m for m in writer.echo_log if "reachable rooms visited" in m]
-    assert len(visited_msgs) == 1
-    assert "1x" in visited_msgs[0]
 
     sent_dirs = [s.decode("utf-8").strip() if isinstance(s, bytes) else s.strip() for s in writer.sent]
     assert len(sent_dirs) >= 2
@@ -1435,16 +1522,19 @@ async def test_randomwalk_skips_blocked_rooms(monkeypatch: pytest.MonkeyPatch, f
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
 @pytest.mark.asyncio
 async def test_randomwalk_same_hash_rooms(monkeypatch: pytest.MonkeyPatch, fast_sleep) -> None:
-    """Randomwalk detects arrival via room_changed event even when room ID is unchanged."""
+    """Same-hash rooms report no room change and trigger recovery instead of bounce."""
     adj: dict[str, dict[str, str]] = {"same": {"north": "same", "south": "same"}}
     writer = TrackingWalkWriter(room_num="same", adj=adj, blocked_directions=set())
-    writer.ctx.room.arrival_timeout = 1.0
+    writer.ctx.room.arrival_timeout = 0.005
 
-    await randomwalk(writer.ctx, logging.getLogger("test"), limit=5)
+    await randomwalk(writer.ctx, logging.getLogger("test"), limit=35)
 
     no_change = [m for m in writer.echo_log if "no room change" in m]
-    assert len(no_change) == 0
-    assert len(writer.sent) >= 4
+    assert len(no_change) > 5
+    recovery_msgs = [m for m in writer.echo_log if "recovering" in m]
+    assert len(recovery_msgs) >= RECOVERY_LIMIT
+    stop_msgs = [m for m in writer.echo_log if "recovery limit reached" in m]
+    assert len(stop_msgs) == 1
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1467,7 +1557,14 @@ async def test_home_travel_command(monkeypatch: pytest.MonkeyPatch, fast_sleep) 
     parts = ["`home`"]
     remainder = await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
     assert remainder == []
-    assert len(fast_travel_args) == 1
+    # fast_travel is launched as a background task; verify it was created.
+    assert writer.ctx.walk.travel_task is not None
+    writer.ctx.walk.travel_task.cancel()
+    # Suppress CancelledError noise in the event loop.
+    try:
+        await writer.ctx.walk.travel_task
+    except asyncio.CancelledError:
+        pass
 
 
 class MockHighlightEngine:
@@ -1583,6 +1680,101 @@ class TestLineHoldBuffer:
         assert buf.pending == "hello"
         buf.flush_raw()
         assert buf.pending == ""
+
+
+class TestLineHoldBufferHide:
+    """LineHoldBuffer with hide_checker."""
+
+    def make_buf(self, hide: Callable[[str], bool] | None = None):
+        engine = MockHighlightEngine()
+        return LineHoldBuffer(lambda: engine, hide_checker=hide)
+
+    def test_hide_checker_none(self) -> None:
+        buf = self.make_buf(None)
+        emit, held = buf.add("hello\n")
+        assert emit == "[hello]\n"
+        assert held == ""
+
+    def test_hide_checker_matches_hides_line(self) -> None:
+        def hide(stripped: str) -> bool:
+            return "hide" in stripped or "MORE" in stripped
+
+        buf = self.make_buf(hide)
+        emit, held = buf.add("--- MORE (89%) - press return, h for help.\n")
+        assert emit == ""
+        assert held == ""
+
+    def test_hide_checker_non_matching_passes(self) -> None:
+        def hide(stripped: str) -> bool:
+            return "hide" in stripped or "MORE" in stripped
+
+        buf = self.make_buf(hide)
+        emit, held = buf.add("visible line here\n")
+        assert emit == "[visible line here]\n"
+        assert held == ""
+
+    def test_hide_checker_mixed_lines(self) -> None:
+        def hide(stripped: str) -> bool:
+            return "MORE" in stripped
+
+        buf = self.make_buf(hide)
+        emit, held = buf.add("visible1\n--- MORE (50%) ---\nvisible2\n")
+        assert "visible1" in emit
+        assert "visible2" in emit
+        assert "MORE" not in emit
+
+    def test_hide_checker_incomplete_line_not_hidden(self) -> None:
+        """Hide checker only applies to complete lines, not the held-back fragment."""
+
+        def hide(stripped: str) -> bool:
+            return "hide" in stripped
+
+        buf = self.make_buf(hide)
+        emit, held = buf.add("visible\nwaiting for more info")
+        assert emit == "[visible]\n"
+        assert held == "waiting for more info"
+
+    def test_hide_checker_flush_for_prompt(self) -> None:
+        def hide(stripped: str) -> bool:
+            return "hide" in stripped
+
+        buf = self.make_buf(hide)
+        buf.add("this line hides the output")
+        text = buf.flush_for_prompt()
+        assert text == ""
+        assert buf.pending == ""
+
+    def test_hide_checker_strips_cr_before_matching(self) -> None:
+        """Trailing \\r is stripped before the hide checker sees the line."""
+        pat = re.compile(r"help\.?$", re.IGNORECASE)
+        buf = self.make_buf(hide=lambda s: pat.search(s) is not None)
+        text = "Help text ends with help.\r\n"
+        emit, held = buf.add(text)
+        assert emit == ""
+        assert held == ""
+
+    def test_feed_text_preserved_when_line_hidden(self) -> None:
+        """feed_text returns the raw text even when lines are hidden from display."""
+
+        def hide(stripped: str) -> bool:
+            return "HIDE" in stripped
+
+        buf = self.make_buf(hide)
+        buf.add("visible\nthis should be HIDEden\nmore visible\n")
+        assert "visible" in buf.feed_text
+        assert "HIDE" in buf.feed_text
+
+    def test_feed_text_after_flush_for_prompt(self) -> None:
+        """flush_for_prompt sets feed_text to the raw held text."""
+
+        def hide(stripped: str) -> bool:
+            return "HIDE" in stripped
+
+        buf = self.make_buf(hide)
+        buf.add("visible\npending HIDE")
+        held_text = buf.flush_for_prompt()
+        assert held_text == ""
+        assert "pending HIDE" in buf.feed_text
 
 
 def test_typescript_file_default_none() -> None:
@@ -1794,6 +1986,8 @@ async def test_handle_travel_noreply_parsed(monkeypatch: pytest.MonkeyPatch, fas
 
     parts = ["`autodiscover noreply`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert len(captured_kw) == 1
     assert captured_kw[0]["noreply"] is True
@@ -1813,6 +2007,43 @@ async def test_randomwalk_noreply_disables_engine(monkeypatch: pytest.MonkeyPatc
 
     assert engine.enabled is True
     assert writer.ctx.walk.last_walk_noreply is True
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_randomwalk_falls_back_to_current_file(tmp_path, monkeypatch, fast_sleep) -> None:
+    """When ctx.room.current is empty, randomwalk reads current from disk."""
+    room_file = tmp_path / "current_room"
+    room_file.write_text("room1")
+    adj = {"room1": {"north": "room2"}}
+    writer = WalkWriter(room_num="", adj=adj)
+    writer.ctx.room.current_file = str(room_file)
+
+    await randomwalk(writer.ctx, logging.getLogger("test"), limit=1)
+
+    assert "no room data" not in " ".join(writer.echo_log)
+    assert writer.ctx.room.current == "room1"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
+@pytest.mark.asyncio
+async def test_autodiscover_falls_back_to_current_file(tmp_path, monkeypatch, fast_sleep) -> None:
+    """When ctx.room.current is empty, autodiscover reads current from disk."""
+    room_file = tmp_path / "current_room"
+    room_file.write_text("room1")
+    adj = {"room1": {"north": "room2"}, "room2": {"south": "room1"}}
+    writer = WalkWriter(room_num="", adj=adj)
+    writer.ctx.room.current_file = str(room_file)
+
+    async def fake_fast_travel(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("telix.client_repl_travel.fast_travel", fake_fast_travel)
+
+    await autodiscover(writer.ctx, logging.getLogger("test"), limit=1)
+
+    assert "no room data" not in " ".join(writer.echo_log)
+    assert writer.ctx.room.current == "room1"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only")
@@ -1855,6 +2086,8 @@ async def test_resume_inherits_noreply(monkeypatch: pytest.MonkeyPatch, fast_sle
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_noreply == [True]
 
@@ -1878,6 +2111,8 @@ async def test_resume_inherits_room_change_cmd(monkeypatch, fast_sleep):
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_kw.get("room_change_cmd") == "`await fremen.hunt`"
 
@@ -1922,6 +2157,8 @@ async def test_resume_inherits_visit_level(monkeypatch, fast_sleep):
 
     parts = ["`resume`"]
     await handle_travel_commands(parts, writer.ctx, logging.getLogger("test"))
+    # Walk is launched as a background task; yield to let it run.
+    await asyncio.sleep(0)
 
     assert captured_kw.get("visit_level") == 5
 
@@ -2028,6 +2265,7 @@ async def test_read_input_password_no_command_expansion(monkeypatch: pytest.Monk
     repl.history_file = None
     repl.replay_buf = []
     repl.ctx = TelixSessionContext()
+    repl.log = logging.getLogger("test")
     repl.tty_shell = types.SimpleNamespace(_resize_pending=types.SimpleNamespace(is_set=lambda: False))
 
     def fake_write(data):
@@ -2279,7 +2517,7 @@ async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol,
     repl.stdout = stdout
     repl.dialogs_mod = types.SimpleNamespace(subprocess_is_active=False, subprocess_buffer=[])
     repl.line_hold = types.SimpleNamespace(
-        add=lambda text: line_hold_calls.append(text) or ("", ""), flush_raw=lambda: ""
+        add=lambda text: line_hold_calls.append(text) or ("", ""), flush_raw=lambda: "", feed_text=""
     )
     repl.refresh_trigger_engine = lambda: None
     repl.refresh_highlight_engine = lambda: None

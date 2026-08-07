@@ -207,16 +207,17 @@ async def test_hello_uses_custom_modules():
     transport.data.clear()
     client.writer.handle_will(GMCP)
     data = bytes(transport.data)
-    assert b"IRE.Rift 1" in data
+    assert b"ire.rift 1" in data
 
 
 @pytest.mark.asyncio
-async def test_no_hello_without_always_do():
+async def test_hello_with_passive_do():
+    """Hello is sent even without ``always_do`` because GMCP has ``passive_do``."""
     client, transport = make_connected_client()
     transport.data.clear()
     client.writer.handle_will(GMCP)
     data = bytes(transport.data)
-    assert b"Core.Hello" not in data
+    assert b"Core.Hello" in data
 
 
 def test_gmcp_modules_cli_flag():

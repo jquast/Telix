@@ -9,11 +9,11 @@ from collections.abc import Callable, Awaitable
 import telnetlib3.stream_writer
 import telnetlib3._session_context  # pylint: disable=no-name-in-module
 
-from . import mslp, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
+from . import mslp, rooms, macros, trigger, ws_transport, gmcp_snapshot, raw_transport, ssh_transport
 from .telix_config import TelixConfig
 
 if typing.TYPE_CHECKING:
-    from . import rooms, highlighter, progressbars
+    from . import highlighter, progressbars
 
 
 class CommandQueue:
@@ -35,10 +35,23 @@ class RoomState:
     graph: "rooms.RoomStore | None" = None
     file: str = ""
     current_file: str = ""
-    current: str = ""
+    _current: str = dataclasses.field(default="", repr=False)
     previous: str = ""
     arrival_timeout: float = 3.0
     changed: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+    contents_buf: str = ""
+
+    @property
+    def current(self) -> str:
+        if not self._current and self.current_file:
+            val = rooms.read_current_room(self.current_file)
+            if val:
+                self._current = val
+        return self._current
+
+    @current.setter
+    def current(self, value: str) -> None:
+        self._current = value
 
 
 @dataclasses.dataclass
@@ -58,6 +71,25 @@ class WalkState:
     await_script: str = ""
     active_command: str | None = None
     active_command_time: float = 0.0
+    # FIFO of (direction, monotonic-time) pairs sent by walk systems
+    # whose room change has not yet been observed.  The server may
+    # queue movement commands (Discworld can take minutes to complete a
+    # burst), so multiple responses can arrive long after their commands
+    # were sent.  The Nth room change corresponds to the Nth oldest
+    # pending direction, not to whatever active_command happens to hold
+    # when the GMCP Room.Info arrives.  on_room_info pops the oldest
+    # live entry and attributes the edge to it, preventing wrong-
+    # direction edges.  Entries older than a stale bound (a move that
+    # was genuinely blocked never produces a room change) are discarded
+    # so they cannot misattribute a later room change.
+    pending_directions: collections.deque[tuple[str, float]] = dataclasses.field(default_factory=collections.deque)
+    # Direction on_room_info most recently consumed from pending_directions
+    # (or active_command when the FIFO was empty).  Walk loops compare
+    # this against their current step's direction: when they differ, the
+    # observed room change was the delayed response to an older queued
+    # command, so the walk must not attribute or correct the edge for
+    # its own step's direction.
+    last_consumed_direction: str | None = None
     blocked_exits: set[tuple[str, str]] = dataclasses.field(default_factory=set)
     macro_start_room: str = ""
     last_walk_mode: str = ""
@@ -69,6 +101,17 @@ class WalkState:
     last_walk_visited: set[str] = dataclasses.field(default_factory=set)
     last_walk_tried: set[tuple[str, str]] = dataclasses.field(default_factory=set)
     command_delay: float = 0.0
+    # Set momentarily by cancel_walks_on_keypress() so that walk-starting
+    # code (dispatch actions, macro handlers) triggered by the same keypress
+    # does not launch a new walk after cancelling the current one.
+    walk_cancelled_by_input: bool = False
+    # Event-based cancellation signal for fast_travel/autodiscover/randomwalk.
+    # Set by cancel_walks_on_keypress(), checked between loop iterations.
+    cancel_event: "asyncio.Event" = dataclasses.field(default_factory=asyncio.Event)
+    # Lock acquired by scripts while processing the current room (e.g.
+    # combat/evaluation cycles).  Walk systems check this before moving
+    # to the next room and yield until the script releases the lock.
+    busy_lock: "asyncio.Lock" = dataclasses.field(default_factory=asyncio.Lock)
 
 
 @dataclasses.dataclass
@@ -124,6 +167,7 @@ class GmcpState:
     on_room_info: typing.Any | None = None
     package_events: dict[str, asyncio.Event] = dataclasses.field(default_factory=dict)
     any_update: asyncio.Event = dataclasses.field(default_factory=asyncio.Event)
+    script_callbacks: dict[str, list[Callable[..., None]]] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -165,6 +209,9 @@ class PromptState:
     echo: typing.Any | None = None
     ready: typing.Any | None = None
     repaint_input: typing.Any | None = None
+    pending_echo: list[str] = dataclasses.field(default_factory=list)
+    script_echo: typing.Any | None = None
+    pending_script_echo: list[str] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -294,7 +341,7 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
     ) -> "TelixSessionContext":
         # writer: ws_transport.WebSocketWriter
         """Class factory method, makes TelixSessionContext from TelnetSessionContext."""
-        return cls(
+        ctx = cls(
             session_key,
             writer,
             encoding,
@@ -308,6 +355,8 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             gmcp_data=writer.ctx.gmcp_data,
             color_args=getattr(writer.ctx, "color_args", None),
         )
+        ctx.zmp_data = writer.ctx.zmp_data
+        return ctx
 
     def mark_macros_dirty(self) -> None:
         """Mark macros as needing a save and schedule a debounced flush."""
@@ -366,6 +415,9 @@ class TelixSessionContext(telnetlib3._session_context.TelnetSessionContext):
             self.save_timer = None
         self.flush_timestamps()
         if self.room.graph is not None:
+            if self.room.current and self.room.contents_buf:
+                self.room.graph.save_room_contents(self.room.current, self.room.contents_buf)
+                self.room.contents_buf = ""
             self.room.graph.close()
             self.room.graph = None
         self.typescript_file = None

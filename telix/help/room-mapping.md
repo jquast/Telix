@@ -85,3 +85,4 @@ fire in each room along the path unless `noreply` is given.
 Use `` `return [noreply]` `` to travel back to the room where the
 current macro started, or `` `home` `` to travel to the home room of
 the current area.
+

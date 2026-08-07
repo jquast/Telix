@@ -268,6 +268,29 @@ class TestServerTypePresets:
 
         assert captured == [["Core.Supports", "Char.Vitals"]]
 
+    def test_gmcp_modules_extra_injects_modules_for_telnet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--gmcp-modules-extra injects --gmcp-modules with defaults+extra for telnet."""
+        monkeypatch.setattr(sys, "argv", ["telix", "--gmcp-modules-extra=room.writtenmap 1", "mud.example.com"])
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        assert "--gmcp-modules" in sys.argv
+        modules_idx = sys.argv.index("--gmcp-modules")
+        modules_value = sys.argv[modules_idx + 1]
+        assert "room.writtenmap 1" in modules_value
+        assert "room 1" in modules_value
+        assert "char 1" in modules_value
+
+    def test_gmcp_modules_extra_not_injected_when_gmcp_modules_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """--gmcp-modules-extra is ignored when --gmcp-modules is already set."""
+        monkeypatch.setattr(
+            sys, "argv", ["telix", "--gmcp-modules=Char 1", "--gmcp-modules-extra=room.writtenmap 1", "mud.example.com"]
+        )
+        with patch("telix.main.asyncio.run"), patch("telix.main.telnetlib3.client.run_client"):
+            main()
+        modules_count = sys.argv.count("--gmcp-modules")
+        assert modules_count == 1
+        assert "room.writtenmap 1" not in sys.argv
+
     def test_bbs_flag_removed_from_argv(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--bbs is removed from sys.argv before telnetlib3 parses it."""
         monkeypatch.setattr(sys, "argv", ["telix", "--bbs", "bbs.example.com"])

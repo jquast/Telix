@@ -375,6 +375,40 @@ def test_gmcp_package_normalization(raw, expected):
     assert ".".join(seg.title() for seg in raw.split(".")) == expected
 
 
+class TestTelnetZMPDispatch:
+    def test_zmp_callback_wired(self):
+        """telix_client_shell wires ZMP ext callback on the telnet writer."""
+        import telnetlib3.telopt
+        from telnetlib3.stream_writer import TelnetWriterUnicode
+
+        writer = TelnetWriterUnicode.__new__(TelnetWriterUnicode)
+        writer._ext_callback = {}
+        ctx = TelixSessionContext(session_key="test:23")
+        ctx.writer = writer
+        ctx.zmp_data = getattr(writer, "zmp_data", [])
+
+        base_on_zmp = writer._ext_callback.get(telnetlib3.telopt.ZMP)
+
+        def on_zmp(command: str, *args: str) -> None:
+            if base_on_zmp is not None:
+                base_on_zmp(command, *args)
+
+        writer.set_ext_callback(telnetlib3.telopt.ZMP, on_zmp)
+        assert telnetlib3.telopt.ZMP in writer._ext_callback
+
+    def test_zmp_data_references_writer_ctx(self):
+        """TelixSessionContext.zmp_data references writer.ctx.zmp_data."""
+        from unittest.mock import MagicMock
+
+        writer = MagicMock()
+        writer.ctx.zmp_data = {"char.vitals": ["100"]}
+        ctx = TelixSessionContext(session_key="test:23")
+        ctx.writer = writer
+        ctx.zmp_data = writer.ctx.zmp_data
+        assert ctx.zmp_data == {"char.vitals": ["100"]}
+        assert ctx.zmp_data is writer.ctx.zmp_data
+
+
 class TestWsClientShellTypescript:
     """ws_client_shell opens a typescript file from initial ctx and closes it in finally."""
 

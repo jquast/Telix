@@ -100,6 +100,14 @@ class TelixClient(telnetlib3.client.TelnetClient):
     ttype_factory: Callable[[], str] | None = None
     mnes_env: dict[str, str] | None = None
     gmcp_hello: dict[str, str] | None = None
+    _zmp_supported_commands: set[str] = {
+        "char.login",
+        "char.info",
+        "char.vitals",
+        "room.info",
+        "room.map",
+        "room.writtenmap",
+    }
 
     def send_ttype(self) -> str:
         """Cycle TTYPE responses per MTTS protocol when a factory is set."""
@@ -119,16 +127,36 @@ class TelixClient(telnetlib3.client.TelnetClient):
                 env.update(self.mnes_env)
         return env
 
-    def _send_gmcp_hello(self) -> None:
+    def send_gmcp_hello(self) -> None:
         """Send Core.Hello identifying Telix instead of telnetlib3."""
         if self._gmcp_hello_sent:
             return
         self._gmcp_hello_sent = True
         hello = self.gmcp_hello or {"client": "Telix", "version": version}
+        modules = [m.lower() for m in self._gmcp_modules]
 
         self.writer.send_gmcp("Core.Hello", hello)
-        self.writer.send_gmcp("Core.Supports.Set", self._gmcp_modules)
-        self.log.info("GMCP handshake: Core.Hello + Core.Supports.Set %s", self._gmcp_modules)
+        self.writer.send_gmcp("Core.Supports.Set", modules)
+        self.log.info("GMCP handshake: Core.Hello + Core.Supports.Set %s", modules)
+
+    def zmp_check(self, cmd: str) -> bool:
+        """Accept all ZMP commands."""
+        return True
+
+    def setup_zmp(self) -> None:
+        """Wire ZMP and populate supported commands before handshake."""
+        self._zmp_supported_commands = self.__class__._zmp_supported_commands.copy()
+        super().setup_zmp()
+
+    def send_zmp_ident(self) -> None:
+        """Send ``zmp.ident`` identifying Telix instead of telnetlib3."""
+        if self._zmp_ident_sent:
+            return
+        self._zmp_ident_sent = True
+        self.writer.send_zmp("zmp.ident", "Telix", version)
+        self.log.info("ZMP handshake: zmp.ident Telix %s", version)
+        for cmd in sorted(self._zmp_supported_commands):
+            self.writer.send_zmp("zmp.support", cmd)
 
 
 class TelixTerminalClient(TelixClient, telnetlib3.client.TelnetTerminalClient):

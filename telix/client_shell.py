@@ -16,11 +16,13 @@ import io
 import os
 import re
 import sys
+import time
 import shlex
 import codecs
 import typing
 import asyncio
 import logging
+import pathlib
 import contextlib
 
 # 3rd party
@@ -47,6 +49,7 @@ from . import (
     raw_transport,
     ssh_transport,
     session_context,
+    client_repl_commands,
 )
 from .telix_config import TelixConfig
 
@@ -104,6 +107,33 @@ def _apply_atascii_return(stdin: typing.Any) -> None:
         return data.replace(b"\r", b"\x9b")
 
     stdin.read = _cr_to_atascii_eol  # type: ignore[method-assign]
+
+
+def consume_edge_direction(walk: typing.Any, log: logging.Logger) -> str | None:
+    """
+    Pick the direction to attribute a room change to.
+
+    The server may queue movement commands and respond slowly, so a room change can arrive long after its command was
+    sent, while newer commands are already in flight.  The Nth room change is the response to the Nth oldest sent
+    command, so the oldest live pending direction is consumed; when no walk command is outstanding, the current
+    active_command is used instead.
+
+    :param walk: The session WalkState.
+    :param log: Logger.
+    :returns: Direction to record the edge under, or None.
+    """
+    direction = walk.active_command
+    if walk.pending_directions:
+        now = time.monotonic()
+        while walk.pending_directions:
+            pending_dir, pending_time = walk.pending_directions[0]
+            if now - pending_time <= PENDING_COMMAND_STALE:
+                break
+            log.debug("room_info: dropping stale pending command %r", pending_dir)
+            walk.pending_directions.popleft()
+        if walk.pending_directions:
+            direction = walk.pending_directions.popleft()[0]
+    return direction
 
 
 def load_configs(ctx: "session_context.TelixSessionContext") -> None:
@@ -164,10 +194,44 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
         num = rooms.room_id(data)
         if num is None:
             return
-        ctx.room.previous = ctx.room.current
+        prev = ctx.room.current
+        ctx.room.previous = prev
         ctx.room.current = num
+
+        if prev and num and num != prev and ctx.room.contents_buf:
+            graph_ = ctx.room.graph
+            if graph_ is not None:
+                graph_.save_room_contents(prev, ctx.room.contents_buf)
+                log.debug("room_info: saved %d chars of contents for %s", len(ctx.room.contents_buf), prev[:8])
+            ctx.room.contents_buf = ""
+
+        # If the player moved from a known room (prev) to a different room
+        # (num), and we know what direction was just sent, record the real
+        # edge in both the in-memory adjacency cache and the database so
+        # it survives Writtenmap re-processing (which would otherwise
+        # overwrite with "1" placeholders) and carries across sessions.
+        if prev and num and num != prev:
+            direction = consume_edge_direction(ctx.walk, log)
+            ctx.walk.last_consumed_direction = direction
+            if direction:
+                graph_ = ctx.room.graph
+                if graph_ is not None:
+                    graph_.adj.setdefault(prev, {})[direction] = num
+                    graph_.conn.execute(
+                        "INSERT INTO exit (src_num, direction, dst_num)"
+                        " VALUES (?, ?, ?)"
+                        " ON CONFLICT(src_num, direction)"
+                        " DO UPDATE SET dst_num=excluded.dst_num",
+                        (prev, direction, num),
+                    )
+                    graph_.conn.commit()
+                    log.debug("room_info: connected %s --%s--> %s", prev[:8], direction, num[:8])
+            else:
+                log.debug(
+                    "room_info: room change %s -> %s with no active command, edge not recorded", prev[:8], num[:8]
+                )
+
         ctx.room.changed.set()
-        ctx.room.changed.clear()
         ctx.room.graph.update_room(data)
         rooms.write_current_room(ctx.room.current_file, num)
 
@@ -178,7 +242,8 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
 
     scripts_dir = str(paths.xdg_config_dir() / "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
-    ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, log=log)
+    bundled_dir = str(pathlib.Path(__file__).parent / "bundled-scripts")
+    ctx.scripts.manager = scripts_mod.ScriptManager(scripts_dir=scripts_dir, bundled_dir=bundled_dir, log=log)
 
 
 # ED 2 (erase display) without an adjacent HOME -- inject HOME before it.
@@ -186,6 +251,15 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
 ED2 = b"\x1b[2J"
 HOME = b"\x1b[H"
 HOME_ED2 = b"\x1b[H\x1b[2J"
+
+# Max age of a pending walk direction before it is considered stale.
+# Discworld queues movement commands and can take minutes to complete a
+# burst (e.g. 10 wests can take up to 2 minutes), so a delayed room
+# change is legitimate well past the arrival timeout.  The bound must
+# exceed the longest plausible queue delay; entries that never produce a
+# room change (genuinely blocked moves) are discarded once stale so they
+# cannot misattribute a later room change.
+PENDING_COMMAND_STALE = 240.0
 
 
 def inject_home_before_clear(data: bytes) -> bytes:
@@ -524,6 +598,10 @@ def _setup_resize_and_naws(raw_stdout: typing.Any, writer: typing.Any, tty_shell
             return raw_stdout.virtual_size()
 
         writer.handle_send_naws = _naws  # type: ignore[method-assign]
+        import telnetlib3.telopt
+
+        if hasattr(writer, "set_ext_send_callback"):
+            writer.set_ext_send_callback(telnetlib3.telopt.NAWS, _naws)
     if tty_shell is not None and hasattr(tty_shell, "_resize_pending"):
         import signal
 
@@ -641,6 +719,17 @@ async def telix_client_shell(
     # 2. Load per-session configs, set up color filter from CLI arguments
     load_configs(ctx)
 
+    on_connect = getattr(ctx.color_args, "on_connect_command", "") if ctx.color_args is not None else ""
+    if on_connect and (mgr := ctx.scripts.manager) is not None:
+        if m := client_repl_commands.ASYNC_CMD_RE.match(on_connect) or client_repl_commands.AWAIT_CMD_RE.match(
+            on_connect
+        ):
+            on_connect = m.group(1)
+        try:
+            mgr.start_script(ctx, on_connect)
+        except Exception:
+            log.warning("on-connect command %r failed", on_connect, exc_info=True)
+
     setup_color_filter(ctx, telnet_writer)
     setup_ansi_keys(ctx)
     setup_clear_homes(ctx)
@@ -654,6 +743,8 @@ async def telix_client_shell(
         package = ".".join(seg.title() for seg in package.split("."))
         if base_on_gmcp is not None:
             base_on_gmcp(package, data)
+
+        # wire up additional callbacks
         if package == "Comm.Channel.Text":
             if ctx.chat.on_text is not None:
                 ctx.chat.on_text(data)
@@ -663,6 +754,10 @@ async def telix_client_shell(
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        script_callbacks = ctx.gmcp.script_callbacks.get(package)
+        if script_callbacks:
+            for cb in script_callbacks:
+                cb(data)
         evt = ctx.gmcp.package_events.get(package)
         if evt is not None:
             evt.set()
@@ -671,6 +766,16 @@ async def telix_client_shell(
         ctx.gmcp.any_update.clear()
 
     telnet_writer.set_ext_callback(telnetlib3.telopt.GMCP, on_gmcp)
+
+    # 4. Setup ZMP callbacks
+    base_on_zmp = telnet_writer._ext_callback.get(telnetlib3.telopt.ZMP)
+
+    def on_zmp(command: str, *args: str) -> None:
+        if base_on_zmp is not None:
+            base_on_zmp(command, *args)
+        # XXX ?!
+
+    telnet_writer.set_ext_callback(telnetlib3.telopt.ZMP, on_zmp)
 
     keyboard_escape = ctx.repl.keyboard_escape
 
@@ -968,6 +1073,10 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
         elif package == "Room.Info":
             if ctx.gmcp.on_room_info is not None:
                 ctx.gmcp.on_room_info(data)
+        script_callbacks = ctx.gmcp.script_callbacks.get(package)
+        if script_callbacks:
+            for cb in script_callbacks:
+                cb(data)
         evt = ctx.gmcp.package_events.get(package)
         if evt is not None:
             evt.set()

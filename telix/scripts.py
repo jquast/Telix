@@ -267,6 +267,24 @@ class ScriptContext:
         return self._ctx.room.graph
 
     @property
+    def area_names(self) -> dict[str, str]:
+        """
+        Area name overrides registered by scripts.
+
+        Maps area identifiers (e.g. ``"1"``, ``"17"``) to human-readable names.
+        Scripts may assign to this dict directly::
+
+            ctx.area_names["1"] = "Ankh-Morpork"
+            ctx.area_names["17"] = "Bes Pelargic"
+
+        The Room Browser will display the mapped name when available.
+        """
+        rg = self._ctx.room.graph
+        if rg is None:
+            return {}
+        return rg.area_names
+
+    @property
     def captures(self) -> dict[str, typing.Any]:
         """Highlight capture variables for this session."""
         return self._ctx.highlights.captures
@@ -283,6 +301,46 @@ class ScriptContext:
         if rg is None or not self._ctx.room.current:
             return None
         return rg.get_room(self._ctx.room.current)
+
+    def update_room(self, data: dict[str, typing.Any]) -> None:
+        """
+        Update or create a room in the graph from a dict.
+
+        The dict must contain a room identifier key (``num``, ``vnum``, ``id``, or ``identifier``) and may contain
+        ``exits`` as a dict of direction to room-id mappings.
+
+        This is the scripting counterpart of :meth:`rooms.RoomStore.update_room`.
+        """
+        graph = self._ctx.room.graph
+        if graph is not None:
+            graph.update_room(data)
+
+    def on_gmcp(self, package: str, callback: "typing.Callable[[typing.Any], None]") -> None:
+        """
+        Register a callback to be invoked whenever a GMCP package arrives.
+
+        The callback receives the package data (typically a dict or string) when
+        that GMCP package is received from the server.  Multiple callbacks may
+        be registered for the same package; they fire in registration order.
+
+        The callback runs synchronously inside the telnet data-receive handler, it must not block.
+
+        Example::
+
+            def on_writtenmap(data: dict) -> None:
+                exits = parse_exits(data)
+                if exits:
+                    ctx.update_room({"identifier": ctx.room_id, "exits": exits})
+
+            ctx.on_gmcp("Room.Writtenmap", on_writtenmap)
+
+        :param package: GMCP package name
+        :param callback: Callable accepting GMCP package data.
+        """
+        callbacks = self._ctx.gmcp.script_callbacks
+        if package not in callbacks:
+            callbacks[package] = []
+        callbacks[package].append(callback)
 
     def gmcp_get(self, dotted_path: str) -> typing.Any:
         """
@@ -607,17 +665,18 @@ class ScriptContext:
         Write args to the terminal scroll region (cyan).
 
         Behaves like the built-in :func:`print`: multiple positional arguments are joined with *sep*, and non-string
-        values are converted via :func:`str`.  Uses the same echo mechanism as trigger notifications.
+        values are converted via :func:`str`.  Output is delivered through the session's ``script_echo`` hook and is
+        never password-scrambled; it is buffered in ``pending_script_echo`` until the REPL registers the hook.
 
         :param args: Values to display.
         :param sep: Separator string inserted between values (default " ").
         """
         text = sep.join(str(a) for a in args)
-        echo = self._ctx.prompt.echo
-        if echo is not None:
-            echo(text)
-        else:
-            self._log.info("script print: %s", text)
+        if self._ctx.prompt.script_echo:
+            self._ctx.prompt.script_echo(text)
+            return
+        # pending text enqueued until ReplSession.register_callbacks() is ready
+        self._ctx.prompt.pending_script_echo.append(text)
 
     def debug(self, msg: str) -> None:
         """
@@ -814,12 +873,14 @@ class ScriptManager:
     matching does not conflict.
 
     :param scripts_dir: Path to the user global scripts directory.
+    :param bundled_dir: Path to bundled telix scripts (lowest priority).
     :param log: Logger instance.
     """
 
-    def __init__(self, scripts_dir: str = "", log: "logging.Logger | None" = None) -> None:
+    def __init__(self, scripts_dir: str = "", bundled_dir: str = "", log: "logging.Logger | None" = None) -> None:
         """Initialize ScriptManager."""
         self.scripts_dir = scripts_dir
+        self.bundled_dir = bundled_dir
         self._log = log or logging.getLogger(__name__)
         self._tasks: dict[str, asyncio.Task[typing.Any]] = {}
         self._buffers: dict[str, ScriptOutputBuffer] = {}
@@ -841,6 +902,8 @@ class ScriptManager:
             search_dirs.append(cwd)
         if self.scripts_dir and self.scripts_dir != cwd:
             search_dirs.append(self.scripts_dir)
+        if self.bundled_dir and self.bundled_dir not in search_dirs:
+            search_dirs.append(self.bundled_dir)
 
         for d in reversed(search_dirs):
             if d not in sys.path:
@@ -915,8 +978,9 @@ class ScriptManager:
             mod = self._load_module(module_path)
         except Exception:
             script_log.exception("script %r failed to import", task_key)
+            ctx.print(f" Error: script {task_key!r} failed to import")
             for line in traceback.format_exc().splitlines():
-                ctx.print(line)
+                ctx.print(f"   {line}")
 
             async def _noop() -> None:
                 pass

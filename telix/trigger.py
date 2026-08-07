@@ -21,7 +21,7 @@ from collections.abc import Callable, Awaitable
 import wcwidth
 
 # local
-from . import util, client_repl_render
+from . import util
 
 if TYPE_CHECKING:
     from .session_context import TelixSessionContext
@@ -252,6 +252,7 @@ class TriggerRule:
     :param when: Vital conditions that must be met for the rule to fire, e.g. {"HP%": ">50", "MP%": ">30"}.
     :param immediate: Fire without waiting for prompt/GA/EOR.
     :param case_sensitive: Match the pattern case-sensitively.
+    :param hide_line: When True, matching lines are suppressed from display output.
     """
 
     pattern: re.Pattern[str]
@@ -262,6 +263,7 @@ class TriggerRule:
     immediate: bool = False
     last_fired: str = ""
     case_sensitive: bool = False
+    hide_line: bool = False
 
 
 def parse_entries(entries: list[dict[str, str]]) -> list[TriggerRule]:
@@ -279,6 +281,7 @@ def parse_entries(entries: list[dict[str, str]]) -> list[TriggerRule]:
         immediate = bool(entry.get("immediate", False))
         last_fired = str(entry.get("last_fired", ""))
         case_sensitive = bool(entry.get("case_sensitive", False))
+        hide_line = bool(entry.get("hide_line", False))
         flags = re.MULTILINE | re.DOTALL
         if not case_sensitive:
             flags |= re.IGNORECASE
@@ -296,6 +299,7 @@ def parse_entries(entries: list[dict[str, str]]) -> list[TriggerRule]:
                 immediate=immediate,
                 last_fired=last_fired,
                 case_sensitive=case_sensitive,
+                hide_line=hide_line,
             )
         )
     return rules
@@ -336,6 +340,7 @@ def save_triggers(path: str, rules: list[TriggerRule], session_key: str) -> None
             **({"when": dict(r.when)} if r.when else {}),
             **({"immediate": True} if r.immediate else {}),
             **({"case_sensitive": True} if r.case_sensitive else {}),
+            **({"hide_line": True} if r.hide_line else {}),
             **({"last_fired": r.last_fired} if r.last_fired else {}),
         }
         for r in rules
@@ -712,6 +717,7 @@ class TriggerEngine:
         self.status: str = ""
         self.until_start: float = 0.0
         self.until_deadline: float = 0.0
+        self._hide_patterns: list[re.Pattern[str]] = [r.pattern for r in rules if r.hide_line and r.enabled]
 
     def pop_condition_failed(self) -> tuple[int, str] | None:
         """
@@ -778,6 +784,21 @@ class TriggerEngine:
         if now <= self.until_start:
             return 0.0
         return (now - self.until_start) / (self.until_deadline - self.until_start)
+
+    def renew_hide_patterns(self) -> None:
+        """Rebuild the hide-pattern list from current rules."""
+        self._hide_patterns = [r.pattern for r in self.rules if r.hide_line and r.enabled]
+
+    def should_hide_line(self, stripped_line: str) -> bool:
+        """
+        Return True when *stripped_line* matches any enabled hide_line trigger.
+
+        :param stripped_line: A single line with ANSI escape sequences removed.
+        :returns: True if the line should be suppressed from display.
+        """
+        if not self._enabled or not self._hide_patterns:
+            return False
+        return any(pat.search(stripped_line) for pat in self._hide_patterns)
 
     def feed(self, text: str) -> None:
         """
@@ -969,27 +990,27 @@ class TriggerEngine:
         self.status = ""
 
     def send_command(self, cmd: str) -> None:
-        """
+        r"""
         Send a single command line to the server.
 
-        :param cmd: Command text (without line ending).
+        :param cmd: Command text (without line ending). An empty or whitespace-only command sends a bare ``\\r\\n``
+            (i.e. presses Enter with no text).
         """
-        if not cmd or not cmd.strip():
+        payload = cmd.strip()
+        if not payload:
+            self.log.info("trigger: sending CR (empty line)")
+            assert self.ctx.writer is not None
+            self.ctx.writer.write("\r\n")
             return
-        self.log.info("trigger: sending %r", cmd)
-        self.sent_commands.add(cmd.strip())
+        self.log.info("trigger: sending %r", payload)
+        self.sent_commands.add(payload)
         if len(self.sent_commands) > self.sent_commands_max:
             self.sent_commands.clear()
         if self.echo_fn is not None:
             self.echo_fn(cmd)
-        writer = self.ctx.writer
-        if writer is not None and getattr(writer, "will_echo", False):
-            self.ctx.walk.active_command = client_repl_render.scramble_password(len(cmd))
-        else:
-            self.ctx.walk.active_command = cmd
         self.ctx.walk.active_command_time = time.monotonic()
         assert self.ctx.writer is not None
-        self.ctx.writer.write(cmd + "\r\n")
+        self.ctx.writer.write(payload + "\r\n")
 
     def on_prompt(self) -> None:
         """
