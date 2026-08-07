@@ -125,15 +125,15 @@ PASSWORD_CHAR = "\u273b"
 log = logging.getLogger(__name__)
 
 # Register TRACE log level for per-keystroke diagnostic logging.
-# TRACE_LEVEL = 5
-# logging.addLevelName(TRACE_LEVEL, "TRACE")
-# if not hasattr(logging.Logger, "trace"):
-#
-#    def _trace(self, msg, *args, **kwargs):
-#        if self.isEnabledFor(TRACE_LEVEL):
-#            self._log(TRACE_LEVEL, msg, args, **kwargs)
-#
-#    logging.Logger.trace = _trace  # type: ignore[attr-defined]
+TRACE_LEVEL = 5
+logging.addLevelName(TRACE_LEVEL, "TRACE")
+if not hasattr(logging.Logger, "trace"):
+
+    def _trace(self: logging.Logger, msg: str, *args: typing.Any, **kwargs: typing.Any) -> None:
+        if self.isEnabledFor(TRACE_LEVEL):
+            self._log(TRACE_LEVEL, msg, args, **kwargs)
+
+    logging.Logger.trace = _trace  # type: ignore[attr-defined]
 
 
 def load_history(history: "blessed.line_editor.LineHistory", path: str) -> None:
@@ -1174,7 +1174,7 @@ class ReplSession:
         cancelled = False
         disc_task = w.discover_task
         if disc_task is not None and not disc_task.done():
-            log.trace("cancel_walks: AUTODISCOVER task %s", disc_task)
+            log.trace("cancel_walks: AUTODISCOVER task %s", disc_task)  # type: ignore[attr-defined]
             if echo_fn is not None:
                 echo_fn("AUTODISCOVER: cancelled by input")
             disc_task.cancel()
@@ -1182,7 +1182,7 @@ class ReplSession:
             cancelled = True
         rw_task = w.randomwalk_task
         if rw_task is not None and not rw_task.done():
-            log.trace("cancel_walks: RANDOMWALK task %s", rw_task)
+            log.trace("cancel_walks: RANDOMWALK task %s", rw_task)  # type: ignore[attr-defined]
             if echo_fn is not None:
                 echo_fn("RANDOMWALK: cancelled by input")
             rw_task.cancel()
@@ -1196,7 +1196,7 @@ class ReplSession:
         #    any running tasks that may not have been tracked.
         ft_task = w.travel_task
         if ft_task is not None and not ft_task.done():
-            log.trace("cancel_walks: TRAVEL task %s", ft_task)
+            log.trace("cancel_walks: TRAVEL task %s", ft_task)  # type: ignore[attr-defined]
             if echo_fn is not None:
                 echo_fn("TRAVEL: cancelled by input")
             ft_task.cancel()
@@ -1206,7 +1206,7 @@ class ReplSession:
         # Also zap pending chained send (submit_command_queue).
         cq = getattr(self.ctx, "command_queue", None)
         if cq is not None and not cq.cancel_event.is_set():
-            log.trace("cancel_walks: command_queue cancel")
+            log.trace("cancel_walks: command_queue cancel")  # type: ignore[attr-defined]
             cq.cancel_event.set()
             cancelled = True
 
@@ -1724,7 +1724,7 @@ class ReplSession:
                     self.tty_shell._resize_pending.clear()
                     self.fire_resize()
 
-                log.trace(
+                log.trace(  # type: ignore[attr-defined]
                     "keypress: name=%r str=%r code=%r", getattr(key, "name", None), str(key), getattr(key, "code", None)
                 )
                 self.cancel_walks_on_keypress()
@@ -1736,7 +1736,7 @@ class ReplSession:
                         self.telnet_writer.write(seq)  # type: ignore[arg-type]
                         continue
                 if action is not None:
-                    log.trace(
+                    log.trace(  # type: ignore[attr-defined]
                         "keypress: dispatch found handler for key name=%r str=%r", getattr(key, "name", None), str(key)
                     )
                     result = action()

@@ -247,6 +247,7 @@ def make_ctx():
     ctx.room.graph.find_path.return_value = ["north", "north"]
     ctx.room.graph.get_room.return_value = MagicMock(name="Forest", area="Wilds")
     ctx.prompt.echo = MagicMock()
+    ctx.prompt.script_echo = MagicMock()
     ctx.prompt.wait_fn = None
     ctx.prompt.ready = None
     ctx.script_manager = None
@@ -333,37 +334,37 @@ class TestScriptContextOnGmcp:
 
 
 class TestScriptContextPrint:
-    """ScriptContext.print calls echo_command."""
+    """ScriptContext.print calls script_echo."""
 
-    def test_delegates_to_echo_command(self):
+    def test_delegates_to_script_echo(self):
         ctx, sctx = make_script_ctx()
         ctx.print("hello world")
-        sctx.prompt.echo.assert_called_once_with("hello world")
+        sctx.prompt.script_echo.assert_called_once_with("hello world")
 
-    def test_no_echo_command_does_not_crash(self):
+    def test_no_script_echo_does_not_crash(self):
         ctx, sctx = make_script_ctx()
-        sctx.prompt.echo = None
+        sctx.prompt.script_echo = None
         ctx.print("silent")
 
     def test_non_string_argument_is_converted(self):
         ctx, sctx = make_script_ctx()
         ctx.print(42)
-        sctx.prompt.echo.assert_called_once_with("42")
+        sctx.prompt.script_echo.assert_called_once_with("42")
 
     def test_list_argument_is_converted(self):
         ctx, sctx = make_script_ctx()
         ctx.print([1, 2, 3])
-        sctx.prompt.echo.assert_called_once_with("[1, 2, 3]")
+        sctx.prompt.script_echo.assert_called_once_with("[1, 2, 3]")
 
     def test_multiple_args_joined_with_space(self):
         ctx, sctx = make_script_ctx()
         ctx.print("hp:", 100)
-        sctx.prompt.echo.assert_called_once_with("hp: 100")
+        sctx.prompt.script_echo.assert_called_once_with("hp: 100")
 
     def test_multiple_args_custom_sep(self):
         ctx, sctx = make_script_ctx()
         ctx.print("a", "b", "c", sep=", ")
-        sctx.prompt.echo.assert_called_once_with("a, b, c")
+        sctx.prompt.script_echo.assert_called_once_with("a, b, c")
 
 
 class TestScriptContextLogging:
@@ -520,7 +521,7 @@ class TestScriptManagerStartStop:
 
         assert isinstance(task, asyncio.Task)
         await asyncio.sleep(0.05)
-        session_ctx.prompt.echo.assert_called()
+        session_ctx.prompt.script_echo.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_with_args(self):
@@ -924,7 +925,7 @@ class TestScriptManagerExceptionReporting:
             mgr.start_script(session_ctx, script_name)
 
         await asyncio.sleep(0.1)
-        calls = session_ctx.prompt.echo.call_args_list
+        calls = session_ctx.prompt.script_echo.call_args_list
         assert calls
         printed = "\n".join(str(c) for c in calls)
         assert expected_substr in printed
@@ -940,7 +941,7 @@ class TestScriptManagerExceptionReporting:
 
         mgr.stop_script("cancel_script")
         await asyncio.sleep(0.1)
-        session_ctx.prompt.echo.assert_not_called()
+        session_ctx.prompt.script_echo.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -954,7 +955,7 @@ class TestScriptManagerExceptionReporting:
             mgr.start_script(session_ctx, script_name)
 
         await asyncio.sleep(0.1)
-        calls = session_ctx.prompt.echo.call_args_list
+        calls = session_ctx.prompt.script_echo.call_args_list
         assert calls
         printed = "\n".join(str(c) for c in calls)
         assert expected_substr in printed
@@ -985,7 +986,7 @@ class TestScriptManagerExceptionReporting:
         mod.run = bad_script
         mgr = scripts.ScriptManager()
         session_ctx = make_ctx()
-        session_ctx.prompt.echo.side_effect = received.append
+        session_ctx.prompt.script_echo.side_effect = received.append
 
         with patch.dict(sys.modules, {"warn_test_script": mod}):
             mgr.start_script(session_ctx, "warn_test_script")
@@ -1009,7 +1010,7 @@ class TestScriptManagerExceptionReporting:
         mod.run = locatable_script
         mgr = scripts.ScriptManager()
         session_ctx = make_ctx()
-        session_ctx.prompt.echo.side_effect = received.append
+        session_ctx.prompt.script_echo.side_effect = received.append
 
         with patch.dict(sys.modules, {"loc_warn_script": mod}):
             mgr.start_script(session_ctx, "loc_warn_script")
@@ -1032,7 +1033,7 @@ class TestScriptManagerExceptionReporting:
         mod.run = failing_with_warning
         mgr = scripts.ScriptManager()
         session_ctx = make_ctx()
-        session_ctx.prompt.echo.side_effect = received.append
+        session_ctx.prompt.script_echo.side_effect = received.append
 
         with patch.dict(sys.modules, {"mixed_script": mod}):
             mgr.start_script(session_ctx, "mixed_script")

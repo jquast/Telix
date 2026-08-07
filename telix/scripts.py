@@ -665,7 +665,8 @@ class ScriptContext:
         Write args to the terminal scroll region (cyan).
 
         Behaves like the built-in :func:`print`: multiple positional arguments are joined with *sep*, and non-string
-        values are converted via :func:`str`.  Uses the same echo mechanism as trigger notifications.
+        values are converted via :func:`str`.  Output is delivered through the session's ``script_echo`` hook and is
+        never password-scrambled; it is buffered in ``pending_script_echo`` until the REPL registers the hook.
 
         :param args: Values to display.
         :param sep: Separator string inserted between values (default " ").
