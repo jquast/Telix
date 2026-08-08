@@ -321,6 +321,32 @@ class TestWsClientShellGMCP:
         writer.dispatch_gmcp("Room.Info", room_data)
         assert received == [room_data]
 
+    def test_room_info_same_room_preserves_previous(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Repeated Room.Info for the same room keeps the arrival room."""
+        monkeypatch.setattr("telix.client_shell.paths.xdg_config_dir", lambda: tmp_path / "cfg")
+        monkeypatch.setattr("telix.client_shell.paths.xdg_data_dir", lambda: tmp_path / "data")
+        monkeypatch.setattr("telix.client_shell.paths.chat_path", lambda sk: str(tmp_path / "data" / f"chat-{sk}.json"))
+        monkeypatch.setattr(
+            "telix.client_shell.paths.history_path", lambda sk: str(tmp_path / "data" / f"history-{sk}")
+        )
+        monkeypatch.setattr("telix.rooms.rooms_path", lambda sk: str(tmp_path / "data" / f"rooms-{sk}.db"))
+
+        writer = self._make_writer()
+        session_key = build_session_key(writer)
+        ctx = TelixSessionContext(session_key=session_key)
+        ctx.writer = writer
+        writer.ctx = ctx
+        load_configs(ctx)
+
+        ctx.gmcp.on_room_info({"identifier": "A"})
+        ctx.gmcp.on_room_info({"identifier": "B"})
+        assert ctx.room.previous == "A"
+        assert ctx.room.current == "B"
+        # A gl/look in the same room must not make B look like its own previous.
+        ctx.gmcp.on_room_info({"identifier": "B"})
+        assert ctx.room.previous == "A"
+        assert ctx.room.current == "B"
+
 
 class TestWsClientShellNoRepl:
     """ws_client_shell respects no_repl set on the initial ctx by run_ws_client."""

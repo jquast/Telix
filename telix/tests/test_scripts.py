@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from telix import scripts, session_context
+from telix import scripts, highlighter, progressbars, session_context
 from telix.client_repl_commands import (
     ASYNC_CMD_RE,
     AWAIT_CMD_RE,
@@ -371,14 +371,18 @@ class TestScriptContextLogging:
     """ScriptContext level-specific logging methods."""
 
     @pytest.mark.parametrize(
-        "method, logger_method", [("debug", "debug"), ("info", "info"), ("warn", "warning"), ("error", "error")]
+        "method, logger_method",
+        [("trace", "log"), ("debug", "debug"), ("info", "info"), ("warn", "warning"), ("error", "error")],
     )
     def test_log_level(self, method, logger_method):
         session_ctx = make_ctx()
         mock_log = MagicMock()
         ctx = scripts.ScriptContext(session_ctx, scripts.ScriptOutputBuffer(), mock_log)
         getattr(ctx, method)("test message")
-        getattr(mock_log, logger_method).assert_called_once_with("script: %s", "test message")
+        if logger_method == "log":
+            mock_log.log.assert_called_once_with(scripts.TRACE_LEVEL, "script: %s", "test message")
+        else:
+            getattr(mock_log, logger_method).assert_called_once_with("script: %s", "test message")
 
 
 class TestScriptContextProperties:
@@ -395,6 +399,115 @@ class TestScriptContextProperties:
     def test_captures(self):
         ctx, _ = make_script_ctx()
         assert ctx.captures["Kills"] == 5
+
+
+class TestScriptContextAddHighlight:
+    """ScriptContext.add_highlight registers and persists highlight rules."""
+
+    def make_ctx(self, tmp_path):
+        ctx, sctx = make_script_ctx()
+        sctx.highlights = session_context.HighlightState()
+        sctx.highlights.file = str(tmp_path / "highlights.json")
+        sctx.session_key = "host:23"
+        return ctx, sctx
+
+    def test_adds_rule_to_live_rules(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        ctx.add_highlight("wise monk", "black_on_yellow")
+        assert len(sctx.highlights.rules) == 1
+        rule = sctx.highlights.rules[0]
+        assert rule.pattern.pattern == "wise monk"
+        assert rule.highlight == "black_on_yellow"
+        assert rule.enabled is True
+
+    def test_replaces_existing_same_pattern(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        ctx.add_highlight("wise monk", "black_on_yellow")
+        ctx.add_highlight("wise monk", "black_on_red")
+        assert len(sctx.highlights.rules) == 1
+        assert sctx.highlights.rules[0].highlight == "black_on_red"
+
+    def test_persists_to_highlights_file(self, tmp_path):
+        ctx, _ = self.make_ctx(tmp_path)
+        ctx.add_highlight("wise monk", "black_on_yellow")
+        loaded = highlighter.load_highlights(str(tmp_path / "highlights.json"), "host:23")
+        assert len(loaded) == 1
+        assert loaded[0].pattern.pattern == "wise monk"
+        assert loaded[0].highlight == "black_on_yellow"
+
+    def test_preserves_unrelated_rules(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        sctx.highlights.rules = [
+            highlighter.HighlightRule(
+                pattern=re.compile("Ryattenoki", re.IGNORECASE), highlight="bold_black"
+            )
+        ]
+        ctx.add_highlight("wise monk", "black_on_yellow")
+        assert [r.pattern.pattern for r in sctx.highlights.rules] == ["Ryattenoki", "wise monk"]
+
+    def test_no_file_skips_persistence(self):
+        ctx, sctx = make_script_ctx()
+        sctx.highlights = session_context.HighlightState()
+        ctx.add_highlight("wise monk", "black_on_yellow")
+        assert len(sctx.highlights.rules) == 1
+        assert sctx.highlights.file == ""
+
+
+class TestScriptContextReload:
+    """ScriptContext.reload re-reads configuration files, replacing in-memory rules."""
+
+    def make_ctx(self, tmp_path):
+        ctx, sctx = make_script_ctx()
+        sctx.highlights = session_context.HighlightState()
+        sctx.highlights.file = str(tmp_path / "highlights.json")
+        sctx.progress = session_context.ProgressState()
+        sctx.progress.file = str(tmp_path / "progressbars.json")
+        sctx.session_key = "host:23"
+        return ctx, sctx
+
+    @staticmethod
+    def rule(pattern):
+        return highlighter.HighlightRule(pattern=re.compile(pattern, re.IGNORECASE), highlight="black_on_yellow")
+
+    def test_reload_replaces_rules_with_file_contents(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        highlighter.save_highlights(sctx.highlights.file, [self.rule("wise monk")], "host:23")
+        count = ctx.reload("highlights")
+        assert count == 1
+        assert [r.pattern.pattern for r in sctx.highlights.rules] == ["wise monk"]
+        assert sctx.highlights.file == str(tmp_path / "highlights.json")
+
+    def test_reload_drops_rules_removed_from_file(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        highlighter.save_highlights(
+            sctx.highlights.file, [self.rule("wise monk"), self.rule("stale mob")], "host:23"
+        )
+        ctx.reload("highlights")
+        assert len(sctx.highlights.rules) == 2
+        highlighter.save_highlights(sctx.highlights.file, [self.rule("wise monk")], "host:23")
+        count = ctx.reload("highlights")
+        assert count == 1
+        assert [r.pattern.pattern for r in sctx.highlights.rules] == ["wise monk"]
+
+    def test_reload_progressbars(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        bar = progressbars.BarConfig(name="hp", gmcp_package="Char.Vitals", value_field="hp", max_field="maxhp")
+        progressbars.save_progressbars(sctx.progress.file, "host:23", [bar])
+        count = ctx.reload("progressbars")
+        assert count == 1
+        assert [b.name for b in sctx.progress.configs] == ["hp"]
+
+    def test_reload_missing_file_returns_zero(self, tmp_path):
+        ctx, sctx = self.make_ctx(tmp_path)
+        sctx.highlights.file = str(tmp_path / "nope.json")
+        count = ctx.reload("highlights")
+        assert count == 0
+        assert sctx.highlights.rules == []
+
+    def test_reload_unknown_kind_raises(self, tmp_path):
+        ctx, _ = self.make_ctx(tmp_path)
+        with pytest.raises(ValueError):
+            ctx.reload("themes")
 
 
 class TestConditionsMet:
