@@ -287,6 +287,37 @@ class OutputRingBuffer:
         return b"".join(self.chunks)
 
 
+_OUTPUT_WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\-]*[A-Za-z0-9']|[A-Za-z0-9]")
+
+
+class OutputWordCollector:
+    """Collect unique words from MUD output for tab completion."""
+
+    def __init__(self, max_words: int = 500) -> None:
+        self._words: collections.deque[str] = collections.deque(maxlen=max_words)
+        self._seen: set[str] = set()
+
+    def feed(self, text: str) -> None:
+        """Extract and store unique words from *text*."""
+        stripped = wcwidth.strip_sequences(text)
+        for word in _OUTPUT_WORD_RE.findall(stripped):
+            if len(word) < 2:
+                continue
+            if word not in self._seen:
+                if len(self._words) == self._words.maxlen:
+                    old = self._words.popleft()
+                    self._seen.discard(old)
+                self._seen.add(word)
+                self._words.append(word)
+
+    def matching(self, prefix: str) -> list[str]:
+        """Return collected words starting with *prefix* (case-insensitive)."""
+        if not prefix:
+            return []
+        plow = prefix.lower()
+        return [w for w in self._words if w.lower().startswith(plow) and w.lower() != plow]
+
+
 # Set by restore_after_subprocess so the main event loop can defer
 # re-enabling in-band resize (DEC 2048) until the post-action render
 # is complete and stale terminal input has been flushed.
@@ -822,7 +853,13 @@ class ReplSession:
             ),
         )
         self.line_hold_timer: asyncio.TimerHandle | None = None
+        self._esc_hold: bytes = b""
         self.mslp_index: int | None = None
+        self.output_words = OutputWordCollector()
+        self._wc_matches: list[str] = []
+        self._wc_index: int = 0
+        self._wc_prefix: str = ""
+        self._wc_start: int = 0
         self._last_inkey_ts: float = 0.0
 
         if sys.platform == "win32":
@@ -929,24 +966,85 @@ class ReplSession:
         self.toolbar.schedule_until_progress(self.loop, self.trigger_engine, self.editor, self.blessed_term)
 
     def mslp_tab(self) -> None:
-        """Cycle forward through available MSLP commands."""
+        """Cycle forward through MSLP commands, or complete words from output."""
         n = self.ctx.mslp_collector.count
-        if n == 0:
+        if n > 0:
+            if self.mslp_index is None:
+                self.mslp_index = 0
+            else:
+                self.mslp_index = (self.mslp_index + 1) % n
             return
-        if self.mslp_index is None:
-            self.mslp_index = 0
-        else:
-            self.mslp_index = (self.mslp_index + 1) % n
+        self._word_complete(forward=True)
 
     def mslp_shift_tab(self) -> None:
-        """Cycle backward through available MSLP commands."""
+        """Cycle backward through MSLP commands, or reverse-complete words from output."""
         n = self.ctx.mslp_collector.count
-        if n == 0:
+        if n > 0:
+            if self.mslp_index is None:
+                self.mslp_index = n - 1
+            else:
+                self.mslp_index = (self.mslp_index - 1) % n
             return
-        if self.mslp_index is None:
-            self.mslp_index = n - 1
-        else:
-            self.mslp_index = (self.mslp_index - 1) % n
+        self._word_complete(forward=False)
+
+    def _word_at_cursor(self) -> str:
+        """Return the word at or immediately left of the editor cursor."""
+        buf = self.editor._buf
+        cursor = self.editor._cursor
+        if cursor == 0:
+            return ""
+        if not buf[cursor - 1].isalnum():
+            return ""
+        start = cursor - 1
+        while start > 0 and buf[start - 1].isalnum():
+            start -= 1
+        return "".join(buf[start:cursor])
+
+    def _word_complete(self, forward: bool) -> None:
+        """Complete the word at cursor from collected output words."""
+        prefix = self._word_at_cursor()
+        if not prefix:
+            return
+        if self._continue_cycle():
+            old = self._wc_matches[self._wc_index]
+            if forward:
+                self._wc_index = (self._wc_index + 1) % len(self._wc_matches)
+            else:
+                self._wc_index = (self._wc_index - 1) % len(self._wc_matches)
+            self._replace_word_at_cursor(old, self._wc_matches[self._wc_index])
+            return
+        self._wc_matches = self.output_words.matching(prefix)
+        hist = self.editor.history.search_prefix(prefix)
+        if hist is not None and hist not in self._wc_matches:
+            self._wc_matches.insert(0, hist)
+        if not self._wc_matches:
+            return
+        self._wc_index = 0
+        self._wc_prefix = prefix
+        self._wc_start = self.editor._cursor - len(prefix)
+        self._replace_word_at_cursor(prefix, self._wc_matches[0])
+
+    def _continue_cycle(self) -> bool:
+        """Return True when the buffer still holds the previous completion."""
+        if not self._wc_prefix or not self._wc_matches:
+            return False
+        match = self._wc_matches[self._wc_index]
+        buf = self.editor._buf
+        end = self._wc_start + len(match)
+        return (
+            self.editor._cursor == end
+            and "".join(buf[self._wc_start:end]) == match
+        )
+
+    def _replace_word_at_cursor(self, old: str, new: str) -> None:
+        """Replace the word at cursor with *new* in the editor buffer."""
+        buf = self.editor._buf
+        cursor = self.editor._cursor
+        start = cursor - len(old)
+        del buf[start:cursor]
+        for i, ch in enumerate(new):
+            buf.insert(start + i, ch)
+        self.editor._cursor = start + len(new)
 
     def on_prompt_signal(self, cmd: bytes) -> None:
         """
@@ -1027,9 +1125,7 @@ class ReplSession:
             return
         bt = self.blessed_term
         self.stdout.write(bt.restore.encode())
-        encoded = text.encode()
-        self.stdout.write(encoded)
-        self.replay_buf.append(encoded)
+        self._write_server_text(text.encode())
         self.stdout.write(bt.save.encode())
         if self.trigger_engine is not None:
             self.trigger_engine.feed(text)
@@ -1040,6 +1136,19 @@ class ReplSession:
         self.stdout.write(self.render_editor(bt, self.scroll.input_row, self.input_width()).encode())
         cursor_col = self.editor_cursor()
         self.show_cursor(self.scroll.input_row, cursor_col)
+
+    def _write_server_text(self, data: bytes) -> None:
+        """Write server-derived text, holding back any trailing incomplete escape.
+
+        The terminal must never receive a dangling ``ESC [`` (or other partial
+        sequence): the next cursor movement or SGR write cancels it, and the
+        sequence's tail then renders as literal text.
+        """
+        data = self._esc_hold + data
+        data, self._esc_hold = split_incomplete_esc(data)
+        if data:
+            self.stdout.write(data)
+            self.replay_buf.append(data)
 
     def repaint_after_toggle(self) -> None:
         """Repaint toolbar and input line after a toggle key."""
@@ -1510,7 +1619,6 @@ class ReplSession:
         assert self.scroll is not None
         scroll = self.scroll
         bt = self.blessed_term
-        esc_hold = b""
         while not self.server_done:
             out = await self.telnet_reader.read(2**24)
             t0 = time.monotonic()
@@ -1522,14 +1630,12 @@ class ReplSession:
                     held = self.line_hold.flush_raw()
                     if held:
                         self.stdout.write(bt.restore.encode())
-                        held_enc = held.encode()
-                        self.stdout.write(held_enc)
-                        self.replay_buf.append(held_enc)
+                        self._write_server_text(held.encode())
                         self.stdout.write(bt.save.encode())
-                    if esc_hold:
+                    if self._esc_hold:
                         self.stdout.write(bt.restore.encode())
-                        self.stdout.write(esc_hold)
-                        self.replay_buf.append(esc_hold)
+                        self.stdout.write(self._esc_hold)
+                        self.replay_buf.append(self._esc_hold)
                         self.stdout.write(bt.save.encode())
                     cf = self.ctx.repl.color_filter
                     if cf is not None:
@@ -1549,9 +1655,7 @@ class ReplSession:
                     held_feed = self.line_hold.feed_text
                     if held:
                         self.stdout.write(bt.restore.encode())
-                        held_enc = held.encode()
-                        self.stdout.write(held_enc)
-                        self.replay_buf.append(held_enc)
+                        self._write_server_text(held.encode())
                         self.stdout.write(bt.save.encode())
                     self.prompt_pending = False
                     if self.trigger_engine is not None:
@@ -1615,14 +1719,9 @@ class ReplSession:
             self.stdout.write(bt.restore.encode())
             if self.dialogs_mod.subprocess_buffer:
                 for chunk in self.dialogs_mod.subprocess_buffer:
-                    self.stdout.write(chunk)
-                    self.replay_buf.append(chunk)
+                    self._write_server_text(chunk)
                 self.dialogs_mod.subprocess_buffer.clear()
-            encoded = esc_hold + emit_now.encode()
-            encoded, esc_hold = split_incomplete_esc(encoded)
-            if encoded:
-                self.stdout.write(encoded)
-                self.replay_buf.append(encoded)
+            self._write_server_text(emit_now.encode())
             self.stdout.write(bt.save.encode())
             if self.trigger_engine is not None:
                 self.trigger_engine.feed(feed_text)
@@ -1633,6 +1732,8 @@ class ReplSession:
                 self.ctx.scripts.manager.feed(feed_text)
                 if is_prompt:
                     self.ctx.scripts.manager.on_prompt()
+            if feed_text:
+                self.output_words.feed(feed_text)
             cq_s = self.ctx.command_queue
             ac_s = self.ctx.walk.active_command
             ac_elapsed = time.monotonic() - self.ctx.walk.active_command_time

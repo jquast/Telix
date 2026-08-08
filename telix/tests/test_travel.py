@@ -114,6 +114,7 @@ def make_travel_ctx(graph=None, current=""):
         randomwalk_total=0,
         busy_lock=asyncio.Lock(),
         cancel_event=asyncio.Event(),
+        travel_task=None,
     )
     repaint_calls = []
     prompt = types.SimpleNamespace(wait_fn=None, echo=None, ready=None, repaint_input=lambda: repaint_calls.append(1))
@@ -201,6 +202,47 @@ async def test_fast_travel_blocks_bad_exit_and_reroutes(tmp_path):
     # The blocked exit ("read sign") is restored to the graph by the
     # finally block so it remains available for future travel sessions.
     assert "read sign" in store.adj.get("A", {})
+
+
+@pytest.mark.asyncio()
+async def test_fast_travel_preserves_replaced_task_reference():
+    """A finishing travel task leaves a replaced travel_task reference intact."""
+    import logging
+
+    ctx, repaint_calls = make_travel_ctx()
+    replacement = asyncio.ensure_future(asyncio.sleep(60))
+    ctx.walk.travel_task = replacement
+
+    await client_repl_travel.fast_travel([], ctx, logging.getLogger("test"))
+    assert ctx.walk.travel_task is replacement
+
+    replacement.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await replacement
+
+
+@pytest.mark.asyncio()
+async def test_cancelled_replaced_travel_keeps_new_reference():
+    """Cancelling a replaced travel task does not clobber the new reference."""
+    import logging
+
+    ctx, repaint_calls = make_travel_ctx()
+    old = asyncio.ensure_future(
+        client_repl_travel.fast_travel([("east", "B")], ctx, logging.getLogger("test"), destination="B")
+    )
+    await asyncio.sleep(0.05)
+    replacement = asyncio.ensure_future(asyncio.sleep(60))
+    ctx.walk.travel_task = replacement
+
+    old.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await old
+
+    assert ctx.walk.travel_task is replacement
+
+    replacement.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await replacement
 
 
 def test_room_info_does_not_record_edge_when_active_command_none(tmp_path):

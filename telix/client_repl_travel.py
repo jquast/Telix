@@ -375,7 +375,11 @@ async def fast_travel(
                         prev.exits[exit_dir] = target
                     graph.adj.setdefault(room_num, {})[exit_dir] = target
         ctx.walk.active_command = None
-        ctx.walk.travel_task = None
+        # A replacement travel task may already own this field (the old
+        # task's cancellation runs this finally after the replacement
+        # assigned its own reference); only clear our own reference.
+        if ctx.walk.travel_task is asyncio.current_task():
+            ctx.walk.travel_task = None
         if noreply and engine is not None:
             engine.enabled = engine_was_enabled
         if ctx.prompt.repaint_input is not None:
@@ -648,7 +652,8 @@ async def autodiscover(
         ctx.walk.discover_active = False
         ctx.walk.discover_current = 0
         ctx.walk.discover_total = 0
-        ctx.walk.discover_task = None
+        if ctx.walk.discover_task is asyncio.current_task():
+            ctx.walk.discover_task = None
         ctx.walk.active_command = None
         # Restore blocked edges so the graph stays accurate for future
         # pathfinding (the block may be transient, e.g. a level gate).
@@ -1021,7 +1026,8 @@ async def randomwalk(
         ctx.walk.randomwalk_room_change_cmd = ""
         ctx.walk.randomwalk_current = 0
         ctx.walk.randomwalk_total = 0
-        ctx.walk.randomwalk_task = None
+        if ctx.walk.randomwalk_task is asyncio.current_task():
+            ctx.walk.randomwalk_task = None
         ctx.walk.active_command = None
         if ctx.prompt.repaint_input is not None:
             ctx.prompt.repaint_input()
