@@ -4,8 +4,10 @@ History
 0.1.12 -- unreleased
 
 - enhancement: enable tab-completion of recently seen words in output
+- enhancement: allow hot reloading of 'highlights' and other configurations, from scripts
 - bugfix: issuing multiple travel commands should allow canceling
 - bugfix: backspace and delete character codes corrected for input and output of ATASCII/PETSCII
+- bugfix: tracking of previous room from scripts
 
 
 0.1.11 -- 2026-08-07

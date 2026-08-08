@@ -199,7 +199,11 @@ def load_configs(ctx: "session_context.TelixSessionContext") -> None:
         if num is None:
             return
         prev = ctx.room.current
-        ctx.room.previous = prev
+        # Only move the arrival room forward on an actual room change;
+        # a same-room Room.Info (e.g. from a gl/look) must not make the
+        # current room look like its own previous room.
+        if prev != num:
+            ctx.room.previous = prev
         ctx.room.current = num
 
         if prev and num and num != prev and ctx.room.contents_buf:

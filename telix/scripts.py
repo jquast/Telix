@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Numeric level for TRACE diagnostics (client_repl.py registers the "TRACE" name).
+TRACE_LEVEL = 5
+
 
 class ScriptOutputBuffer:
     """
@@ -288,6 +291,56 @@ class ScriptContext:
     def captures(self) -> dict[str, typing.Any]:
         """Highlight capture variables for this session."""
         return self._ctx.highlights.captures
+
+    def add_highlight(self, pattern: str, highlight: str) -> None:
+        """
+        Add or replace a highlight rule for *pattern* and persist it.
+
+        The rule becomes active immediately: the live engine is rebuilt from the session's highlight rules on every
+        output.  It is also written to the session's highlights.json, so it survives a restart and appears in the
+        Alt+H editor.
+
+        :param pattern: Regex pattern matched against output lines.
+        :param highlight: Blessed compoundable name, e.g. "black_on_yellow".
+        """
+        from . import highlighter
+
+        rules = [r for r in self._ctx.highlights.rules if r.pattern.pattern != pattern]
+        rules.append(highlighter.HighlightRule(pattern=re.compile(pattern, re.IGNORECASE), highlight=highlight))
+        self._ctx.highlights.rules = rules
+        path = self._ctx.highlights.file
+        if path:
+            highlighter.save_highlights(path, rules, self._ctx.session_key)
+
+    def reload(self, kind: str) -> int:
+        """
+        Re-read *kind* configuration from its JSON file, replacing the in-memory rules.
+
+        The file is the source of truth: any rules removed from the file are dropped from the session, and any edits
+        are picked up by the live engines on the next server output.  Macros are pushed to the key dispatch
+        immediately.
+
+        :param kind: One of "highlights", "triggers", "macros", or "progressbars".
+        :returns: Number of items loaded, or 0 when the configuration file does not exist.
+        :raises ValueError: For an unknown *kind*.
+        """
+        from . import paths, client_repl_dialogs
+
+        specs = {
+            "highlights": (self._ctx.highlights, "highlights.json", "rules"),
+            "triggers": (self._ctx.triggers, "triggers.json", "rules"),
+            "macros": (self._ctx.macros, "macros.json", "defs"),
+            "progressbars": (self._ctx.progress, "progressbars.json", "configs"),
+        }
+        spec = specs.get(kind)
+        if spec is None:
+            raise ValueError(f"unknown reload kind: {kind!r}")
+        state, filename, count_attr = spec
+        path = state.file or os.path.join(paths.CONFIG_DIR, filename)
+        if not os.path.exists(path):
+            return 0
+        getattr(client_repl_dialogs, f"reload_{kind}")(self._ctx, path, self._ctx.session_key, self._log)
+        return len(getattr(state, count_attr))
 
     @property
     def room(self) -> "rooms.Room | None":
@@ -677,6 +730,14 @@ class ScriptContext:
             return
         # pending text enqueued until ReplSession.register_callbacks() is ready
         self._ctx.prompt.pending_script_echo.append(text)
+
+    def trace(self, msg: str) -> None:
+        """
+        Write *msg* to the telix log at TRACE level.
+
+        :param msg: Message text.
+        """
+        self._log.log(TRACE_LEVEL, "script: %s", msg)
 
     def debug(self, msg: str) -> None:
         """
