@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -93,6 +94,38 @@ class TestLauncherCallsThread:
         launch_unified_editor("macros", ctx)
         assert len(called) == 1
         assert callable(called[0])
+
+    @pytest.mark.usefixtures("stub_terminal")
+    async def test_unified_editor_clears_stale_cancel_before_travel(self, monkeypatch):
+        """The rooms TUI fast-travel must not inherit a stale cancel signal."""
+        calls = []
+        monkeypatch.setattr("telix.client_repl_dialogs.run_in_thread", lambda t, **kw: None)
+        monkeypatch.setattr("os.path.exists", lambda p: False)
+        monkeypatch.setattr("telix.rooms.read_fasttravel", lambda p: ([("n", "B")], False))
+        monkeypatch.setattr("sys.stdout", MagicMock(write=MagicMock(), flush=MagicMock()))
+        monkeypatch.setattr("sys.stderr", MagicMock(flush=MagicMock()))
+        monkeypatch.setattr("sys.__stderr__", MagicMock(flush=MagicMock(), isatty=MagicMock(return_value=False)))
+
+        async def fake_fast_travel(steps, ctx_arg, log, noreply=False):
+            calls.append((steps, noreply, ctx_arg.walk.cancel_event.is_set()))
+
+        monkeypatch.setattr("telix.client_repl_travel.fast_travel", fake_fast_travel)
+
+        async def never_done():
+            await asyncio.Event().wait()
+
+        stale = asyncio.ensure_future(never_done())
+        ctx = make_ctx()
+        ctx.room.graph = None
+        ctx.walk.travel_task = stale
+        ctx.walk.cancel_event.set()
+
+        launch_unified_editor("rooms", ctx)
+        await asyncio.sleep(0)
+
+        assert stale.cancelled()
+        assert calls == [([("n", "B")], False, False)]
+        assert not ctx.walk.cancel_event.is_set()
 
 
 class TestMostRecentChannel:

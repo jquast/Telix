@@ -65,7 +65,6 @@ class ProgressBarEditPane(client_tui_base.EditListPane):
           #pb-preview-bar { height: 1; margin: 0 0 0 12; } #pb-preview-gradient { height: 1; margin: 0 0 0 12; }
           #pb-bar-type { max-width: 20; } #pb-label-format { max-width: 50; } #pb-label-format-row { height: auto;
           margin: 0; }"""
-
     )
 
     def __init__(self, path: str, session_key: str = "", gmcp_snapshot_path: str = "") -> None:
@@ -710,10 +709,8 @@ class ThemeEditPane(textual.containers.Vertical):
     class Saved(textual.events.Event):
         """Posted when the user confirms a theme selection in modal mode."""
 
-
     class Cancelled(textual.events.Event):
         """Posted when the user cancels theme selection in modal mode."""
-
 
     DEFAULT_CSS = """
     ThemeEditPane {

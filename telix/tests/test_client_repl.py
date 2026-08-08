@@ -35,6 +35,7 @@ from telix.client_repl import (
     ReplSession,
     ScrollRegion,
     LineHoldBuffer,
+    OutputWordCollector,
     get_term,
     fmt_value,
     randomwalk,
@@ -2514,6 +2515,7 @@ async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol,
     repl.ctx = ctx
     repl.prompt_pending = False
     repl.replay_buf = []
+    repl._esc_hold = b""
     repl.stdout = stdout
     repl.dialogs_mod = types.SimpleNamespace(subprocess_is_active=False, subprocess_buffer=[])
     repl.line_hold = types.SimpleNamespace(
@@ -2527,3 +2529,268 @@ async def test_read_server_erase_eol(monkeypatch: pytest.MonkeyPatch, erase_eol,
 
     assert len(line_hold_calls) == 1
     assert line_hold_calls[0] == expected
+
+
+class TestOutputWordCollector:
+    def test_feed_extracts_words(self) -> None:
+        col = OutputWordCollector()
+        col.feed("You see a door and a window.")
+        assert "door" in col.matching("do")
+        assert "window" in col.matching("win")
+        assert "You" in col.matching("Yo")
+
+    def test_case_insensitive_matching(self) -> None:
+        col = OutputWordCollector()
+        col.feed("The DOOR is open.")
+        assert "DOOR" in col.matching("do")
+
+    def test_exact_match_excluded(self) -> None:
+        col = OutputWordCollector()
+        col.feed("doorway")
+        assert col.matching("doorway") == []
+
+    def test_unique_words_only(self) -> None:
+        col = OutputWordCollector()
+        col.feed("door door door")
+        assert col.matching("do") == ["door"]
+
+    @pytest.mark.parametrize(
+        "text, prefix, expected",
+        [
+            ("a b c ab cd", "a", ["ab"]),
+            ("don't cross-bridge", "don", ["don't"]),
+            ("don't cross-bridge", "cro", ["cross-bridge"]),
+            ("Room 42 has 7 exits.", "42", []),
+        ],
+    )
+    def test_word_extraction(self, text, prefix, expected) -> None:
+        col = OutputWordCollector()
+        col.feed(text)
+        assert col.matching(prefix) == expected
+
+    def test_max_words_eviction(self) -> None:
+        col = OutputWordCollector(max_words=3)
+        col.feed("one two three four five")
+        assert col.matching("on") == []
+        assert col.matching("tw") == []
+        assert "three" in col.matching("th")
+        assert "four" in col.matching("fo")
+        assert "five" in col.matching("fi")
+
+    def test_matching_empty_prefix(self) -> None:
+        col = OutputWordCollector()
+        col.feed("hello")
+        assert col.matching("") == []
+        assert col.matching("xyz") == []
+
+    def test_ansi_stripped_before_extraction(self) -> None:
+        col = OutputWordCollector()
+        col.feed("\x1b[31mred\x1b[0m door")
+        assert "red" in col.matching("re")
+        assert "door" in col.matching("do")
+
+
+class TestWordCompletion:
+    @staticmethod
+    def _make_repl(editor_buf="") -> ReplSession:
+        editor = LineEditor()
+        for ch in editor_buf:
+            editor.feed_key(ch)
+        ctx = TelixSessionContext()
+        repl = ReplSession.__new__(ReplSession)
+        repl.editor = editor
+        repl.ctx = ctx
+        repl.output_words = OutputWordCollector()
+        repl._wc_matches = []
+        repl._wc_index = 0
+        repl._wc_prefix = ""
+        repl._wc_start = 0
+        return repl
+
+    @pytest.mark.parametrize(
+        "buf, cursor, expected", [("doo", None, "doo"), ("open door", 9, "door"), ("", None, ""), ("a door", 2, "")]
+    )
+    def test_word_at_cursor(self, buf, cursor, expected) -> None:
+        repl = self._make_repl(buf)
+        if cursor is not None:
+            repl.editor._cursor = cursor
+        assert repl._word_at_cursor() == expected
+
+    @pytest.mark.parametrize(
+        "buf, old, new, expected_line, expected_cursor",
+        [("exa", "exa", "examine", "examine", 7), ("open do", "do", "door", "open door", 9)],
+    )
+    def test_replace_word_at_cursor(self, buf, old, new, expected_line, expected_cursor) -> None:
+        repl = self._make_repl(buf)
+        repl._replace_word_at_cursor(old, new)
+        assert repl.editor.line == expected_line
+        assert repl.editor._cursor == expected_cursor
+
+    def test_word_complete_cycles(self) -> None:
+        repl = self._make_repl("d")
+        repl.output_words.feed("door dog duck")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "door"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "dog"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "duck"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "door"
+
+    def test_word_complete_cycles_after_uppercase_match(self) -> None:
+        repl = self._make_repl("l")
+        repl.output_words.feed("LPMud light list")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "LPMud"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "light"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "list"
+
+    def test_word_complete_cycles_past_hyphenated_word(self) -> None:
+        repl = self._make_repl("l")
+        repl.output_words.feed("LPMud light low-quality")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "LPMud"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "light"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "low-quality"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "LPMud"
+
+    def test_word_complete_cycles_history_full_line(self) -> None:
+        repl = self._make_repl("l")
+        repl.editor.history.add("look at the door")
+        repl.output_words.feed("LPMud light")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "look at the door"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "LPMud"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "light"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "look at the door"
+
+    def test_word_complete_reverse_cycles_history_full_line(self) -> None:
+        repl = self._make_repl("l")
+        repl.editor.history.add("look at the door")
+        repl.output_words.feed("LPMud light")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "look at the door"
+        repl._word_complete(forward=False)
+        assert repl.editor.line == "light"
+        repl._word_complete(forward=False)
+        assert repl.editor.line == "LPMud"
+        repl._word_complete(forward=False)
+        assert repl.editor.line == "look at the door"
+
+    def test_word_complete_prefers_history_first(self) -> None:
+        repl = self._make_repl("lo")
+        repl.editor.history.entries.append("look")
+        repl.output_words.feed("long loom")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "look"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "long"
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "loom"
+
+    def test_word_complete_reverse_cycles(self) -> None:
+        repl = self._make_repl("d")
+        repl.output_words.feed("door dog duck")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "door"
+        repl._word_complete(forward=False)
+        assert repl.editor.line == "duck"
+        repl._word_complete(forward=False)
+        assert repl.editor.line == "dog"
+
+    def test_word_complete_resets_on_new_prefix(self) -> None:
+        repl = self._make_repl("d")
+        repl.output_words.feed("door dog window")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "door"
+        repl.editor._buf.clear()
+        repl.editor._cursor = 0
+        for ch in "wi":
+            repl.editor.feed_key(ch)
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "window"
+
+    def test_word_complete_no_matches_no_change(self) -> None:
+        repl = self._make_repl("xyz")
+        repl.output_words.feed("hello world")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == "xyz"
+
+    def test_word_complete_empty_buffer_noop(self) -> None:
+        repl = self._make_repl()
+        repl.output_words.feed("hello")
+        repl._word_complete(forward=True)
+        assert repl.editor.line == ""
+
+    def test_mslp_tab_falls_through_to_word_complete(self) -> None:
+        repl = self._make_repl("do")
+        repl.output_words.feed("door dog")
+        repl.mslp_tab()
+        assert repl.editor.line == "door"
+        repl.mslp_tab()
+        assert repl.editor.line == "dog"
+
+    def test_mslp_shift_tab_reverse_completes(self) -> None:
+        repl = self._make_repl("do")
+        repl.output_words.feed("door dog")
+        repl.mslp_tab()
+        assert repl.editor.line == "door"
+        repl.mslp_shift_tab()
+        assert repl.editor.line == "dog"
+
+
+class TestWriteServerText:
+    """Incomplete escape tails must never reach the terminal as bare text."""
+
+    def make_repl(self) -> ReplSession:
+        repl = ReplSession.__new__(ReplSession)
+        stdout, transport = mock_stdout()
+        repl.stdout = stdout
+        repl.transport = transport
+        repl.replay_buf = []
+        repl._esc_hold = b""
+        return repl
+
+    def written(self, repl: ReplSession) -> bytes:
+        return bytes(repl.transport.data)
+
+    def test_trailing_incomplete_escape_is_held_back(self) -> None:
+        repl = self.make_repl()
+        repl._write_server_text(b"1 Agatean Empire\x1b[")
+        assert self.written(repl) == b"1 Agatean Empire"
+        assert repl._esc_hold == b"\x1b["
+
+    def test_split_escape_reconstructed_across_chunks(self) -> None:
+        repl = self.make_repl()
+        repl._write_server_text(b"1 Agatean Empire\x1b[")
+        repl._write_server_text(b"39;49m\x1b[0m\r\n> ")
+        out = self.written(repl)
+        assert repl._esc_hold == b""
+        assert out == b"1 Agatean Empire\x1b[39;49m\x1b[0m\r\n> "
+
+    def test_cursor_writes_between_chunks_do_not_corrupt_escape(self) -> None:
+        repl = self.make_repl()
+        repl._write_server_text(b"1 Agatean Empire\x1b[")
+        # The REPL moves the cursor (save/restore) before the next chunk.
+        repl.stdout.write(b"\x1b7")
+        repl._write_server_text(b"39;49m\x1b[0m\r\n> ")
+        out = self.written(repl)
+        assert out == b"1 Agatean Empire\x1b7\x1b[39;49m\x1b[0m\r\n> "
+
+    def test_unterminated_escape_flushed_raw_on_close(self) -> None:
+        repl = self.make_repl()
+        repl._write_server_text(b"half-rhinu.\x1b[0m\x1b[")
+        assert self.written(repl) == b"half-rhinu.\x1b[0m"
+        assert repl._esc_hold == b"\x1b["
+        # EOF path: nothing more is coming, write the held tail.
+        repl._esc_hold = b""
+        assert self.written(repl) == b"half-rhinu.\x1b[0m"

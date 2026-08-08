@@ -44,7 +44,6 @@ class HighlightEditPane(client_tui_base.EditListPane):
 
           30; } #highlight-example { width: 1fr; height: 1; }
           """
-
     )
 
     def __init__(self, path: str, session_key: str = "") -> None:

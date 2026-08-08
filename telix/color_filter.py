@@ -565,7 +565,6 @@ class PetsciiColorFilter:
 
 # ATASCII decoded control character glyphs -> ANSI terminal sequences.
 _ATASCII_CONTROL_CODES: dict[str, str] = {
-    "\u25e2": "\x08\x1b[P",  # ◢  backspace (0x08/0x88) -- ASCII BS decoded by atascii codec
     "\u25c0": "\x08\x1b[P",  # ◀  backspace/delete (0x7E / 0xFE)
     "\u25b6": "\t",  # ▶  tab (0x7F / 0xFF)
     "\u21b0": "\x1b[2J\x1b[H",  # ↰  clear screen (0x7D / 0xFD)
@@ -582,8 +581,6 @@ ATASCII_CTRL_RE = re.compile("[" + re.escape("".join(sorted(_ATASCII_CONTROL_COD
 # Used by filter_bytes() to avoid the decode-filter-encode roundtrip
 # that corrupts ANSI escape sequences during re-encoding.
 _ATASCII_CONTROL_BYTES: dict[int, bytes] = {
-    0x08: b"\x08\x1b[P",  # BS (decodes to U+25E2 ◢)
-    0x09: b"\t",  # TAB (decodes to U+2597 ▗)
     0x1B: b"\x1b",  # ESC (decodes to U+241B ␛)
     0x1C: b"\x1b[A",  # cursor up (decodes to U+2191 ↑)
     0x1D: b"\x1b[B",  # cursor down (decodes to U+2193 ↓)
@@ -593,8 +590,6 @@ _ATASCII_CONTROL_BYTES: dict[int, bytes] = {
     0x7E: b"\x08\x1b[P",  # DEL (decodes to U+25C0 ◀)
     0x7F: b"\t",  # TAB (decodes to U+25B6 ▶)
     # Inverse video variants (bit 7 set)
-    0x88: b"\x08\x1b[P",  # BS inverse (decodes to U+25E4 ◤)
-    0x89: b"\t",  # TAB inverse (decodes to U+259B ▛)
     0x9C: b"\x1b[A",  # cursor up inverse (decodes to U+2191 ↑)
     0x9D: b"\x1b[B",  # cursor down inverse (decodes to U+2193 ↓)
     0x9E: b"\x1b[D",  # cursor left inverse (decodes to U+2190 ←)

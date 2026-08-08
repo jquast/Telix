@@ -256,14 +256,9 @@ async def raw_client_shell(raw_reader: raw_transport.RawReader, raw_writer: raw_
             if tty_shell._save_mode is not None:
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             stdin = await tty_shell.connect_stdin()
-            if not ctx.repl.ansi_keys:
-                from .client_shell import _apply_delete_to_backspace
+            from .client_shell import _apply_input_xlat
 
-                _apply_delete_to_backspace(stdin)
-            if raw_writer.encoding == "atascii":
-                from .client_shell import _apply_atascii_return
-
-                _apply_atascii_return(stdin)
+            _apply_input_xlat(stdin, raw_writer.encoding, ctx.repl.ansi_keys)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )

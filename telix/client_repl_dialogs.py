@@ -505,6 +505,12 @@ def launch_unified_editor(initial_tab: str, ctx: "TelixSessionContext", replay_b
     steps, noreply = rooms.read_fasttravel(fasttravel_file)
     if steps:
         log.debug("travel: scheduling %d steps (noreply=%s)", len(steps), noreply)
+        old = ctx.walk.travel_task
+        if old is not None and not old.done():
+            old.cancel()
+        # fast_travel exits before its first step when cancel_event is
+        # still set from a keypress that cancelled an earlier walk.
+        ctx.walk.cancel_event.clear()
         task = asyncio.ensure_future(client_repl_travel.fast_travel(steps, ctx, log, noreply=noreply))
         ctx.walk.travel_task = task
 

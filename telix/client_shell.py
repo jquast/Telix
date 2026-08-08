@@ -78,35 +78,39 @@ def compute_local_echo(echo_mode: str, will_echo: bool) -> bool:
         return False
 
 
-def _apply_delete_to_backspace(stdin: typing.Any) -> None:
-    """
-    Patch stdin so Delete (0x7f) is sent as Backspace (0x08).
+# Input byte translation for retro encodings, mirroring telnetlib3's
+# InputFilter byte table (_INPUT_XLAT): DEL/BS become the BBS's backspace
+# code, and CR/LF become the ATASCII EOL.
+_RETRO_INPUT_XLAT: dict[str, dict[int, int]] = {
+    "atascii": {0x7F: 0x7E, 0x08: 0x7E, 0x0D: 0x9B, 0x0A: 0x9B},
+    "petscii": {0x7F: 0x14, 0x08: 0x14},
+}
 
-    BBS systems expect Backspace, but modern terminals send Delete in raw mode.
+
+def _apply_input_xlat(stdin: typing.Any, encoding: str, ansi_keys: bool) -> None:
+    """
+    Patch stdin so terminal key bytes become the BBS's expected codes.
+
+    Retro encodings translate the modern Delete key (0x7f) and Backspace (0x08) to the BBS's backspace byte (ATASCII
+    0x7e, PETSCII 0x14) and the Enter key (CR/LF) to ATASCII EOL (0x9b).  Other encodings map Delete to Backspace (0x08)
+    unless ANSI keys are in use, since BBS systems expect Backspace but modern terminals send Delete in raw mode.  The
+    translation matches telnetlib3's InputFilter byte table for transports that bypass telnetlib3's client shell.
+
+    :param stdin: The stdin stream to patch.
+    :param encoding: Connection encoding name.
+    :param ansi_keys: When True, non-retro encodings are left untranslated.
     """
     _real_read = stdin.read
+    enc = (encoding or "").lower()
+    xlat = _RETRO_INPUT_XLAT.get(enc, {} if ansi_keys else {0x7F: 0x08})
+    if not xlat:
+        return
 
-    async def _delete_to_backspace(n: int = -1) -> bytes:
+    async def _translate(n: int = -1) -> bytes:
         data = await _real_read(n)
-        return data.replace(b"\x7f", b"\x08")
+        return bytes(xlat.get(b, b) for b in data)
 
-    stdin.read = _delete_to_backspace  # type: ignore[method-assign]
-
-
-def _apply_atascii_return(stdin: typing.Any) -> None:
-    """
-    Patch stdin so Enter (0x0d) is sent as ATASCII Return (0x9b).
-
-    ATASCII uses byte 0x9B as its end-of-line character, not ASCII CR (0x0D). Raw ATASCII connections must send 0x9B for
-    the Enter key so the server can detect ATASCII-capable clients.
-    """
-    _real_read = stdin.read
-
-    async def _cr_to_atascii_eol(n: int = -1) -> bytes:
-        data = await _real_read(n)
-        return data.replace(b"\r", b"\x9b")
-
-    stdin.read = _cr_to_atascii_eol  # type: ignore[method-assign]
+    stdin.read = _translate  # type: ignore[method-assign]
 
 
 def consume_edge_direction(walk: typing.Any, log: logging.Logger) -> str | None:
@@ -872,10 +876,7 @@ async def telix_client_shell(
                 local_echo = compute_local_echo(ctx.echo_mode, telnet_writer.will_echo)
                 linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
-            if not ctx.repl.ansi_keys:
-                _apply_delete_to_backspace(stdin)
-            if (ctx.encoding or "").startswith("atascii"):
-                _apply_atascii_return(stdin)
+            _apply_input_xlat(stdin, ctx.encoding, ctx.repl.ansi_keys)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=switched_to_raw, last_will_echo=last_will_echo, local_echo=local_echo, linesep=linesep
             )
@@ -976,10 +977,7 @@ async def ssh_client_shell(ssh_reader: ssh_transport.SSHReader, ssh_writer: ssh_
             if tty_shell._save_mode is not None:
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
-            if not ctx.repl.ansi_keys:
-                _apply_delete_to_backspace(stdin)
-            if ssh_writer.encoding == "atascii":
-                _apply_atascii_return(stdin)
+            _apply_input_xlat(stdin, ssh_writer.encoding, ctx.repl.ansi_keys)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True, last_will_echo=False, local_echo=False, linesep=linesep
             )
@@ -1128,10 +1126,7 @@ async def ws_client_shell(ws_reader: ws_transport.WebSocketReader, ws_writer: ws
                 tty_shell.set_mode(tty_shell._make_raw(tty_shell._save_mode, suppress_echo=True))
             linesep = "\r\n"
             stdin = await tty_shell.connect_stdin()  # pylint: disable=no-member
-            if not ctx.repl.ansi_keys:
-                _apply_delete_to_backspace(stdin)
-            if (ctx.encoding or "").startswith("atascii"):
-                _apply_atascii_return(stdin)
+            _apply_input_xlat(stdin, ctx.encoding, ctx.repl.ansi_keys)
             state = telnetlib3.client_shell._RawLoopState(
                 switched_to_raw=True,
                 last_will_echo=False,

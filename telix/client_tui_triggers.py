@@ -50,7 +50,6 @@ class TriggerEditPane(client_tui_base.EditListPane):
           #trigger-cond-vital { width: 23; } #trigger-cond-op { width: 8; } #trigger-cond-val { width: 9; border: tall
           grey; } #trigger-cond-val:focus { border: tall $accent; } .command-text-area { height: 1fr; min-height: 3;
           }"""
-
     )
 
     def __init__(
