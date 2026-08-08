@@ -1,6 +1,12 @@
 History
 =======
 
+0.1.12 -- unreleased
+
+- enhancement: enable tab-completion of recently seen words in output
+- bugfix: issuing multiple travel commands should allow canceling
+
+
 0.1.11 -- 2026-08-07
 --------------------
 
