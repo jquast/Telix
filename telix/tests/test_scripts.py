@@ -438,9 +438,7 @@ class TestScriptContextAddHighlight:
     def test_preserves_unrelated_rules(self, tmp_path):
         ctx, sctx = self.make_ctx(tmp_path)
         sctx.highlights.rules = [
-            highlighter.HighlightRule(
-                pattern=re.compile("Ryattenoki", re.IGNORECASE), highlight="bold_black"
-            )
+            highlighter.HighlightRule(pattern=re.compile("Ryattenoki", re.IGNORECASE), highlight="bold_black")
         ]
         ctx.add_highlight("wise monk", "black_on_yellow")
         assert [r.pattern.pattern for r in sctx.highlights.rules] == ["Ryattenoki", "wise monk"]
@@ -479,9 +477,7 @@ class TestScriptContextReload:
 
     def test_reload_drops_rules_removed_from_file(self, tmp_path):
         ctx, sctx = self.make_ctx(tmp_path)
-        highlighter.save_highlights(
-            sctx.highlights.file, [self.rule("wise monk"), self.rule("stale mob")], "host:23"
-        )
+        highlighter.save_highlights(sctx.highlights.file, [self.rule("wise monk"), self.rule("stale mob")], "host:23")
         ctx.reload("highlights")
         assert len(sctx.highlights.rules) == 2
         highlighter.save_highlights(sctx.highlights.file, [self.rule("wise monk")], "host:23")
