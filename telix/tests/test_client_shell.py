@@ -846,28 +846,78 @@ class TestComputeLocalEcho:
         assert compute_local_echo("remote", False) is False
 
 
-def test_apply_atascii_return_translates_cr() -> None:
-    from telix.client_shell import _apply_atascii_return
+def test_apply_input_xlat_retro_backspace_and_eol() -> None:
+    from telix.client_shell import _apply_input_xlat
+
+    class Stdin:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+
+        async def read(self, n: int = -1) -> bytes:
+            return self.data
+
+    stdin = Stdin(b"a\x7fb\x08c\rd\ne")
+    _apply_input_xlat(stdin, "atascii", ansi_keys=False)
+    assert asyncio.run(stdin.read()) == b"a\x7eb\x7ec\x9bd\x9be"
+
+
+def test_apply_input_xlat_petscii_delete() -> None:
+    from telix.client_shell import _apply_input_xlat
+
+    class Stdin:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+
+        async def read(self, n: int = -1) -> bytes:
+            return self.data
+
+    stdin = Stdin(b"a\x7fb\x08c")
+    _apply_input_xlat(stdin, "petscii", ansi_keys=False)
+    assert asyncio.run(stdin.read()) == b"a\x14b\x14c"
+
+
+def test_apply_input_xlat_non_retro_delete_to_backspace() -> None:
+    from telix.client_shell import _apply_input_xlat
+
+    class Stdin:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+
+        async def read(self, n: int = -1) -> bytes:
+            return self.data
+
+    stdin = Stdin(b"a\x7fb")
+    _apply_input_xlat(stdin, "cp437", ansi_keys=False)
+    assert asyncio.run(stdin.read()) == b"a\x08b"
+
+
+def test_apply_input_xlat_ansi_keys_skips_non_retro() -> None:
+    from telix.client_shell import _apply_input_xlat
+
+    class Stdin:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+
+        async def read(self, n: int = -1) -> bytes:
+            return self.data
+
+    stdin = Stdin(b"a\x7fb")
+    _apply_input_xlat(stdin, "cp437", ansi_keys=True)
+    assert asyncio.run(stdin.read()) == b"a\x7fb"
+
+
+def test_apply_input_xlat_passthrough_other_bytes() -> None:
+    from telix.client_shell import _apply_input_xlat
 
     class Stdin:
         def __init__(self) -> None:
-            self.data = b"hello\rworld\r"
+            self.data = b"hello world"
 
         async def read(self, n: int = -1) -> bytes:
             return self.data
 
     stdin = Stdin()
     orig_read = stdin.read
-    _apply_atascii_return(stdin)
+    _apply_input_xlat(stdin, "atascii", ansi_keys=False)
     assert stdin.read is not orig_read
-
-
-def test_apply_atascii_return_passthrough_non_cr() -> None:
-    from telix.client_shell import _apply_atascii_return
-
-    class Stdin:
-        async def read(self, n: int = -1) -> bytes:
-            return b"hello world"
-
-    stdin = Stdin()
-    _apply_atascii_return(stdin)
+    assert asyncio.run(stdin.read()) == b"hello world"

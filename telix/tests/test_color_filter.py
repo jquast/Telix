@@ -660,9 +660,9 @@ def test_atascii_backspace_erases() -> None:
     assert f.filter("DINGO\u25c0\u25c0\u25c0\u25c0\u25c0") == ("DINGO" + "\x08\x1b[P" * 5)
 
 
-def test_atascii_bs_glyph_erases() -> None:
+def test_atascii_graphics_glyphs_pass_through() -> None:
     f = AtasciiControlFilter()
-    assert f.filter("DINGO\u25e2\u25e2") == ("DINGO" + "\x08\x1b[P" * 2)
+    assert f.filter("DINGO\u25e2\u25e4") == "DINGO\u25e2\u25e4"
 
 
 def test_atascii_plain_text_unchanged() -> None:
@@ -683,9 +683,12 @@ def test_atascii_multiple_controls_in_one_string() -> None:
 def test_atascii_filter_bytes_destructive_backspace() -> None:
     f = AtasciiControlFilter()
     assert f.filter_bytes(b"hello\x7eworld") == b"hello\x08\x1b[Pworld"
-    assert f.filter_bytes(b"hello\x08world") == b"hello\x08\x1b[Pworld"
     assert f.filter_bytes(b"hello\xfeworld") == b"hello\x08\x1b[Pworld"
-    assert f.filter_bytes(b"hello\x88world") == b"hello\x08\x1b[Pworld"
+
+
+def test_atascii_filter_bytes_graphics_passthrough() -> None:
+    f = AtasciiControlFilter()
+    assert f.filter_bytes(b"hello\x08\x88world") == b"hello\x08\x88world"
 
 
 def test_atascii_filter_bytes_cursor_movement() -> None:
@@ -708,9 +711,7 @@ def test_atascii_filter_bytes_escape() -> None:
 
 def test_atascii_filter_bytes_tab() -> None:
     f = AtasciiControlFilter()
-    assert f.filter_bytes(b"\x09") == b"\t"
     assert f.filter_bytes(b"\x7f") == b"\t"
-    assert f.filter_bytes(b"\x89") == b"\t"
     assert f.filter_bytes(b"\xff") == b"\t"
 
 

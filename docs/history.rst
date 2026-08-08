@@ -5,6 +5,7 @@ History
 
 - enhancement: enable tab-completion of recently seen words in output
 - bugfix: issuing multiple travel commands should allow canceling
+- bugfix: backspace and delete character codes corrected for input and output of ATASCII/PETSCII
 
 
 0.1.11 -- 2026-08-07

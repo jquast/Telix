@@ -2608,13 +2608,7 @@ class TestWordCompletion:
         return repl
 
     @pytest.mark.parametrize(
-        "buf, cursor, expected",
-        [
-            ("doo", None, "doo"),
-            ("open door", 9, "door"),
-            ("", None, ""),
-            ("a door", 2, ""),
-        ],
+        "buf, cursor, expected", [("doo", None, "doo"), ("open door", 9, "door"), ("", None, ""), ("a door", 2, "")]
     )
     def test_word_at_cursor(self, buf, cursor, expected) -> None:
         repl = self._make_repl(buf)
@@ -2624,10 +2618,7 @@ class TestWordCompletion:
 
     @pytest.mark.parametrize(
         "buf, old, new, expected_line, expected_cursor",
-        [
-            ("exa", "exa", "examine", "examine", 7),
-            ("open do", "do", "door", "open door", 9),
-        ],
+        [("exa", "exa", "examine", "examine", 7), ("open do", "do", "door", "open door", 9)],
     )
     def test_replace_word_at_cursor(self, buf, old, new, expected_line, expected_cursor) -> None:
         repl = self._make_repl(buf)

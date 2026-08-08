@@ -1031,10 +1031,7 @@ class ReplSession:
         match = self._wc_matches[self._wc_index]
         buf = self.editor._buf
         end = self._wc_start + len(match)
-        return (
-            self.editor._cursor == end
-            and "".join(buf[self._wc_start:end]) == match
-        )
+        return self.editor._cursor == end and "".join(buf[self._wc_start : end]) == match
 
     def _replace_word_at_cursor(self, old: str, new: str) -> None:
         """Replace the word at cursor with *new* in the editor buffer."""
@@ -1138,11 +1135,11 @@ class ReplSession:
         self.show_cursor(self.scroll.input_row, cursor_col)
 
     def _write_server_text(self, data: bytes) -> None:
-        """Write server-derived text, holding back any trailing incomplete escape.
+        """
+        Write server-derived text, holding back any trailing incomplete escape.
 
-        The terminal must never receive a dangling ``ESC [`` (or other partial
-        sequence): the next cursor movement or SGR write cancels it, and the
-        sequence's tail then renders as literal text.
+        The terminal must never receive a dangling ``ESC [`` (or other partial sequence): the next cursor movement or
+        SGR write cancels it, and the sequence's tail then renders as literal text.
         """
         data = self._esc_hold + data
         data, self._esc_hold = split_incomplete_esc(data)
